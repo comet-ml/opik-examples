@@ -1,0 +1,18 @@
+name: E2E Tests
+
+on:
+  schedule:
+    # Runs daily at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    uses: ./.github/workflows/test-scripts-matrix.yml
+    with:
+      os: ubuntu-latest
+    secrets:
+      OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
