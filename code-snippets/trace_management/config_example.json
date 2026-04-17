@@ -1,47 +1,11 @@
 {
-  "_comment": "Opik Trace Manager — config file example",
-  "_comment_projects": "List of project names to target. Omit or set to [] to target ALL projects in the workspace.",
   "projects": [
     "my-production-project",
     "another-project"
   ],
-
-  "_comment_modes": "Use EITHER 'filters' (single pass) OR 'ttl_rules' (multi-pass). If both are present, ttl_rules wins.",
-
-  "_comment_filters": "--- OPTION A: flat filters (single deletion pass) ---",
-  "filters": {
-    "_comment": "Delete traces older than N days (mutually exclusive with 'before')",
-    "older_than_days": 90,
-
-    "_comment_before": "'before' is an alternative to older_than_days — ISO 8601 date string",
-    "before": null,
-
-    "_comment_after": "Only target traces created after this date (optional lower bound)",
-    "after": null,
-
-    "_comment_tags": "Include only traces that contain ALL of these tags (leave empty [] for no tag filter)",
-    "tags": [],
-
-    "_comment_exclude": "Exclude traces that contain ANY of these tags",
-    "exclude_tags": []
-  },
-
-  "_comment_ttl": "--- OPTION B: TTL rules (multiple passes, processed shortest-retention first) ---",
   "ttl_rules": [
-    {
-      "description": "Sensitive / PII data — short retention",
-      "tags": ["sensitive", "PII"],
-      "older_than_days": 30
-    },
-    {
-      "description": "Internal tooling traces",
-      "tags": ["internal"],
-      "older_than_days": 60
-    },
-    {
-      "description": "Default catch-all — traces with none of the above tags",
-      "tags": [],
-      "older_than_days": 90
-    }
+    { "tags": ["sensitive", "PII"], "older_than_days": 30, "description": "Short retention for sensitive data" },
+    { "tags": ["internal"],         "older_than_days": 60 },
+    { "tags": [],                   "older_than_days": 90, "description": "Default catch-all" }
   ]
 }
