@@ -14,7 +14,7 @@ opik-examples/
 
 | Snippet | Description |
 |---------|-------------|
-| [trace_deletion](code-snippets/trace_deletion/) | Bulk-delete traces older than N months across one or more projects |
+| [trace_management](code-snippets/trace_management/) | Inspect and delete traces by date range, tags, or per-tag TTL policies |
 
 ### examples
 
