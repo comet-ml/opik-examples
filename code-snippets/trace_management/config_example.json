@@ -1,0 +1,11 @@
+{
+  "projects": [
+    "my-production-project",
+    "another-project"
+  ],
+  "ttl_rules": [
+    { "tags": ["sensitive", "PII"], "older_than_days": 30, "description": "Short retention for sensitive data" },
+    { "tags": ["internal"],         "older_than_days": 60 },
+    { "tags": [],                   "older_than_days": 90, "description": "Default catch-all" }
+  ]
+}
