@@ -175,7 +175,7 @@ class TraceFilter:
         before = None
         if getattr(args, "before", None):
             before = _parse_date(args.before)
-        elif getattr(args, "older_than_days", None):
+        elif getattr(args, "older_than_days", None) is not None:
             before = datetime.now(tz=timezone.utc) - timedelta(days=args.older_than_days)
         after = _parse_date(args.after) if getattr(args, "after", None) else None
         return cls(
@@ -205,7 +205,7 @@ class TraceFilter:
         result = dataclasses.replace(self)
         if getattr(args, "before", None):
             result.before = _parse_date(args.before)
-        elif getattr(args, "older_than_days", None):
+        elif getattr(args, "older_than_days", None) is not None:
             result.before = datetime.now(tz=timezone.utc) - timedelta(days=args.older_than_days)
         if getattr(args, "after", None):
             result.after = _parse_date(args.after)
