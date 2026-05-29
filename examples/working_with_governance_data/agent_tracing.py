@@ -112,14 +112,7 @@ def run_agent(
 
     context_docs = retrieve_context(query)
     answer       = call_llm(query, context_docs, model)
-
-    # Raw signal scores logged by the agent at runtime.
-    # Online evaluation rules (configured in the Opik UI) will add further
-    # scores automatically within seconds of the trace being written.
-    opik.log_current_trace_feedback_score("hallucination_rate", hallucination_rate)
-    opik.log_current_trace_feedback_score("response_quality",   response_quality)
-    opik.log_current_trace_feedback_score("cost_usd",           cost_usd)
-
+        
     return {"answer": answer, "sources": context_docs}
 
 
