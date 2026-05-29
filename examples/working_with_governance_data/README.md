@@ -13,7 +13,7 @@ Two teams share one Opik workspace. They are decoupled by a single convention: e
 | `agent_tracing.py` | Use-case team (BU) | Instrument an agent for production; log traces with governance tags and metadata |
 | `use_case_team.py` | Use-case team (BU) | Run daily retrospective batch to derive composite metrics and write them back to traces |
 | `data_governance_team.py` | Oversight team | Daily batch extraction; aggregate metrics across all projects and push to the reporting endpoint |
-| `workflow.md` | Both | This guide |
+| `README.md` | Both | This guide |
 
 ---
 
@@ -346,9 +346,8 @@ export OPIK_WORKSPACE="your-workspace"
 ### Python dependencies
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install opik
+uv sync
+source .venv/bin/activate
 ```
 
 ---
