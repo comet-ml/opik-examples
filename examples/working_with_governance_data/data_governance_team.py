@@ -11,7 +11,7 @@ For every project in the workspace:
   4. Build a structured payload and POST to the oversight reporting endpoint.
 
 Usage:
-    source ../../.env.prod && python oversight_metrics.py
+    python data_governance_team.py
 
 Required env vars:
     OPIK_API_KEY
