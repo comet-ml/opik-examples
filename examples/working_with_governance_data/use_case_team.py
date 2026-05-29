@@ -14,12 +14,12 @@ Online evaluation rules are configured directly in the Opik web app
 (Project → Automation Rules) and do not need to be managed from this script.
 
 Usage:
-    source ../../.env.prod && python use_case_team.py
+    python use_case_team.py
 
 Required env vars:
     OPIK_API_KEY
     OPIK_WORKSPACE
-    OPIK_PROJECT_NAME   (e.g. "loan-approval-agent-prod")
+    OPIK_PROJECT_NAME   (optional, defaults to "governance-data-demo")
     OPIK_URL_OVERRIDE   (optional, for self-hosted deployments)
 
 Docs:
@@ -39,7 +39,7 @@ from opik.rest_api.types.feedback_score_source import FeedbackScoreSource
 # ---------------------------------------------------------------------------
 
 WORKSPACE       = os.environ["OPIK_WORKSPACE"]
-PROJECT_NAME    = os.environ.get("OPIK_PROJECT_NAME", "loan-approval-agent-prod")
+PROJECT_NAME    = os.environ.get("OPIK_PROJECT_NAME", "governance-data-demo")
 OPIK_BASE_URL   = os.environ.get("OPIK_URL_OVERRIDE", "https://www.comet.com/opik/api")
 GOVERNANCE_TAG  = "governance"
 

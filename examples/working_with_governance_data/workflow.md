@@ -12,7 +12,7 @@ Two teams share one Opik workspace. They are decoupled by a single convention: e
 |---|---|---|
 | `agent_tracing.py` | Use-case team (BU) | Instrument an agent for production; log traces with governance tags and metadata |
 | `use_case_team.py` | Use-case team (BU) | Run daily retrospective batch to derive composite metrics and write them back to traces |
-| `aict_data_team.py` | Oversight team | Daily batch extraction; aggregate metrics across all projects and push to the reporting endpoint |
+| `data_governance_team.py` | Oversight team | Daily batch extraction; aggregate metrics across all projects and push to the reporting endpoint |
 | `workflow.md` | Both | This guide |
 
 ---
@@ -35,7 +35,7 @@ Business Unit Agent
         │  Daily ~01:00  use_case_team.py
         │  Fetch yesterday's governance-tagged traces, derive composite scores, write back
         │
-        │  Daily ~02:00  aict_data_team.py
+        │  Daily ~02:00  data_governance_team.py
         │  get_project_metrics() per project x governance slice x period window
         ▼
 ┌──────────────────────────┐
@@ -74,7 +74,7 @@ sequenceDiagram
     end
 
     rect rgb(220, 240, 230)
-        Note over OT,Rep: Daily batch at 02:00 (aict_data_team.py)
+        Note over OT,Rep: Daily batch at 02:00 (data_governance_team.py)
 
         OT->>Opik: find_projects() — enumerate all projects
         loop For each project x governance slice x metric_type
@@ -101,7 +101,7 @@ import opik
 @opik.track(
     name="loan_approval_assessment",
     tags=["governance", "use-case:loan-approval", "env:prod"],
-    project_name="loan-approval-agent-prod",
+    project_name="governance-data-demo",
 )
 def run_agent(query: str, request_id: str) -> str:
     # Attach governance metadata to the current trace
@@ -150,7 +150,7 @@ After a day's traces are in Opik (with scores from the agent and online rules), 
 **Reference:** [use_case_team.py](./use_case_team.py)
 
 ```bash
-source ../../.env.prod && python use_case_team.py
+python use_case_team.py
 ```
 
 The batch script:
@@ -202,10 +202,10 @@ for trace in response.content:
 
 ### Step 2: Run the daily aggregation batch
 
-**Reference:** [aict_data_team.py](./aict_data_team.py)
+**Reference:** [data_governance_team.py](./data_governance_team.py)
 
 ```bash
-source ../../.env.prod && python aict_data_team.py
+python data_governance_team.py
 ```
 
 The batch runs at ~02:00, one hour after the use-case team's batch, so all composite scores are present before aggregation.
@@ -248,7 +248,7 @@ for result in response.results:
 - `client.projects.find_projects()` — enumerate all projects in the workspace
 - `client.projects.get_project_metrics()` — server-side aggregated time-series metrics
 
-The script extracts `FEEDBACK_SCORES` at a `DAILY` interval by default. Both are set as constants (`METRIC_TYPES`, `INTERVAL`) at the top of `aict_data_team.py` and can be changed without touching the rest of the code.
+The script extracts `FEEDBACK_SCORES` at a `DAILY` interval by default. Both are set as constants (`METRIC_TYPES`, `INTERVAL`) at the top of `data_governance_team.py` and can be changed without touching the rest of the code.
 
 Other available `metric_type` values include `TRACE_COUNT`, `COST`, `DURATION`, `TOKEN_USAGE`, and more. Available `interval` values are `"HOURLY"`, `"DAILY"`, `"WEEKLY"`, and `"TOTAL"`. See the full parameter reference in the [SDK docs for `get_project_metrics()`](https://www.comet.com/docs/opik/python-sdk-reference/rest_api/clients/projects.html#opik.rest_api.projects.client.ProjectsClient.get_project_metrics).
 
@@ -273,7 +273,7 @@ TraceFilterPublic(field="metadata", key="regulatory_scope",operator="=", value="
 TraceFilterPublic(field="metadata", key="business_unit",   operator="=", value="retail")
 ```
 
-To enable slices, populate the `METADATA_SLICES` list at the top of `aict_data_team.py`. It defaults to empty (single unfiltered extraction).
+To enable slices, populate the `METADATA_SLICES` list at the top of `data_governance_team.py`. It defaults to empty (single unfiltered extraction).
 
 ---
 
@@ -316,8 +316,8 @@ Log via `opik.update_current_trace(metadata={...})` inside a `@opik.track`-decor
 ## Cron Schedule
 
 ```
-0 1 * * *   source .env.prod && python use_case_team.py
-0 2 * * *   source .env.prod && python aict_data_team.py
+0 1 * * *   python use_case_team.py
+0 2 * * *   python data_governance_team.py
 ```
 
 Register online evaluation rules once per project via the Opik web app (Project → Automation Rules) when onboarding a new use case.
@@ -328,17 +328,18 @@ Register online evaluation rules once per project via the Opik web app (Project 
 
 ### Environment variables
 
-All scripts read credentials from environment variables. Source the appropriate `.env.*` file before running:
+All scripts read credentials from environment variables. Set these in your shell profile (e.g. `~/.zshrc` or `~/.bashrc`) and then run the scripts directly:
 
 ```bash
-source ../../.env.prod && python agent_tracing.py
+export OPIK_API_KEY="your-api-key"
+export OPIK_WORKSPACE="your-workspace"
 ```
 
 | Variable | Required | Description |
 |---|---|---|
 | `OPIK_API_KEY` | Yes | API key for authentication |
 | `OPIK_WORKSPACE` | Yes | Workspace name (matches your Opik workspace) |
-| `OPIK_PROJECT_NAME` | Yes | Project name traces are logged to |
+| `OPIK_PROJECT_NAME` | No | Project name traces are logged to (defaults to `governance-data-demo`) |
 | `OPIK_URL_OVERRIDE` | No | Base URL for self-hosted deployments (default: `https://www.comet.com/opik/api`) |
 | `OVERSIGHT_INGEST_URL` | No | URL for the reporting/ingestion endpoint |
 
@@ -381,7 +382,7 @@ pip install opik
 
 | Step | How | When |
 |---|---|---|
-| Extract and aggregate | `aict_data_team.py` | Daily at 02:00 |
+| Extract and aggregate | `data_governance_team.py` | Daily at 02:00 |
 
 The only coordination point between the teams is:
 1. The `"governance"` tag on every trace the use-case team logs.

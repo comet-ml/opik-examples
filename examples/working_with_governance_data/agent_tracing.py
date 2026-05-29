@@ -14,12 +14,12 @@ The main block runs the agent three times with different inputs to populate
 the project with representative data.
 
 Usage:
-    source ../../.env.prod && python agent_tracing.py
+    python agent_tracing.py
 
 Required env vars:
     OPIK_API_KEY
     OPIK_WORKSPACE
-    OPIK_PROJECT_NAME   (e.g. "loan-approval-agent-prod")
+    OPIK_PROJECT_NAME   (optional, defaults to "governance-data-demo")
     OPIK_URL_OVERRIDE   (optional, for self-hosted deployments)
 
 Docs:
@@ -34,7 +34,7 @@ import time
 import opik
 from opik import opik_context
 
-PROJECT_NAME    = os.environ.get("OPIK_PROJECT_NAME", "loan-approval-agent-prod")
+PROJECT_NAME    = os.environ.get("OPIK_PROJECT_NAME", "governance-data-demo")
 
 # Tag applied to every trace. The oversight/reporting team filters on this tag
 # to identify which traces belong to the governance programme.
