@@ -1,4 +1,4 @@
-name: Scripts test matrix
+name: Test Scripts Matrix
 
 permissions:
   contents: read
@@ -15,6 +15,8 @@ on:
     secrets:
       OPIK_API_KEY:
         required: true
+      OPENAI_API_KEY:
+        required: false
 
 jobs:
   test-scripts:
@@ -23,7 +25,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-        scripts: # Add in alphabetical order
+        # Add new example folders here in alphabetical order.
+        # Each folder must have a run_examples.sh (enforced by example-compliance-check.yml).
+        scripts:
           - code-snippets/trace_deletion
           - examples/otel_with_offline_eval_example
           - examples/programmatic_leaderboard_dashboard_creation
@@ -40,9 +44,9 @@ jobs:
         env:
           OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
           OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
-          OPIK_PROJECT_NAME: ${{ vars.OPIK_PROJECT_NAME }}
           OPIK_BASE_URL: "https://www.comet.com"
           OPIK_OTLP_ENDPOINT: "https://www.comet.com/opik/api/v1/private/otel/v1/traces"
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           timeout_minutes: 30
           max_attempts: 2

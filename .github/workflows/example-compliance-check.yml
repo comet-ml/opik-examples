@@ -1,0 +1,115 @@
+name: Example Compliance Check
+
+# Verifies that any new or modified example folder in a PR satisfies the contribution requirements.
+# Rules enforced:
+#   1. run_examples.sh must exist
+#   2. README.md must exist
+#   3. At least one dependency manifest must exist (requirements.txt, pyproject.toml, or uv.lock)
+#   4. run_examples.sh should contain "set -e" (warning, not a hard failure)
+#
+# This check is secrets-free so it runs safely on PRs from forks.
+
+on:
+  pull_request:
+    paths:
+      - "code-snippets/**"
+      - "examples/**"
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find changed example folders
+        id: changed-folders
+        run: |
+          changed_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+
+          folders=""
+          while IFS= read -r file; do
+            if [[ "$file" == code-snippets/* ]] || [[ "$file" == examples/* ]]; then
+              # Extract the two-segment path (e.g. examples/foo or code-snippets/bar)
+              parent=$(echo "$file" | cut -d'/' -f1,2)
+              folders="$folders $parent"
+            fi
+          done <<< "$changed_files"
+
+          # Deduplicate and trim
+          folders=$(echo "$folders" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ' | xargs)
+          echo "folders=$folders" >> "$GITHUB_OUTPUT"
+
+          if [[ -z "$folders" ]]; then
+            echo "No example folders changed."
+          else
+            echo "Changed example folders: $folders"
+          fi
+
+      - name: Check compliance
+        if: steps.changed-folders.outputs.folders != ''
+        run: |
+          FAILED=0
+
+          for folder in ${{ steps.changed-folders.outputs.folders }}; do
+            # Skip if the folder was deleted entirely
+            if [[ ! -d "$folder" ]]; then
+              echo "Skipping deleted folder: $folder"
+              continue
+            fi
+
+            echo ""
+            echo "Checking: $folder"
+
+            if [[ ! -f "$folder/run_examples.sh" ]]; then
+              echo "::error file=$folder/run_examples.sh::$folder is missing run_examples.sh"
+              FAILED=1
+            else
+              echo "  OK  run_examples.sh"
+            fi
+
+            if [[ ! -f "$folder/README.md" ]]; then
+              echo "::error file=$folder/README.md::$folder is missing README.md"
+              FAILED=1
+            else
+              echo "  OK  README.md"
+            fi
+
+            if [[ ! -f "$folder/requirements.txt" ]] && \
+               [[ ! -f "$folder/pyproject.toml" ]] && \
+               [[ ! -f "$folder/uv.lock" ]]; then
+              echo "::error::$folder is missing a dependency manifest (requirements.txt, pyproject.toml, or uv.lock)"
+              FAILED=1
+            else
+              echo "  OK  dependency manifest"
+            fi
+
+            if [[ -f "$folder/run_examples.sh" ]] && ! grep -q "set -e" "$folder/run_examples.sh"; then
+              echo "::warning file=$folder/run_examples.sh::$folder/run_examples.sh does not contain 'set -e' — failures may go undetected"
+            fi
+          done
+
+          echo ""
+          if [[ "$FAILED" -ne 0 ]]; then
+            echo "Compliance check failed. Fix the errors above before merging."
+            exit 1
+          fi
+
+          echo "All compliance checks passed."
+
+      - name: Write step summary
+        if: always() && steps.changed-folders.outputs.folders != ''
+        run: |
+          echo "## Example Compliance Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Folders checked: \`${{ steps.changed-folders.outputs.folders }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Rules:**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`run_examples.sh\` must exist" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`README.md\` must exist" >> "$GITHUB_STEP_SUMMARY"
+          echo "- At least one of \`requirements.txt\`, \`pyproject.toml\`, or \`uv.lock\` must exist" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`run_examples.sh\` should contain \`set -e\`" >> "$GITHUB_STEP_SUMMARY"
