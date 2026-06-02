@@ -1,0 +1,11 @@
+[project]
+name = "working-with-governance-data"
+version = "0.1.0"
+description = "Instrument agents with governance tags and metadata, derive composite metrics, and extract aggregated scores for oversight reporting"
+requires-python = ">=3.10"
+dependencies = [
+    "opik>=1.11.0",
+]
+
+[dependency-groups]
+dev = []

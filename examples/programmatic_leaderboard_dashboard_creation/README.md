@@ -1,8 +1,11 @@
 # Opik Experiment Leaderboard — Programmatic Setup
 
-> **Demo scripts** for creating an Experiment Leaderboard dashboard in Opik entirely via the REST API, with no UI interaction required. Copy this folder and adapt the dataset, experiment configs, and scoring metrics to your own use case.
+> **Demo scripts** for creating a multi-widget Experiment dashboard in Opik entirely via the REST API, with no UI interaction required. Copy this folder and adapt the dataset, experiment configs, and scoring metrics to your own use case.
 
-This directory demonstrates how to create an **Experiment Leaderboard dashboard** in Opik entirely via the REST API, with no UI interaction required.
+This directory demonstrates how to create a dashboard in Opik entirely via the REST API, with no UI interaction required. The generated dashboard contains two sections:
+
+- **Leaderboard** — a ranked comparison table across all experiments
+- **Metric Charts** — a radar chart (all metrics) plus one bar-chart widget per feedback score
 
 ---
 
@@ -34,7 +37,7 @@ This creates a dataset (`leaderboard-demo`), runs two experiments with different
 python create_leaderboard_from_yaml.py
 ```
 
-The script reads the YAML and calls `POST /opik/api/v1/private/dashboards` to create a dashboard with the leaderboard widget pre-configured.
+The script reads the YAML and calls `POST /opik/api/v1/private/dashboards` to create a dashboard with a leaderboard widget and one `experiments_feedback_scores` chart widget per metric (plus a radar overview).
 
 If the dashboard already exists, you'll be prompted to re-run with `--replace`:
 
@@ -282,6 +285,98 @@ The widget identifies column type by ID prefix:
   ]
 }
 ```
+
+---
+
+## Feedback Score Chart Widget
+
+The `experiments_feedback_scores` widget renders a chart comparing experiments across one or more feedback score metrics. It supports `bar`, `line`, and `radar` chart types.
+
+```json
+{
+  "id": "<uuid>",
+  "title": "Accuracy by Experiment",
+  "type": "experiments_feedback_scores",
+  "config": {
+    "overrideDefaults": true,
+    "dataSource": "select_experiments",
+    "experimentIds": ["exp-id-1", "exp-id-2"],
+    "filters": [],
+    "feedbackScores": ["accuracy"],
+    "chartType": "bar",
+    "maxExperimentsCount": 50
+  }
+}
+```
+
+### Key config fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `overrideDefaults` | bool | `true` = widget uses its own `experimentIds`, ignoring the dashboard-level selection |
+| `dataSource` | string | `select_experiments` or `filter_and_group` |
+| `experimentIds` | string[] | Experiments to include when `dataSource = select_experiments` |
+| `feedbackScores` | string[] | Raw metric names to display (e.g. `["accuracy"]`). Empty list shows all scores |
+| `chartType` | string | `"bar"`, `"line"`, or `"radar"` |
+| `maxExperimentsCount` | int | Maximum number of experiments to load |
+
+> **Note:** `feedbackScores` takes the **raw metric name** (e.g. `"accuracy"`), not the prefixed column ID used by the leaderboard widget (`"feedback_scores.accuracy"`).
+
+### Chart type guidance
+
+| Chart type | Best used for |
+|------------|---------------|
+| `bar` | Comparing experiments on a **single metric** side-by-side |
+| `line` | Showing a metric trend across experiments ordered by time |
+| `radar` | Comparing experiments across **multiple metrics** simultaneously |
+
+### Radar chart (all metrics)
+
+Pass all metric names in `feedbackScores` and set `chartType` to `"radar"` to create a multi-dimensional comparison view:
+
+```json
+{
+  "id": "<uuid>",
+  "title": "All Metrics — Radar",
+  "type": "experiments_feedback_scores",
+  "config": {
+    "overrideDefaults": true,
+    "dataSource": "select_experiments",
+    "experimentIds": ["exp-id-1", "exp-id-2"],
+    "filters": [],
+    "feedbackScores": ["accuracy", "relevance", "conciseness"],
+    "chartType": "radar",
+    "maxExperimentsCount": 50
+  }
+}
+```
+
+### Layout
+
+Chart widgets follow the same 24-column grid as the leaderboard. A useful pattern for a "Metric Charts" section is:
+
+```
+┌──────────────────┐
+│  Radar (w=6,h=6) │   ← all metrics at a glance
+├────┬────┬────┬───┤
+│bar │bar │bar │...│   ← one bar chart per metric (w=3, h=5)
+└────┴────┴────┴───┘
+```
+
+```python
+# Example layout entry for a bar chart widget
+{
+    "i": widget_id,
+    "x": col * 3,      # 8 widgets per row at w=3
+    "y": 6 + row * 5,  # start below the radar (h=6)
+    "w": 3,
+    "h": 5,
+    "minW": 3,
+    "minH": 3,
+}
+```
+
+See `_build_metric_chart_widgets()` in `create_leaderboard_from_yaml.py` for the complete working implementation.
 
 ---
 
