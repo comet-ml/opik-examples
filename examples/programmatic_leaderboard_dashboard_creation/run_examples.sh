@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+export OPIK_PROJECT_NAME="programmatic-leaderboard"
+
 pip install -r requirements.txt
 
 # Run experiments (heuristic scoring only — no LLM API key required)

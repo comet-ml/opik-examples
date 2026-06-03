@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+export OPIK_PROJECT_NAME="trace-deletion"
+
 pip install -r requirements.txt
 
 # Verify the script imports cleanly and CLI is functional (no destructive action)
