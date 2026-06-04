@@ -16,6 +16,7 @@ opik-examples/
 |---------|-------------|
 | [trace_management](code-snippets/trace_management/) | Inspect and delete traces by date range, tags, or per-tag TTL policies |
 | [automate_annotation_queue](code-snippets/automate_annotation_queue/) | Automatically route traces into annotation queues via batch or real-time assignment |
+| [usage_stats](code-snippets/usage_stats/) | Fetch trace, thread, and span counts per project and visualise daily and cumulative trends |
 
 ### examples
 
