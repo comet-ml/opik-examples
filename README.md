@@ -1,28 +1,52 @@
 # opik-examples
 
-Code snippets and examples for working with [Opik](https://www.comet.com/site/products/opik/), Comet's LLM evaluation and observability platform.
+Examples and utilities for working with [Opik](https://www.comet.com/site/products/opik/), Comet's LLM evaluation and observability platform.
 
 ## Structure
 
 ```
 opik-examples/
-├── code-snippets/     # Short, self-contained scripts for specific tasks
-└── examples/          # Multi-file, end-to-end examples with full context
+├── integrations/   # Adding Opik to a specific framework or library
+├── guides/         # How-to examples for Opik workflows and patterns
+├── use-cases/      # End-to-end applications and domain workflows
+├── scripts/        # Utility automations and API helpers
+└── _template/      # Starter template for new examples
 ```
 
-### code-snippets
+## Integrations
 
-| Snippet | Description |
-|---------|-------------|
-| [trace_management](code-snippets/trace_management/) | Inspect and delete traces by date range, tags, or per-tag TTL policies |
-| [automate_annotation_queue](code-snippets/automate_annotation_queue/) | Automatically route traces into annotation queues via batch or real-time assignment |
-| [usage_stats](code-snippets/usage_stats/) | Fetch trace, thread, and span counts per project and visualise daily and cumulative trends |
+Examples for teams using a specific framework who want to add Opik.
 
-### examples
+| | Description |
+|---|---|
+| [integrations/otel/offline_evaluation](integrations/otel/offline_evaluation/) | OTel tracing alongside Opik's offline evaluation workflow |
 
-| Example | Description |
-|---------|-------------|
-| [otel_with_offline_eval_example](examples/otel_with_offline_eval_example/) | Use OpenTelemetry tracing alongside Opik's offline evaluation workflow |
-| [programmatic_leaderboard_dashboard_creation](examples/programmatic_leaderboard_dashboard_creation/) | Create an Experiment Leaderboard dashboard entirely via the REST API |
-| [working_with_governance_data](examples/working_with_governance_data/) | Instrument agents with governance tags and metadata, derive composite metrics, and extract aggregated scores for oversight reporting |
+## Guides
 
+Task-oriented examples for specific Opik workflows and patterns.
+
+*More coming soon — see [guides/](guides/) or [contribute one](CONTRIBUTING.md).*
+
+## Use Cases
+
+End-to-end applications and domain-specific workflows.
+
+| | Description |
+|---|---|
+| [use-cases/call_summarizer](use-cases/call_summarizer/) | Streamlit app that summarises customer calls using an LLM, traced with Opik |
+| [use-cases/governance_observability](use-cases/governance_observability/) | Instrument agents with governance metadata, derive composite metrics, and extract scores for oversight reporting |
+
+## Scripts
+
+Standalone scripts for automating and managing Opik resources.
+
+| | Description |
+|---|---|
+| [scripts/trace_management](scripts/trace_management/) | Inspect and delete traces by date range, tags, or TTL policies |
+| [scripts/automate_annotation_queue](scripts/automate_annotation_queue/) | Route traces into annotation queues via batch or real-time assignment |
+| [scripts/usage_stats](scripts/usage_stats/) | Fetch trace and span counts per project and visualise trends |
+| [scripts/leaderboard_dashboard](scripts/leaderboard_dashboard/) | Create an Experiment Leaderboard dashboard via the REST API |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution guide and example template.
