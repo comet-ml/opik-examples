@@ -25,7 +25,9 @@ Examples for teams using a specific framework who want to add Opik.
 
 Task-oriented examples for specific Opik workflows and patterns.
 
-*More coming soon — see [guides/](guides/) or [contribute one](CONTRIBUTING.md).*
+| | Description |
+|---|---|
+| [guides/tracing_finetuned_models](guides/tracing_finetuned_models/) | Fine-tune a model, register it to the CometML Model Registry, then fetch and trace inference in Opik |
 
 ## Use Cases
 
