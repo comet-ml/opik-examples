@@ -20,6 +20,7 @@ Examples for teams using a specific framework who want to add Opik.
 | | Description |
 |---|---|
 | [integrations/otel/offline_evaluation](integrations/otel/offline_evaluation/) | OTel tracing alongside Opik's offline evaluation workflow |
+| [integrations/otel/distributed_tracing](integrations/otel/distributed_tracing/) | Stitch out-of-process tool call spans into a single trace |
 
 ## Guides
 
