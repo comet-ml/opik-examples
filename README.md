@@ -10,7 +10,7 @@ opik-examples/
 ├── guides/         # How-to examples for Opik workflows and patterns
 ├── use-cases/      # End-to-end applications and domain workflows
 ├── scripts/        # Utility automations and API helpers
-└── _template/      # Starter template for new examples
+└── templates/      # Starter templates (use-case-template, script-template)
 ```
 
 ## Integrations
