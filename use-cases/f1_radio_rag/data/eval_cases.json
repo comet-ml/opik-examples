@@ -1,0 +1,107 @@
+[
+  {
+    "query": "What tyre degradation problems did drivers report over the weekend?",
+    "messages": [
+      "VER: Front-left is graining already, losing the front end into turn 4.",
+      "VER: Rear tyres are gone after eight laps, big degradation on the hard compound.",
+      "LEC: Front-left graining is back, I'm struggling to hold this pace."
+    ],
+    "expected_output": "Verstappen reported front-left graining in FP1 and heavy rear degradation on the hard tyre in FP2. Leclerc suffered front-left graining again during the race, hurting his pace.",
+    "assertions": [
+      "Reports the front-left graining described in the radio messages",
+      "Attributes a tyre problem to Verstappen, consistent with the messages",
+      "Describes only tyre issues that appear in the messages"
+    ]
+  },
+  {
+    "query": "Did McLaren use an undercut, and did it work?",
+    "messages": [
+      "Engineer to LEC: Box this lap, box box, we go to the hard tyre.",
+      "Engineer to NOR: Leclerc is pitting, this is the undercut window, push now.",
+      "Engineer to NOR: Undercut worked, you came out ahead of Leclerc, P2 now."
+    ],
+    "expected_output": "Yes. When Leclerc pitted, McLaren told Norris to push in the undercut window. It worked and Norris came out ahead of Leclerc into P2.",
+    "assertions": [
+      "States the undercut outcome the way the messages describe it (it worked)",
+      "Says Norris gained the position, consistent with the messages",
+      "Refers only to drivers named in the messages"
+    ]
+  },
+  {
+    "query": "Why were lap times deleted in qualifying?",
+    "messages": [
+      "NOR: Yellow flag in sector 2, I had to lift, lap is deleted.",
+      "LEC: Lap time deleted for track limits at turn 9, I ran wide."
+    ],
+    "expected_output": "Two laps were deleted: Norris had to lift for a yellow flag in sector 2, and Leclerc lost a lap for exceeding track limits at turn 9.",
+    "assertions": [
+      "Gives the yellow flag as a reason, per the messages",
+      "Gives track limits as a reason, per the messages",
+      "Does not add a reason that is not in the messages"
+    ]
+  },
+  {
+    "query": "What happened with the weather during the race?",
+    "messages": [
+      "VER: It's starting to rain in sector 3, light drizzle on my visor.",
+      "Engineer to PIA: Rain expected to intensify in five minutes, prepare for intermediates.",
+      "HAM: Conditions are treacherous, no grip on the slicks, I nearly lost it at turn 4."
+    ],
+    "expected_output": "Light rain began in sector 3 and was expected to intensify, prompting teams to prepare intermediates. Conditions became treacherous on slicks, with Hamilton nearly losing the car at turn 4.",
+    "assertions": [
+      "States that rain affected the race, per the messages",
+      "Mentions preparing intermediate tyres, as the messages say",
+      "Does not claim the race stayed dry"
+    ]
+  },
+  {
+    "query": "Was there a safety car and what triggered it?",
+    "messages": [
+      "LEC: Safety car is out, there's a car stopped at turn 6.",
+      "Engineer to NOR: Safety car this lap, box for intermediates, it's the right call."
+    ],
+    "expected_output": "Yes. A safety car was deployed for a car stopped at turn 6, and teams used it to pit for intermediates.",
+    "assertions": [
+      "Confirms a safety car, as stated in the messages",
+      "Gives the stopped car at turn 6 as the trigger, per the messages",
+      "Does not invent a different cause"
+    ]
+  },
+  {
+    "query": "Did any driver have brake problems?",
+    "messages": [
+      "LEC: Brakes are running hot, I can smell them on the long straight."
+    ],
+    "expected_output": "Leclerc reported his brakes running hot in FP1, to the point he could smell them on the long straight.",
+    "assertions": [
+      "Attributes the brake issue to Leclerc, per the messages",
+      "Describes the brakes overheating or running hot, as the messages state"
+    ]
+  },
+  {
+    "query": "Were there team orders at Mercedes?",
+    "messages": [
+      "HAM: I have DRS on Russell, I'll have a look down the inside into turn 1.",
+      "Engineer to RUS: Hamilton has DRS, hold position, do not fight your team-mate."
+    ],
+    "expected_output": "Yes. Hamilton had DRS on Russell and intended to attack into turn 1; Mercedes told Russell to hold position and not fight his team-mate.",
+    "assertions": [
+      "Reports the Mercedes hold-position or no-fight instruction from the messages",
+      "Refers to both Hamilton and Russell, as named in the messages"
+    ]
+  },
+  {
+    "query": "Who won the race and how did they manage the lead?",
+    "messages": [
+      "Engineer to VER: P1 provisional, that's pole, great job.",
+      "Engineer to VER: Good launch, you keep the lead into turn 1.",
+      "Engineer to VER: Last lap, gap is four seconds, bring it home, you've won it."
+    ],
+    "expected_output": "Verstappen won. He took pole, kept the lead off the line into turn 1, managed the gap, and brought it home with a four-second margin on the last lap.",
+    "assertions": [
+      "Names the winner the radio messages indicate (Verstappen, who took pole and was told he had won)",
+      "Notes he led from pole or from the start, per the messages",
+      "Does not name a winner the messages do not support"
+    ]
+  }
+]
