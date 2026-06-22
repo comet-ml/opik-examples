@@ -3,7 +3,7 @@ name = "working-with-governance-data"
 version = "0.1.0"
 description = "Instrument agents with governance tags and metadata, derive composite metrics, and extract aggregated scores for oversight reporting"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "opik>=1.11.0",
 ]

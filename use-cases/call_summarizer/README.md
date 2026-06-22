@@ -149,7 +149,6 @@ See the repo [CONTRIBUTING.md](../../CONTRIBUTING.md) for the full contribution 
 call-summarizer/
 ├── .env.example           # Example environment variables
 ├── app.py                 # Main Streamlit application
-├── init_app.py           # Application initialization script
 ├── pyproject.toml        # Project dependencies and configuration (uv)
 ├── README.md             # This file
 └── src/
