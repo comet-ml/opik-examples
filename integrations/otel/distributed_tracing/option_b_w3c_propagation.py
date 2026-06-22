@@ -49,11 +49,11 @@ import os
 import time
 
 from opentelemetry import trace
-from opentelemetry.propagate import inject, extract
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.propagate import extract, inject
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
 # ── OTel -> Opik wiring ──────────────────────────────────────────────────────
 ENDPOINT = os.environ.get(

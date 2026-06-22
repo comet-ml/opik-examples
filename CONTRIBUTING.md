@@ -92,7 +92,7 @@ Then, either way:
 Use the template's README as a guide. Required sections:
 
 - **What this does** — one paragraph, the problem and the solution
-- **Prerequisites** — pip install line and env vars table
+- **Prerequisites** — `uv sync` (optional `pip install` fallback) and an env-vars table
 - **Running it** — exact commands, including dry-run
 - **How it works** — brief walkthrough of the key steps
 
@@ -126,7 +126,7 @@ Never commit `.env` files or hardcoded keys. Add `.env` to the example's `.gitig
 
 ### Dependencies
 
-Each example should be runnable with a standard `pip install` one-liner listed in the README. If the example has many dependencies, include a `requirements.txt`. Do not assume the user has the repo's root virtualenv set up.
+Each example is a `uv` project: declare dependencies in its `pyproject.toml` (the single source of truth) and run with `uv sync` / `uv run`. No `requirements.txt`, no Poetry, and don't commit `uv.lock`. The README may still show an optional `pip install` fallback line. Do not assume the user has the repo's root virtualenv set up.
 
 ### Code style
 
@@ -144,7 +144,7 @@ Before opening a PR, verify:
 - [ ] READMEs updated — the example's `README.md`, and for added/renamed/removed examples the bucket index and the root `README.md` table
 - [ ] Dry-run mode works (no env vars set) prints useful output without errors — e.g. `uv run <command> eval`
 - [ ] No credentials or `.env` files committed
-- [ ] Dependencies are listed in the README
+- [ ] Dependencies declared in `pyproject.toml` (uv project); no `requirements.txt`
 
 ## Questions
 

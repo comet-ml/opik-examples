@@ -18,14 +18,13 @@ Run:
 
 # comet_ml must be imported before transformers/trl — the Trainer integration
 # hooks in at import time.
-import comet_ml  # noqa: F401
-
 import os
 import shutil
-import torch
+
+import comet_ml  # noqa: F401
 from datasets import load_dataset
-from transformers import AutoTokenizer, AutoModelForCausalLM, TrainerCallback
-from trl import SFTTrainer, SFTConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
+from trl import SFTConfig, SFTTrainer
 
 # ── Config ────────────────────────────────────────────────────────────────────
 MODEL_NAME        = "distilgpt2"
@@ -128,7 +127,7 @@ if experiment:
     experiment.end()
 
     print("\nTraining complete. Model registered to CometML Model Registry.")
-    print(f"\nUse these values in use_registered_model.py:")
+    print("\nUse these values in use_registered_model.py:")
     print(f"  COMET_WORKSPACE={workspace}")
     print(f"  COMET_REGISTRY_NAME={REGISTRY_NAME}")
     print(f"  COMET_MODEL_VERSION={MODEL_VERSION}")

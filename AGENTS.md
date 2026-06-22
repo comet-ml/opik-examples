@@ -59,9 +59,9 @@ Do not add comments that explain what the code does. Use a short `# WHY:` commen
 
 Do not write docstrings that restate the function name. One short line is the maximum.
 
-### Dependencies
+### Dependencies — uv + pyproject.toml
 
-List all dependencies in the example's `README.md` as a single `pip install` line. Do not assume the repo root virtualenv is active. Include a `requirements.txt` if the example has more than a handful of dependencies.
+Every example is a `uv` project: its `pyproject.toml` is the single source of truth for dependencies. **No `requirements.txt`, no Poetry.** Install with `uv sync`, run with `uv run` (`uv run python <file>.py`, or the `[project.scripts]` command if one is defined). Don't commit `uv.lock`. The README's Prerequisites still shows a one-line install (`uv sync`, with an optional `pip install` fallback). Do not assume the repo root virtualenv is active.
 
 ## Coding best practices
 

@@ -18,13 +18,12 @@ Environment variables:
 
 import opik
 from opik.evaluation.metrics import Equals, Hallucination
+
 # Note: Hallucination is an LLM-judge metric — it requires an LLM provider to be
 # configured (e.g. set OPENAI_API_KEY). Replace or remove it if you don't have one.
-
 # Import the function from your application code.
 # opik.evaluate() will call this function for each dataset item.
 from llm_app import answer_question
-
 
 # --- Step 1: Create (or get) a dataset ---
 

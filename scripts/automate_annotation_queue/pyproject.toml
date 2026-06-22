@@ -1,11 +1,11 @@
 [project]
-name = "working-with-governance-data"
+name = "automate-annotation-queue"
 version = "0.1.0"
-description = "Instrument agents with governance tags and metadata, derive composite metrics, and extract aggregated scores for oversight reporting"
+description = "Route Opik traces into annotation queues via batch or real-time assignment."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
-    "opik>=1.11.0",
+    "opik>=2.0",
 ]
 
 [dependency-groups]

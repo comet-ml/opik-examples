@@ -1,11 +1,13 @@
 [project]
-name = "working-with-governance-data"
+name = "distributed-tracing"
 version = "0.1.0"
-description = "Instrument agents with governance tags and metadata, derive composite metrics, and extract aggregated scores for oversight reporting"
+description = "Stitch out-of-process tool-call spans into a single Opik trace via OpenTelemetry."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
-    "opik>=1.11.0",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp-proto-http",
+    "uuid6",
 ]
 
 [dependency-groups]

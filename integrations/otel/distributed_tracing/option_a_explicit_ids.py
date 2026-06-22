@@ -61,12 +61,12 @@ RUN
 import json
 import os
 import time
-import uuid6  # same UUIDv7 generator Opik's own SDK uses (opik.id_helpers)
 
+import uuid6  # same UUIDv7 generator Opik's own SDK uses (opik.id_helpers)
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
 # ── OTel -> Opik wiring ──────────────────────────────────────────────────────
 ENDPOINT = os.environ.get(
