@@ -3,3 +3,15 @@
 
 *.csv
 *.png
+.DS_Store
+__pycache__/
+*.pyc
+
+# Model files
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+downloaded_model/
+results_sft/
+final_model/
