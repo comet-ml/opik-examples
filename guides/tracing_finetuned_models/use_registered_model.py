@@ -50,13 +50,8 @@ def download_registered_model() -> str:
 
     api = comet_ml.API(api_key=COMET_API_KEY)
     print(f"Downloading {REGISTRY_NAME} v{MODEL_VERSION} from CometML Model Registry...")
-    api.download_registry_model(
-        workspace=COMET_WORKSPACE,
-        registry_name=REGISTRY_NAME,
-        version=MODEL_VERSION,
-        output_path=MODEL_LOCAL_DIR,
-        expand=True,
-    )
+    registered_model = api.get_model(workspace=COMET_WORKSPACE, model_name=REGISTRY_NAME)
+    registered_model.download(version=MODEL_VERSION, output_folder=MODEL_LOCAL_DIR, expand=True)
     print(f"Model downloaded to {MODEL_LOCAL_DIR}\n")
     return MODEL_LOCAL_DIR
 
