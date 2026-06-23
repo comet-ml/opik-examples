@@ -19,8 +19,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import requests
 
@@ -115,7 +114,7 @@ def _fmt_dt(dt: datetime) -> str:
 def _parse_date(s: str) -> datetime:
     for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%SZ"):
         try:
-            return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
+            return datetime.strptime(s, fmt).replace(tzinfo=UTC)
         except ValueError:
             pass
     _die(f"Cannot parse date: {s!r}. Use ISO 8601 format, e.g. 2025-01-31 or 2025-01-31T12:00:00.")
@@ -130,8 +129,8 @@ class TraceFilter:
       3. Add the CLI flag in add_filter_args().
       4. Add the config key in from_config().
     """
-    before: Optional[datetime] = None
-    after:  Optional[datetime] = None
+    before: datetime | None = None
+    after:  datetime | None = None
     tags:         dataclasses.field(default_factory=list) = dataclasses.field(default_factory=list)
     exclude_tags: dataclasses.field(default_factory=list) = dataclasses.field(default_factory=list)
 
@@ -176,7 +175,7 @@ class TraceFilter:
         if getattr(args, "before", None):
             before = _parse_date(args.before)
         elif getattr(args, "older_than_days", None) is not None:
-            before = datetime.now(tz=timezone.utc) - timedelta(days=args.older_than_days)
+            before = datetime.now(tz=UTC) - timedelta(days=args.older_than_days)
         after = _parse_date(args.after) if getattr(args, "after", None) else None
         return cls(
             before=before,
@@ -189,7 +188,7 @@ class TraceFilter:
     def from_config_filters(cls, f: dict) -> "TraceFilter":
         before = None
         if f.get("older_than_days"):
-            before = datetime.now(tz=timezone.utc) - timedelta(days=f["older_than_days"])
+            before = datetime.now(tz=UTC) - timedelta(days=f["older_than_days"])
         elif f.get("before"):
             before = _parse_date(f["before"])
         after = _parse_date(f["after"]) if f.get("after") else None
@@ -206,7 +205,7 @@ class TraceFilter:
         if getattr(args, "before", None):
             result.before = _parse_date(args.before)
         elif getattr(args, "older_than_days", None) is not None:
-            result.before = datetime.now(tz=timezone.utc) - timedelta(days=args.older_than_days)
+            result.before = datetime.now(tz=UTC) - timedelta(days=args.older_than_days)
         if getattr(args, "after", None):
             result.after = _parse_date(args.after)
         if getattr(args, "tag", None):
@@ -233,7 +232,7 @@ def expand_ttl_rules(rules: list[dict]) -> list[tuple["TraceFilter", str]]:
 
     for rule in sorted_rules:
         days = rule["older_than_days"]
-        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(tz=UTC) - timedelta(days=days)
         rule_tags: list[str] = rule.get("tags", [])
         rule_exclude: list[str] = rule.get("exclude_tags", [])
 
@@ -345,7 +344,7 @@ def collect_trace_ids(
     project_name: str,
     tf: TraceFilter,
     label: str = "",
-) -> tuple[list[str], Optional[str]]:
+) -> tuple[list[str], str | None]:
     """Collect all matching trace IDs by always fetching page 1 until exhausted.
 
     We always request page=1 rather than incrementing the page number.
@@ -355,7 +354,7 @@ def collect_trace_ids(
     the response is empty avoids this entirely.
     """
     all_ids: list[str] = []
-    project_id: Optional[str] = None
+    project_id: str | None = None
 
     desc = f" ({label})" if label else ""
     print(f"  Collecting IDs{desc} ...", flush=True)
@@ -392,7 +391,7 @@ def collect_trace_ids(
 def batch_delete(
     env: dict,
     trace_ids: list[str],
-    project_id: Optional[str],
+    project_id: str | None,
     dry_run: bool,
 ) -> int:
     total_deleted = 0
@@ -416,7 +415,10 @@ def batch_delete(
         resp.raise_for_status()
 
         total_deleted += len(batch)
-        print(f"    Deleted batch {batch_num}/{num_batches}: {len(batch)} traces (running total: {total_deleted})")
+        print(
+            f"    Deleted batch {batch_num}/{num_batches}: "
+            f"{len(batch)} traces (running total: {total_deleted})"
+        )
 
         if i + DELETE_BATCH_SIZE < len(trace_ids):
             time.sleep(RATE_LIMIT_DELAY)
@@ -438,7 +440,7 @@ def cmd_list(env: dict, projects: list[dict], filters: list[tuple[TraceFilter, s
         name = project["name"]
         project_total = 0
 
-        for tf, label in filters:
+        for tf, _label in filters:
             try:
                 count = fetch_trace_count(env, name, tf)
             except requests.HTTPError as e:
@@ -620,7 +622,13 @@ def _resolve_filters(args: argparse.Namespace) -> tuple[list[str], list[tuple[Tr
     return project_names, [(final_tf, final_tf.describe())]
 
 
-def _print_header(env: dict, cmd: str, projects: list[dict], filters: list[tuple[TraceFilter, str]], dry_run: bool = False) -> None:
+def _print_header(
+    env: dict,
+    cmd: str,
+    projects: list[dict],
+    filters: list[tuple[TraceFilter, str]],
+    dry_run: bool = False,
+) -> None:
     mode = "[DRY RUN] " if dry_run else ""
     action = "Inspector" if cmd == "list" else "Deletion"
     print(f"{mode}Opik Trace {action}")
@@ -631,7 +639,7 @@ def _print_header(env: dict, cmd: str, projects: list[dict], filters: list[tuple
         print(f"  Filters   : {filters[0][1]}")
     else:
         print(f"  Filters   : {len(filters)} TTL rule(s)")
-        for tf, label in filters:
+        for _tf, label in filters:
             print(f"              {label}")
 
 
@@ -644,7 +652,7 @@ def main() -> None:
 
     env = get_env()
 
-    print(f"Resolving projects...", flush=True)
+    print("Resolving projects...", flush=True)
     projects = resolve_projects(env, project_names)
 
     _print_header(env, args.cmd, projects, filters, dry_run=getattr(args, "dry_run", False))

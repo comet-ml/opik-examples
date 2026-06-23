@@ -1,0 +1,8 @@
+.env
+.venv
+__pycache__/
+*.pyc
+.tmp/
+opik_test_suite_reports/
+*.log
+.ruff_cache/

@@ -22,7 +22,7 @@ A Streamlit application for summarizing and categorizing call transcripts using 
 ### Prerequisites
 
 - Python 3.12 or higher (recommended)
-- [Poetry](https://python-poetry.org/) for dependency management
+- [uv](https://docs.astral.sh/uv/) for dependency management
 - [OpenAI API key](https://platform.openai.com/api-keys)
 - [Opik API key](https://www.comet.com/signup?utm_source=call-summarizer&utm_medium=referral&utm_campaign=github) (optional but recommended for tracing)
 - (Optional) [pyenv](https://github.com/pyenv/pyenv) for Python version management
@@ -37,10 +37,10 @@ A Streamlit application for summarizing and categorizing call transcripts using 
    cd call-summarizer
    ```
 
-2. Install Python dependencies with Poetry:
+2. Install dependencies with uv:
 
    ```bash
-   poetry install
+   uv sync
    ```
 
 3. Copy the example environment file and update with your API keys:
@@ -48,12 +48,6 @@ A Streamlit application for summarizing and categorizing call transcripts using 
    ```bash
    cp .env.example .env
    # Edit .env with your API keys
-   ```
-
-4. Activate the virtual environment:
-
-   ```bash
-   poetry shell
    ```
 
 ## Configuration
@@ -95,104 +89,31 @@ All LLM interactions will now be traced and visible in your Opik dashboard.
 1. Start the Streamlit application:
 
    ```bash
-   streamlit run app.py
+   uv run streamlit run app.py
    ```
 
 2. Open your browser to the URL shown in the terminal (usually http://localhost:8501)
 
 ### Development
 
-This project uses [Poetry](https://python-poetry.org/) for dependency management. For code quality and consistency, we use:
+Dependencies and tooling are managed with [uv](https://docs.astral.sh/uv/). `uv sync` installs the
+dev group ([Ruff](https://github.com/astral-sh/ruff) + pytest).
 
-- **[Ruff](https://github.com/astral-sh/ruff)**: For extremely fast Python linting and formatting (replaces Black, isort, Flake8).
-- **[pre-commit](https://pre-commit.com/)**: For managing and maintaining multi-language pre-commit hooks.
-- **[Commitizen](https://commitizen-tools.github.io/commitizen/)**: For standardized commit messages (following Conventional Commits) and automated version bumping.
+- **Lint / format:**
 
-**1. Install Development Dependencies:**
-   This includes tools like Ruff, pre-commit, Commitizen, and pytest.
+  ```bash
+  uv run ruff check .
+  uv run ruff format .
+  ```
 
-   ```bash
-   poetry install --with dev
-   ```
+- **Tests:**
 
-**2. Set Up Pre-commit Hooks:**
-After installing dependencies, activate the pre-commit hooks in your local repository. These hooks will run automatically before each commit.
+  ```bash
+  uv run pytest
+  ```
 
-```bash
-poetry run pre-commit install --hook-type commit-msg --hook-type pre-commit
-```
-
-The configured hooks will:
-
-- Format your code using Ruff.
-- Lint your code using Ruff.
-- Check your commit message format using Commitizen.
-- Perform other general checks (e.g., for trailing whitespace, valid YAML/TOML).
-
-**3. Running Linters and Formatters Manually:**
-While pre-commit hooks handle this automatically, you can also run these tools manually:
-
-- **Format code with Ruff:**
-
-```bash
-poetry run ruff format .
-```
-
-- **Check for linting issues with Ruff (and autofix where possible):**
-
-```bash
-poetry run ruff check . --fix
-```
-
-**4. Running Tests:**
-
-```bash
-poetry run pytest
-```
-
-**5. Commit Guidelines (Conventional Commits):**
-This project adheres to the [Conventional Commits](https://www.conventionalcommits.org/) specification. This practice helps in creating an explicit commit history, which is useful for automated version bumping and changelog generation.
-
-To make a commit:
-
-1. Stage your changes (`git add <files>...`).
-2. Run `git commit`.
-   - The pre-commit hooks will execute first. If any hook fails (e.g., Ruff finds formatting issues it can't fix automatically, or your commit message doesn't conform), the commit will be aborted. Address the issues and try committing again.
-   - If all pre-commit hooks pass, Commitizen will prompt you interactively to build a conventional commit message.
-   Alternatively, you can directly use Commitizen's interactive prompt for committing:
-
-```bash
-poetry run cz c
-```
-
-This command also respects pre-commit hooks if they are installed.
-
-**6. Release Process (Versioning):**
-When you're ready to release a new version of the project (e.g., after merging significant features or fixes):
-
-1. Ensure your local main branch (or your primary development branch) is up-to-date with the remote repository and that your working directory is clean (no uncommitted changes).
-2. Run the Commitizen bump command:
-
-   ```bash
-   poetry run cz bump --changelog
-   ```
-
-   This command performs several actions:
-
-   - Analyzes your commit history since the last version tag.
-   - Determines the appropriate new version (patch, minor, or major) based on your conventional commits.
-   - Updates the version string in `pyproject.toml` (under `tool.poetry.version`) and `src/call_summarizer/__init__.py` (the `__version__` attribute).
-   - Creates a new commit with these version changes.
-   - Tags the new commit with the new version number (e.g., `v0.2.0`).
-   - The `--changelog` flag will also attempt to generate or update a changelog file. (Note: For more advanced changelog generation, you might need to configure `commitizen` further, for example, by setting `update_changelog_on_bump = true` and specifying a changelog file in `pyproject.toml` if you want it automatically updated).
-
-3. Push the new commit and the new tag to the remote repository:
-
-```bash
-git push --follow-tags
-```
-
-This process ensures that versioning is consistent and automated.
+This project follows the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+See the repo [CONTRIBUTING.md](../../CONTRIBUTING.md) for the full contribution workflow.
 
 ## 🛠️ Usage
 
@@ -228,8 +149,7 @@ This process ensures that versioning is consistent and automated.
 call-summarizer/
 ├── .env.example           # Example environment variables
 ├── app.py                 # Main Streamlit application
-├── init_app.py           # Application initialization script
-├── pyproject.toml        # Project dependencies and configuration (Poetry)
+├── pyproject.toml        # Project dependencies and configuration (uv)
 ├── README.md             # This file
 └── src/
     └── call_summarizer/
@@ -254,7 +174,7 @@ call-summarizer/
 - **ChromaDB**: Vector database for storing and searching call summaries
 - **LlamaIndex**: For semantic search and retrieval
 - **Opik**: For LLM tracing and debugging
-- **Poetry**: Dependency management
+- **uv**: Dependency management
 - **Pydantic**: Data validation and settings management
 
 ## 🙏 Acknowledgments

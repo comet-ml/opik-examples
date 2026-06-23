@@ -15,8 +15,8 @@ import datetime
 import os
 
 import matplotlib.pyplot as plt
-import pandas as pd
 import opik
+import pandas as pd
 
 # ---------------------------------------------------------------------------
 # 1.  Authenticate
@@ -31,7 +31,7 @@ WORKSPACE = os.environ.get("OPIK_WORKSPACE", "default")
 # ---------------------------------------------------------------------------
 # 2.  Analysis window (last 30 days by default — adjust as needed)
 # ---------------------------------------------------------------------------
-now = datetime.datetime.now(datetime.timezone.utc)
+now = datetime.datetime.now(datetime.UTC)
 INTERVAL_START = now - datetime.timedelta(days=30)
 INTERVAL_END = now
 
@@ -163,7 +163,7 @@ for row, metric in enumerate(metrics_present):
         colors = [project_colors[p] for p in pivot.columns if p in project_colors]
         x = range(len(pivot))
         bottom = pd.Series([0.0] * len(pivot), index=pivot.index)
-        for project, color in zip(pivot.columns, colors):
+        for project, color in zip(pivot.columns, colors, strict=False):
             ax_bar.bar(x, pivot[project].values, bottom=bottom.values,
                        color=color, width=0.8, label=project)
             bottom += pivot[project]
@@ -186,7 +186,7 @@ for row, metric in enumerate(metrics_present):
     else:
         cum = pivot.cumsum()
         x_dates = list(range(len(cum)))
-        for project, color in zip(cum.columns, colors):
+        for project, color in zip(cum.columns, colors, strict=False):
             ax_cum.plot(x_dates, cum[project].values,
                         color=color, linewidth=1.8, label=project)
         ax_cum.fill_between(x_dates, cum.sum(axis=1).values, alpha=0.08, color="grey")

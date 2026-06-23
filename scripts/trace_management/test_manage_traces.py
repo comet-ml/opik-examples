@@ -30,7 +30,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 import requests
 
@@ -96,7 +96,7 @@ def make_headers(env: dict) -> dict:
 def seed_traces(env: dict, project_name: str) -> None:
     """Create test traces directly via the Opik REST API."""
     url = f"{env['base_url']}/opik/api/v1/private/traces/batch"
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     batch = []
 
     for days_ago, tags in TRACE_SEEDS:
@@ -202,12 +202,12 @@ def main() -> None:
     skip_pause = args.skip_pause
 
     # Dates used in filter scenarios
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     cutoff_90  = (now - timedelta(days=90)).strftime("%Y-%m-%d")
     cutoff_60  = (now - timedelta(days=60)).strftime("%Y-%m-%d")
     cutoff_30  = (now - timedelta(days=30)).strftime("%Y-%m-%d")
     after_100  = (now - timedelta(days=100)).strftime("%Y-%m-%d")
-    after_60   = (now - timedelta(days=60)).strftime("%Y-%m-%d")
+    (now - timedelta(days=60)).strftime("%Y-%m-%d")
 
     print("=" * 60)
     print("  Opik Trace Manager — End-to-End Test")
@@ -263,7 +263,10 @@ def main() -> None:
     run(["list", "--projects", project, "--after", after_100, "--before", cutoff_60], "list window")
 
     print("\n  2e. List traces with 'internal' tag, excluding 'sensitive'")
-    run(["list", "--projects", project, "--tag", "internal", "--exclude-tag", "sensitive"], "list tag+exclude")
+    run(
+        ["list", "--projects", project, "--tag", "internal", "--exclude-tag", "sensitive"],
+        "list tag+exclude",
+    )
 
     print("\n  2f. List traces by tag only — no date filter (all 'PII' traces regardless of age)")
     run(["list", "--projects", project, "--tag", "PII"], "list tag-only")
@@ -279,13 +282,19 @@ def main() -> None:
     section("Phase 3: delete --dry-run (preview only, no changes)")
 
     print("\n  3a. Dry-run: delete traces tagged 'sensitive' older than 30 days")
-    run(["delete", "--projects", project, "--tag", "sensitive", "--before", cutoff_30, "--dry-run"], "dry-run tag")
+    run(
+        ["delete", "--projects", project, "--tag", "sensitive", "--before", cutoff_30, "--dry-run"],
+        "dry-run tag",
+    )
 
     print("\n  3b. Dry-run: delete traces older than 90 days")
     run(["delete", "--projects", project, "--before", cutoff_90, "--dry-run"], "dry-run before 90d")
 
     print("\n  3c. Dry-run: delete in date window")
-    run(["delete", "--projects", project, "--after", after_100, "--before", cutoff_60, "--dry-run"], "dry-run window")
+    run(
+        ["delete", "--projects", project, "--after", after_100, "--before", cutoff_60, "--dry-run"],
+        "dry-run window",
+    )
 
     print("\n  3d. Dry-run: delete ALL 'PII' traces — tag only, no date range")
     run(["delete", "--projects", project, "--tag", "PII", "--dry-run"], "dry-run tag-only")
@@ -315,7 +324,10 @@ def main() -> None:
     print(f"\n  Project trace count after 4a: {count_traces(env, project):,}")
 
     print("\n  4b. Delete traces tagged 'sensitive' older than 30 days")
-    run(["delete", "--projects", project, "--tag", "sensitive", "--before", cutoff_30, "--yes"], "delete sensitive")
+    run(
+        ["delete", "--projects", project, "--tag", "sensitive", "--before", cutoff_30, "--yes"],
+        "delete sensitive",
+    )
 
     print(f"\n  Project trace count after 4b: {count_traces(env, project):,}")
 

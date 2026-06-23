@@ -15,3 +15,11 @@ __pycache__/
 downloaded_model/
 results_sft/
 final_model/
+
+# Skill eval scratch (e.g. skill-creator benchmark workspaces) — never commit
+*-workspace/
+.ruff_cache/
+.tmp/
+uv.lock
+.env
+poetry.lock

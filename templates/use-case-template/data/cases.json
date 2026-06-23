@@ -1,0 +1,28 @@
+[
+  {
+    "input": "Summarise the customer's main complaint.",
+    "context": [
+      "Customer: My order #4471 arrived with a cracked screen.",
+      "Customer: This is the second time a delivery has been damaged."
+    ],
+    "expected_output": "The customer received order #4471 with a cracked screen — the second damaged delivery they've had.",
+    "assertions": [
+      "Mentions the cracked screen described in the context",
+      "Notes it is a repeat damaged delivery, consistent with the context",
+      "Introduces no detail absent from the context"
+    ]
+  },
+  {
+    "input": "What action did the customer request?",
+    "context": [
+      "Customer: I'd like a replacement unit sent to the same address.",
+      "Customer: Please don't issue a refund, I still want the product."
+    ],
+    "expected_output": "The customer asked for a replacement unit to the same address and explicitly did not want a refund.",
+    "assertions": [
+      "States the customer wants a replacement, per the context",
+      "States the customer declined a refund, per the context",
+      "Refers only to actions named in the context"
+    ]
+  }
+]

@@ -21,9 +21,10 @@ Run:
 """
 
 import os
+
 import opik
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 COMET_API_KEY    = os.environ.get("COMET_API_KEY")

@@ -26,7 +26,7 @@ All scripts must be run from the script directory with the environment sourced f
 ### Step 1 — Run experiments and generate config
 
 ```bash
-python run_experiments.py
+uv run python run_experiments.py
 ```
 
 This creates a dataset (`leaderboard-demo`), runs two experiments with different model configurations, scores each item on `accuracy`, `relevance`, and `conciseness`, and writes `leaderboard_config.yaml`.
@@ -34,7 +34,7 @@ This creates a dataset (`leaderboard-demo`), runs two experiments with different
 ### Step 2 — Create the leaderboard dashboard
 
 ```bash
-python create_leaderboard_from_yaml.py
+uv run python create_leaderboard_from_yaml.py
 ```
 
 The script reads the YAML and calls `POST /opik/api/v1/private/dashboards` to create a dashboard with a leaderboard widget and one `experiments_feedback_scores` chart widget per metric (plus a radar overview).
@@ -42,17 +42,17 @@ The script reads the YAML and calls `POST /opik/api/v1/private/dashboards` to cr
 If the dashboard already exists, you'll be prompted to re-run with `--replace`:
 
 ```bash
-python create_leaderboard_from_yaml.py --replace
+uv run python create_leaderboard_from_yaml.py --replace
 ```
 
 ### Options
 
 ```bash
 # Use a different config file
-python create_leaderboard_from_yaml.py --config my_config.yaml
+uv run python create_leaderboard_from_yaml.py --config my_config.yaml
 
 # Overwrite an existing dashboard with the same name
-python create_leaderboard_from_yaml.py --replace
+uv run python create_leaderboard_from_yaml.py --replace
 ```
 
 ---
