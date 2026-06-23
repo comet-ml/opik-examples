@@ -2,9 +2,24 @@
 name = "opik-usage-stats"
 version = "0.1.0"
 description = "Fetch and visualise Opik workspace usage metrics"
-requires-python = ">=3.12"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "opik>=1.11.0",
     "pandas>=2.0",
     "matplotlib>=3.7",
 ]
+
+[dependency-groups]
+dev = ["ruff"]
+
+# WHY: loose runnable script, not an installable package — uv manages the env but builds nothing.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

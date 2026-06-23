@@ -17,7 +17,6 @@ import uuid
 import opik
 import yaml
 
-
 # ---------------------------------------------------------------------------
 # Dashboard config builder
 # ---------------------------------------------------------------------------
@@ -279,7 +278,8 @@ def main(config_path: str, replace: bool) -> None:
 
     print(f"  Dashboard name : {dashboard_name}")
     print(f"  Experiments    : {len(experiment_ids)}")
-    print(f"  Ranking metric : {ranking_metric} ({'↓ higher=better' if ranking_direction else '↑ lower=better'})")
+    direction_label = "↓ higher=better" if ranking_direction else "↑ lower=better"
+    print(f"  Ranking metric : {ranking_metric} ({direction_label})")
     print(f"  Score columns  : {score_columns}")
     print(f"  Metadata cols  : {metadata_columns}")
 
@@ -339,7 +339,10 @@ def main(config_path: str, replace: bool) -> None:
     print()
     print("Sections:")
     print("  1. Leaderboard — ranked by", ranking_metric)
-    print(f"  2. Metric Charts — radar (all metrics) + {len(score_columns)} bar-chart widget(s):", score_columns)
+    print(
+        f"  2. Metric Charts — radar (all metrics) + {len(score_columns)} bar-chart widget(s):",
+        score_columns,
+    )
     print()
     print("Experiments:")
     for exp in cfg["experiments"]:

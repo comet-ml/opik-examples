@@ -12,8 +12,9 @@ Method 2 - Real-time (inline with trace logging):
 """
 
 import random
+
 import opik
-from opik import track, opik_context
+from opik import opik_context, track
 
 PROJECT_NAME = "test-annotate"
 

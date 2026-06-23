@@ -5,7 +5,7 @@
 ## Prerequisites
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 Configure your Opik credentials:
@@ -38,7 +38,7 @@ Fetches traces from a project, optionally filters them (e.g. by a low feedback s
 
 ```bash
 # In auto_annotate.py, set option = 1 (already the default)
-python auto_annotate.py
+uv run python auto_annotate.py
 ```
 
 The script will:
@@ -75,7 +75,7 @@ my_llm_call()
 
 ```python
 # In auto_annotate.py, set option = 2
-python auto_annotate.py
+uv run python auto_annotate.py
 ```
 
 **Adapting to your own LLM call:**

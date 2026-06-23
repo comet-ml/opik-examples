@@ -25,8 +25,7 @@ Docs:
 
 import json
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from opik.rest_api.client import OpikApi
 from opik.rest_api.core.request_options import RequestOptions
@@ -40,7 +39,7 @@ WORKSPACE       = os.environ["OPIK_WORKSPACE"]
 OPIK_BASE_URL   = os.environ.get("OPIK_URL_OVERRIDE", "https://www.comet.com/opik/api")
 GOVERNANCE_TAG  = "governance"  # must match the tag used in agent_tracing.py
 
-_now = datetime.now(timezone.utc)
+_now = datetime.now(UTC)
 
 # Metric types to extract. Each maps to one get_project_metrics() call.
 # See the full list of available values in the SDK docs linked above.
@@ -97,7 +96,7 @@ def list_all_projects(client: OpikApi) -> list[dict]:
 #   TraceFilterPublic(field="metadata", key="business_unit", operator="=", value="retail")
 # ---------------------------------------------------------------------------
 
-def _governance_filters(metadata_slice: Optional[dict[str, str]] = None) -> list[TraceFilterPublic]:
+def _governance_filters(metadata_slice: dict[str, str] | None = None) -> list[TraceFilterPublic]:
     """
     Build the filter list for a governance extraction.
     Always includes the governance tag filter; optionally AND-s metadata key/value pairs.
@@ -142,7 +141,7 @@ METADATA_SLICES: list[dict[str, str]] = [
 def fetch_metrics_for_project(
     client: OpikApi,
     project_id: str,
-    metadata_slice: Optional[dict[str, str]] = None,
+    metadata_slice: dict[str, str] | None = None,
 ) -> dict:
     """
     Call get_project_metrics() for each metric type in METRIC_TYPES.

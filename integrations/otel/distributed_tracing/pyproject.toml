@@ -1,0 +1,25 @@
+[project]
+name = "distributed-tracing"
+version = "0.1.0"
+description = "Stitch out-of-process tool-call spans into a single Opik trace via OpenTelemetry."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp-proto-http",
+    "uuid6",
+]
+
+[dependency-groups]
+dev = ["ruff"]
+
+# WHY: loose runnable scripts, not an installable package — uv manages the env but builds nothing.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

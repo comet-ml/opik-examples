@@ -26,10 +26,9 @@ Docs:
     https://www.comet.com/docs/opik/tracing/annotate_traces
 """
 
-import os
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+import os
+from datetime import UTC, datetime, timedelta
 
 from opik.rest_api.client import OpikApi
 from opik.rest_api.types.feedback_score_source import FeedbackScoreSource
@@ -79,7 +78,7 @@ def get_project_id(client: OpikApi) -> str:
 RISK_THRESHOLD = 0.75
 
 
-def derive_composite_risk_score(scores: dict[str, float]) -> Optional[float]:
+def derive_composite_risk_score(scores: dict[str, float]) -> float | None:
     """Weighted composite. Requires regulatory_compliance and hallucination_rate."""
     required = {"regulatory_compliance", "hallucination_rate"}
     if not required.issubset(scores.keys()):
@@ -92,14 +91,14 @@ def derive_composite_risk_score(scores: dict[str, float]) -> Optional[float]:
     )
 
 
-def derive_oversight_risk_flag(composite_risk: Optional[float]) -> Optional[float]:
+def derive_oversight_risk_flag(composite_risk: float | None) -> float | None:
     """1.0 when composite_risk falls below the threshold, otherwise 0.0."""
     if composite_risk is None:
         return None
     return 1.0 if composite_risk < RISK_THRESHOLD else 0.0
 
 
-def derive_cost_per_quality_unit(scores: dict[str, float]) -> Optional[float]:
+def derive_cost_per_quality_unit(scores: dict[str, float]) -> float | None:
     """Cost in USD divided by response quality. Returns None when either score is absent."""
     cost    = scores.get("cost_usd")
     quality = scores.get("response_quality")
@@ -113,7 +112,7 @@ def derive_cost_per_quality_unit(scores: dict[str, float]) -> Optional[float]:
 # ---------------------------------------------------------------------------
 
 def run_retrospective_batch(client: OpikApi, project_id: str) -> None:
-    now       = datetime.now(timezone.utc)
+    now       = datetime.now(UTC)
     yesterday = now - timedelta(days=1)
     from_time = yesterday.replace(hour=0,  minute=0,  second=0,  microsecond=0)
     to_time   = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)

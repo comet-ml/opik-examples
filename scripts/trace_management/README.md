@@ -4,8 +4,8 @@ A CLI tool to inspect and delete [Opik](https://www.comet.com/site/products/opik
 
 ## Prerequisites
 
-- Python 3.10+
-- `pip install requests`
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/) — this folder is a `uv` project; run `uv sync`
 
 ## Environment Setup
 
@@ -29,7 +29,7 @@ Always inspect before you delete.
 ### Step 1 — Inspect (count matching traces, no changes)
 
 ```bash
-python manage_traces.py list --projects my-project --older-than-days 90
+uv run python manage_traces.py list --projects my-project --older-than-days 90
 ```
 
 ```
@@ -47,17 +47,17 @@ Opik Trace Inspector
 ### Step 2 — Dry-run (preview batches, no changes)
 
 ```bash
-python manage_traces.py delete --projects my-project --older-than-days 90 --dry-run
+uv run python manage_traces.py delete --projects my-project --older-than-days 90 --dry-run
 ```
 
 ### Step 3 — Execute
 
 ```bash
 # Interactive (prompts for confirmation)
-python manage_traces.py delete --projects my-project --older-than-days 90
+uv run python manage_traces.py delete --projects my-project --older-than-days 90
 
 # Non-interactive (skip prompt — for cron/CI)
-python manage_traces.py delete --projects my-project --older-than-days 90 --yes
+uv run python manage_traces.py delete --projects my-project --older-than-days 90 --yes
 ```
 
 ---
@@ -67,7 +67,7 @@ python manage_traces.py delete --projects my-project --older-than-days 90 --yes
 ### `list` — count-only inspection
 
 ```
-python manage_traces.py list [filter options]
+uv run python manage_traces.py list [filter options]
 ```
 
 Prints the number of matching traces per project. Makes one lightweight API call per project (reads the `total` field only — does not paginate through all traces). Safe to run at any time.
@@ -75,7 +75,7 @@ Prints the number of matching traces per project. Makes one lightweight API call
 ### `delete` — delete matching traces
 
 ```
-python manage_traces.py delete [filter options] [--dry-run] [--yes]
+uv run python manage_traces.py delete [filter options] [--dry-run] [--yes]
 ```
 
 | Flag | Description |
@@ -102,9 +102,9 @@ python manage_traces.py delete [filter options] [--dry-run] [--yes]
 Use a config file when you want to script complex rules (e.g. per-tag TTL policies, multiple projects) without repeating long CLI flags.
 
 ```bash
-python manage_traces.py list   --config config_example.json
-python manage_traces.py delete --config config_example.json --dry-run
-python manage_traces.py delete --config config_example.json --yes
+uv run python manage_traces.py list   --config config_example.json
+uv run python manage_traces.py delete --config config_example.json --dry-run
+uv run python manage_traces.py delete --config config_example.json --yes
 ```
 
 CLI flags always override the config file.
@@ -151,13 +151,13 @@ See [`config_example.json`](config_example.json) for a fully annotated example.
 ### Delete traces older than 3 months in one project
 
 ```bash
-python manage_traces.py delete --projects my-project --older-than-days 90 --yes
+uv run python manage_traces.py delete --projects my-project --older-than-days 90 --yes
 ```
 
 ### Delete traces in a date window
 
 ```bash
-python manage_traces.py delete \
+uv run python manage_traces.py delete \
   --projects my-project \
   --after 2024-06-01 --before 2024-12-31 \
   --dry-run
@@ -166,7 +166,7 @@ python manage_traces.py delete \
 ### Delete traces with a specific tag, older than 30 days
 
 ```bash
-python manage_traces.py delete \
+uv run python manage_traces.py delete \
   --projects my-project \
   --tag sensitive \
   --older-than-days 30 \
@@ -177,7 +177,7 @@ python manage_traces.py delete \
 
 ```bash
 # Omit --projects to target every project
-python manage_traces.py delete --config config_example.json --yes
+uv run python manage_traces.py delete --config config_example.json --yes
 ```
 
 ### Cron / scheduled deletion
@@ -185,7 +185,7 @@ python manage_traces.py delete --config config_example.json --yes
 ```bash
 # In a crontab or CI step — non-interactive, all workspace projects
 OPIK_API_KEY=... OPIK_WORKSPACE=... \
-  python manage_traces.py delete --config /path/to/ttl.json --yes
+  uv run python manage_traces.py delete --config /path/to/ttl.json --yes
 ```
 
 ---
@@ -213,3 +213,14 @@ At least one of `--older-than-days`, `--before`, `--after`, `--tag`, or `--exclu
 
 **HTTP 429 / rate limit errors**
 The tool already applies a 0.2 s delay between delete batches. If you still hit limits, the `RATE_LIMIT_DELAY` constant at the top of `manage_traces.py` can be increased.
+
+---
+
+## API notes
+
+- Projects endpoint: `GET /opik/api/v1/private/projects` (paginated at 100/page)
+- Traces endpoint: `GET /opik/api/v1/private/traces` (paginated at 1,000/page)
+- Delete endpoint: `POST /opik/api/v1/private/traces/delete` (max 1,000 IDs per call)
+- Rate-limit delay: 0.2 s between delete batches (configurable via `RATE_LIMIT_DELAY` in the script)
+- Filters are AND-combined server-side
+- `list` uses a single size=1 request per project (reads the `total` field only — fast)

@@ -1,0 +1,26 @@
+{
+  "skill_name": "scaffold-example",
+  "evals": [
+    {
+      "id": 0,
+      "name": "email-classifier",
+      "prompt": "I want to add a new Opik demo to this repo (opik-examples) that classifies incoming support emails into categories like billing, technical, and sales. Set up a new use-case project for it, the same way the other demos in here are set up.",
+      "expected_output": "A new uv-project use-case scaffolded from templates/use-case-template (src/<pkg>/ package, pyproject with [project.scripts] + ruff, Typer CLI with eval/optimize/promote, evaluation.py using get_or_create_dataset + test suite + evaluate/run_tests, README 4 sections), renamed to an email-classifier use-case with no sentinel leakage.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "meeting-notes-summarizer",
+      "prompt": "Create a new use-case in opik-examples for a meeting-notes summarizer built on Opik. I want the same end-to-end setup as the f1_radio_rag demo — dataset, test suite, eval, and the optimizer loop.",
+      "expected_output": "A new uv-project use-case scaffolded from templates/use-case-template, renamed for meeting-notes summarization, full Opik loop wired (dataset/suite/evaluate/run_tests/optimizer/prompt-library), runs in DRY_RUN, ruff clean, no sentinel leakage.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "trace-export-script",
+      "prompt": "Add a standalone script to opik-examples that bulk-exports Opik traces to a CSV file. It should be a single-file utility like the other things in scripts/, not a full use-case project.",
+      "expected_output": "A single-file argparse utility scaffolded from templates/script-template into scripts/ (renamed <name>.py + pyproject with [project.scripts] <name>:main entry + ruff, README 4 sections, .env.example), using env-var credentials + DRY_RUN, runnable via uv run <command> --dry-run, ruff clean, no example_script/example-script sentinel leakage. NOT a use-case package (no src/, no Typer, no dataset/optimizer loop).",
+      "files": []
+    }
+  ]
+}

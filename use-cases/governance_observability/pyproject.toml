@@ -2,10 +2,22 @@
 name = "working-with-governance-data"
 version = "0.1.0"
 description = "Instrument agents with governance tags and metadata, derive composite metrics, and extract aggregated scores for oversight reporting"
-requires-python = ">=3.10"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "opik>=1.11.0",
 ]
 
 [dependency-groups]
-dev = []
+dev = ["ruff"]
+
+# WHY: loose runnable scripts, not an installable package — uv manages the env but builds nothing.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
