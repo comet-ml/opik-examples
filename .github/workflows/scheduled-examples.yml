@@ -1,7 +1,9 @@
 name: Scheduled Example Tests
 
 # Runs a curated set of examples on a schedule to verify they stay working.
-# The list of examples is in .github/ci-examples.json.
+# The list is maintainer-managed — contributors do not need to add their example here.
+# Criteria for inclusion: self-contained (no GPU, no pre-existing Opik data required),
+# cheap to run, and stable enough for unattended weekly execution.
 #
 # To change the schedule: edit the cron expression below.
 # To add or remove examples: edit .github/ci-examples.json.
