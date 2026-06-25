@@ -1,14 +1,17 @@
 name: PR Example Tests
 
-# Runs only the example folders that changed in this PR, using a single Python version.
-# This gives fast feedback without running the full cross-version matrix.
-# The full matrix (all Python versions, all examples) runs on the daily schedule via e2e-tests.yml.
+# Runs only the example folders changed in this PR using a cheap model and real Opik
+# credentials. A passing run means the code executes correctly and traces are visible
+# in the opik-examples workspace. Failures block the PR.
 
 on:
   pull_request:
     paths:
-      - "code-snippets/**"
       - "examples/**"
+      - "integrations/**"
+      - "scripts/**"
+      - "use-cases/**"
+      - "guides/**"
 
 permissions:
   contents: read
@@ -23,6 +26,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Detect changed runnable example folders
         id: detect
         run: |
@@ -32,30 +36,32 @@ jobs:
           folders_json="["
 
           while IFS= read -r file; do
-            if [[ "$file" == code-snippets/* ]] || [[ "$file" == examples/* ]]; then
-              folder=$(echo "$file" | cut -d'/' -f1,2)
-
-              # Only include folders that exist and have run_examples.sh
-              if [[ ! -d "$folder" ]] || [[ ! -f "$folder/run_examples.sh" ]]; then
+            top=$(echo "$file" | cut -d'/' -f1)
+            case "$top" in
+              integrations)
+                folder=$(echo "$file" | cut -d'/' -f1,2,3)
+                ;;
+              examples|scripts|use-cases|guides)
+                folder=$(echo "$file" | cut -d'/' -f1,2)
+                ;;
+              *)
                 continue
-              fi
+                ;;
+            esac
 
-              # Deduplicate
-              already_seen=false
-              for s in "${seen[@]}"; do
-                if [[ "$s" == "$folder" ]]; then
-                  already_seen=true
-                  break
-                fi
-              done
+            if [[ -z "$folder" ]] || [[ ! -d "$folder" ]] || [[ ! -f "$folder/run_examples.sh" ]]; then
+              continue
+            fi
 
-              if [[ "$already_seen" == false ]]; then
-                seen+=("$folder")
-                if [[ "${#seen[@]}" -gt 1 ]]; then
-                  folders_json="$folders_json,"
-                fi
-                folders_json="$folders_json\"$folder\""
-              fi
+            already_seen=false
+            for s in "${seen[@]}"; do
+              [[ "$s" == "$folder" ]] && already_seen=true && break
+            done
+
+            if [[ "$already_seen" == false ]]; then
+              seen+=("$folder")
+              [[ "${#seen[@]}" -gt 1 ]] && folders_json="$folders_json,"
+              folders_json="$folders_json\"$folder\""
             fi
           done <<< "$changed_files"
 
@@ -75,32 +81,27 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
-    env:
-      PYTHONIOENCODING: utf-8
     strategy:
       fail-fast: false
       matrix:
-        scripts: ${{ fromJson(needs.detect-changes.outputs.folders) }}
-        python-version: ["3.11"]
+        folder: ${{ fromJson(needs.detect-changes.outputs.folders) }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: "pip"
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-      - name: Test changed example
-        uses: nick-fields/retry@v3
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Run example
         env:
           OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
           OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
-          OPIK_BASE_URL: "https://www.comet.com"
-          OPIK_OTLP_ENDPOINT: "https://www.comet.com/opik/api/v1/private/otel/v1/traces"
+          OPIK_ENVIRONMENT: ${{ vars.OPIK_ENVIRONMENT }}
+          OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        with:
-          timeout_minutes: 30
-          max_attempts: 2
-          command: |
-            cd ${{ matrix.scripts }}
-            bash run_examples.sh
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd ${{ matrix.folder }}
+          bash run_examples.sh

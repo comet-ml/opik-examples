@@ -1,0 +1,59 @@
+name: Scheduled Example Tests
+
+# Runs a curated set of examples on a schedule to verify they stay working.
+# The list of examples is in .github/ci-examples.json.
+#
+# To change the schedule: edit the cron expression below.
+# To add or remove examples: edit .github/ci-examples.json.
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC. Edit this line to change the cadence.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  load-examples:
+    runs-on: ubuntu-latest
+    outputs:
+      folders: ${{ steps.load.outputs.folders }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load curated example list
+        id: load
+        run: |
+          folders=$(cat .github/ci-examples.json)
+          echo "folders=$folders" >> "$GITHUB_OUTPUT"
+
+  run-examples:
+    needs: load-examples
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: ${{ fromJson(needs.load-examples.outputs.folders) }}
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run example
+        env:
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+          OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+          OPIK_ENVIRONMENT: ${{ vars.OPIK_ENVIRONMENT }}
+          OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd ${{ matrix.folder }}
+          bash run_examples.sh
