@@ -1,0 +1,107 @@
+name: PR Example Tests
+
+# Runs only the example folders changed in this PR using a cheap model and real Opik
+# credentials. A passing run means the code executes correctly and traces are visible
+# in the opik-examples workspace. Failures block the PR.
+
+on:
+  pull_request:
+    paths:
+      - "examples/**"
+      - "integrations/**"
+      - "scripts/**"
+      - "use-cases/**"
+      - "guides/**"
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      folders: ${{ steps.detect.outputs.folders }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed runnable example folders
+        id: detect
+        run: |
+          changed_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+
+          seen=()
+          folders_json="["
+
+          while IFS= read -r file; do
+            top=$(echo "$file" | cut -d'/' -f1)
+            case "$top" in
+              integrations)
+                folder=$(echo "$file" | cut -d'/' -f1,2,3)
+                ;;
+              examples|scripts|use-cases|guides)
+                folder=$(echo "$file" | cut -d'/' -f1,2)
+                ;;
+              *)
+                continue
+                ;;
+            esac
+
+            if [[ -z "$folder" ]] || [[ ! -d "$folder" ]] || [[ ! -f "$folder/run_examples.sh" ]]; then
+              continue
+            fi
+
+            already_seen=false
+            for s in "${seen[@]}"; do
+              [[ "$s" == "$folder" ]] && already_seen=true && break
+            done
+
+            if [[ "$already_seen" == false ]]; then
+              seen+=("$folder")
+              [[ "${#seen[@]}" -gt 1 ]] && folders_json="$folders_json,"
+              folders_json="$folders_json\"$folder\""
+            fi
+          done <<< "$changed_files"
+
+          folders_json="$folders_json]"
+
+          if [[ "${#seen[@]}" -eq 0 ]]; then
+            echo "folders=[]" >> "$GITHUB_OUTPUT"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No runnable example folders changed."
+          else
+            echo "folders=$folders_json" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Runnable folders to test: ${seen[*]}"
+          fi
+
+  test-changed:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: ${{ fromJson(needs.detect-changes.outputs.folders) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Run example
+        env:
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+          OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+          OPIK_ENVIRONMENT: ${{ vars.OPIK_ENVIRONMENT }}
+          OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd ${{ matrix.folder }}
+          bash run_examples.sh

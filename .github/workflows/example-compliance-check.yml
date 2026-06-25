@@ -1,0 +1,160 @@
+name: Example Compliance Check
+
+# Verifies that new example folders added in a PR follow repo conventions.
+# Only checks folders that are new (not previously on the base branch).
+# Rules enforced:
+#   1. run_examples.sh must exist, have set -e, and export OPIK_PROJECT_NAME
+#   2. README.md must exist
+#   3. pyproject.toml must exist; requirements.txt must not
+#   4. If litellm is a dependency, OPIK_EXAMPLES_MODEL must be referenced in a .py file
+#
+# This check is secrets-free so it runs safely on PRs from forks.
+
+on:
+  pull_request:
+    paths:
+      - "examples/**"
+      - "integrations/**"
+      - "scripts/**"
+      - "use-cases/**"
+      - "guides/**"
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find changed example folders
+        id: changed-folders
+        run: |
+          changed_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+
+          folders=""
+          while IFS= read -r file; do
+            top=$(echo "$file" | cut -d'/' -f1)
+            case "$top" in
+              integrations)
+                parent=$(echo "$file" | cut -d'/' -f1,2,3)
+                ;;
+              examples|scripts|use-cases|guides)
+                parent=$(echo "$file" | cut -d'/' -f1,2)
+                ;;
+              *)
+                continue
+                ;;
+            esac
+            folders="$folders $parent"
+          done <<< "$changed_files"
+
+          # Deduplicate and trim
+          folders=$(echo "$folders" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ' | xargs)
+          echo "folders=$folders" >> "$GITHUB_OUTPUT"
+
+          if [[ -z "$folders" ]]; then
+            echo "No example folders changed."
+          else
+            echo "Changed example folders: $folders"
+          fi
+
+      - name: Check compliance
+        if: steps.changed-folders.outputs.folders != ''
+        run: |
+          FAILED=0
+
+          for folder in ${{ steps.changed-folders.outputs.folders }}; do
+            # Skip if the folder was deleted entirely
+            if [[ ! -d "$folder" ]]; then
+              echo "Skipping deleted folder: $folder"
+              continue
+            fi
+
+            # Only enforce on NEW folders (not yet on the base branch).
+            # Modifying an existing example does not require adding run_examples.sh.
+            if git ls-tree "origin/${{ github.base_ref }}" "$folder" 2>/dev/null | grep -q .; then
+              echo "  Skipping '$folder' (existing folder — compliance enforced on new examples only)"
+              continue
+            fi
+
+            echo ""
+            echo "Checking: $folder"
+
+            if [[ ! -f "$folder/run_examples.sh" ]]; then
+              echo "::error file=$folder/run_examples.sh::$folder is missing run_examples.sh"
+              FAILED=1
+            else
+              echo "  OK  run_examples.sh"
+            fi
+
+            if [[ ! -f "$folder/README.md" ]]; then
+              echo "::error file=$folder/README.md::$folder is missing README.md"
+              FAILED=1
+            else
+              echo "  OK  README.md"
+            fi
+
+            if [[ ! -f "$folder/pyproject.toml" ]]; then
+              echo "::error::$folder is missing pyproject.toml (uv projects only — no requirements.txt)"
+              FAILED=1
+            else
+              echo "  OK  pyproject.toml"
+            fi
+
+            if [[ -f "$folder/requirements.txt" ]]; then
+              echo "::error file=$folder/requirements.txt::$folder has requirements.txt — declare deps in pyproject.toml instead"
+              FAILED=1
+            fi
+
+            if [[ -f "$folder/run_examples.sh" ]]; then
+              if grep -q "export OPIK_PROJECT_NAME" "$folder/run_examples.sh"; then
+                echo "  OK  OPIK_PROJECT_NAME in run_examples.sh"
+              else
+                echo "::error file=$folder/run_examples.sh::$folder/run_examples.sh must export OPIK_PROJECT_NAME"
+                FAILED=1
+              fi
+
+              if ! grep -q "set -e" "$folder/run_examples.sh"; then
+                echo "::error file=$folder/run_examples.sh::$folder/run_examples.sh must contain 'set -e'"
+                FAILED=1
+              else
+                echo "  OK  set -e in run_examples.sh"
+              fi
+            fi
+
+            # If litellm is declared as a dependency, OPIK_EXAMPLES_MODEL must be referenced.
+            if grep -q "litellm" "$folder/pyproject.toml" 2>/dev/null; then
+              if grep -rq "OPIK_EXAMPLES_MODEL" "$folder" --include="*.py" 2>/dev/null; then
+                echo "  OK  OPIK_EXAMPLES_MODEL referenced (litellm dep detected)"
+              else
+                echo "::error::$folder uses litellm but no .py file references OPIK_EXAMPLES_MODEL"
+                echo "::error::Add: os.environ.get(\"OPIK_EXAMPLES_MODEL\", \"<default-model>\") to your config"
+                FAILED=1
+              fi
+            fi
+          done
+
+          echo ""
+          if [[ "$FAILED" -ne 0 ]]; then
+            echo "Compliance check failed. Fix the errors above before merging."
+            exit 1
+          fi
+
+          echo "All compliance checks passed."
+
+      - name: Write step summary
+        if: always() && steps.changed-folders.outputs.folders != ''
+        run: |
+          echo "## Example Compliance Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Folders checked: \`${{ steps.changed-folders.outputs.folders }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Rules:**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`run_examples.sh\` must exist, contain \`set -e\`, and export \`OPIK_PROJECT_NAME\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`README.md\` must exist" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`pyproject.toml\` must exist; \`requirements.txt\` is not allowed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- If \`litellm\` is a dependency, a \`.py\` file must reference \`OPIK_EXAMPLES_MODEL\`" >> "$GITHUB_STEP_SUMMARY"

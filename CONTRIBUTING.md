@@ -86,6 +86,7 @@ Then, either way:
 - A `README.md` that explains what problem it solves, what the example does, and how to run it
 - A working dry-run mode so anyone can run it locally without an Opik account
 - Credentials loaded from environment variables only — no hardcoded keys
+- A `run_examples.sh` that exports `OPIK_PROJECT_NAME` and can run the example end-to-end
 
 ### README structure
 
@@ -96,9 +97,9 @@ Use the template's README as a guide. Required sections:
 - **Running it** — exact commands, including dry-run
 - **How it works** — brief walkthrough of the key steps
 
-### Dry-run mode
+### Running locally without credentials
 
-Every runnable script should detect missing credentials and fall back to a local mode that prints output to the console instead of sending it to Opik. The standard pattern:
+CI always has real Opik credentials. If you want to smoke-test an example locally before obtaining credentials, you can add a dry-run guard — but this is optional and not enforced:
 
 ```python
 DRY_RUN = not (os.environ.get("OPIK_API_KEY") and os.environ.get("OPIK_WORKSPACE"))
@@ -109,7 +110,7 @@ else:
     # send to Opik
 ```
 
-The dry-run output should be meaningful enough to verify the example is working correctly.
+The recommended path is to set your own Opik credentials locally so you see real traces, the same way CI does.
 
 ### Credentials
 
@@ -128,6 +129,73 @@ Never commit `.env` files or hardcoded keys. Add `.env` to the example's `.gitig
 
 Each example is a `uv` project: declare dependencies in its `pyproject.toml` (the single source of truth) and run with `uv sync` / `uv run`. No `requirements.txt`, no Poetry, and don't commit `uv.lock`. The README may still show an optional `pip install` fallback line. Do not assume the user has the repo's root virtualenv set up.
 
+### run_examples.sh
+
+Every testable example must include a `run_examples.sh` at its root. This file is what the CI matrix runs. Requirements:
+
+- Start with `set -e` (fail fast on any error)
+- Export `OPIK_PROJECT_NAME` to a unique kebab-case name (enforced by the compliance check)
+- Call `uv sync` before invoking any Python
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+export OPIK_PROJECT_NAME="my-example"
+
+uv sync
+uv run my-example run-all
+```
+
+The scaffold tool adds a working `run_examples.sh` automatically when you create a new example.
+
+### Opik workspace
+
+All CI runs log to the workspace set in the `OPIK_WORKSPACE` GitHub Actions variable (currently `opik-examples`). Locally, set both vars explicitly to avoid accidentally writing to the shared workspace:
+
+```bash
+export OPIK_API_KEY=<your personal key>
+export OPIK_WORKSPACE=<your own workspace>
+```
+
+`DRY_RUN` gates on both being set, so forgetting either keeps you in dry-run mode — safe by default. The `OPIK_API_KEY` Actions secret must be a service account key with write access to `opik-examples`.
+
+### CI model convention
+
+CI uses a cheap model to keep costs low. The `OPIK_EXAMPLES_MODEL` GitHub Actions variable controls which model is used (currently `openai/gpt-4o-mini`). All examples that make LLM calls must read this variable.
+
+Use [litellm](https://github.com/BerriAI/litellm) as the model call layer — it routes to any provider via a single unified model name:
+
+```python
+import litellm
+response = litellm.completion(model=config.GEN_MODEL, messages=[...])
+```
+
+In `config.py`, read `OPIK_EXAMPLES_MODEL` with a sensible default for local development:
+
+```python
+# CI sets OPIK_EXAMPLES_MODEL to a cheap model (e.g. openai/gpt-4o-mini).
+# Locally, leave it unset to use the full model.
+GEN_MODEL = os.environ.get("OPIK_EXAMPLES_MODEL", "anthropic/claude-sonnet-4-6")
+JUDGE_MODEL = GEN_MODEL
+OPTIMIZER_MODEL = GEN_MODEL
+```
+
+Model names use litellm's provider-prefixed format: `openai/gpt-4o-mini`, `anthropic/claude-haiku-4-5-20251001`, `google/gemini-1.5-flash`, etc. The compliance check will fail if `litellm` is declared as a dependency but `OPIK_EXAMPLES_MODEL` is not referenced.
+
+### Opik logging
+
+CI always has real Opik credentials (`OPIK_API_KEY`, `OPIK_WORKSPACE`, `OPIK_ENVIRONMENT`). Every CI run logs traces to the `opik-examples` workspace — this is how we verify an example is working, not just that it exits 0.
+
+`OPIK_ENVIRONMENT` is set automatically in CI; you do not need to set it locally. It tags traces so CI runs are distinguishable from local runs in the Opik UI.
+
+Locally, set your own credentials to log to your personal workspace:
+
+```bash
+export OPIK_API_KEY=<your personal key>
+export OPIK_WORKSPACE=<your workspace>
+```
+
 ### Code style
 
 - No comments that explain what the code does — well-named variables and functions do that
@@ -145,6 +213,8 @@ Before opening a PR, verify:
 - [ ] Dry-run mode works (no env vars set) prints useful output without errors — e.g. `uv run <command> eval`
 - [ ] No credentials or `.env` files committed
 - [ ] Dependencies declared in `pyproject.toml` (uv project); no `requirements.txt`
+- [ ] `run_examples.sh` exists, starts with `set -e`, and exports `OPIK_PROJECT_NAME`
+- [ ] Examples that call LLMs use litellm and read `OPIK_EXAMPLES_MODEL` in `config.py`
 
 ## Questions
 
