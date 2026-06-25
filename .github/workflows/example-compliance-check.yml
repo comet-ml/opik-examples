@@ -3,10 +3,12 @@ name: Example Compliance Check
 # Verifies that new example folders added in a PR follow repo conventions.
 # Only checks folders that are new (not previously on the base branch).
 # Rules enforced:
-#   1. run_examples.sh must exist, have set -e, and export OPIK_PROJECT_NAME
-#   2. README.md must exist
-#   3. pyproject.toml must exist; requirements.txt must not
-#   4. If litellm is a dependency, OPIK_EXAMPLES_MODEL must be referenced in a .py file
+#   1. run_examples.sh must exist and contain set -e
+#   2. OPIK_PROJECT_NAME must be set — either exported in run_examples.sh (scripts)
+#      or referenced in a .py file (use-cases/guides with a config module)
+#   3. README.md must exist
+#   4. pyproject.toml must exist; requirements.txt must not
+#   5. If litellm is a dependency, OPIK_EXAMPLES_MODEL must be referenced in a .py file
 #
 # This check is secrets-free so it runs safely on PRs from forks.
 
@@ -111,18 +113,22 @@ jobs:
             fi
 
             if [[ -f "$folder/run_examples.sh" ]]; then
-              if grep -q "export OPIK_PROJECT_NAME" "$folder/run_examples.sh"; then
-                echo "  OK  OPIK_PROJECT_NAME in run_examples.sh"
-              else
-                echo "::error file=$folder/run_examples.sh::$folder/run_examples.sh must export OPIK_PROJECT_NAME"
-                FAILED=1
-              fi
-
               if ! grep -q "set -e" "$folder/run_examples.sh"; then
                 echo "::error file=$folder/run_examples.sh::$folder/run_examples.sh must contain 'set -e'"
                 FAILED=1
               else
                 echo "  OK  set -e in run_examples.sh"
+              fi
+
+              # OPIK_PROJECT_NAME may be exported in run_examples.sh (scripts)
+              # or defined as a constant in a .py file (use-cases/guides with config.py).
+              if grep -q "export OPIK_PROJECT_NAME" "$folder/run_examples.sh"; then
+                echo "  OK  OPIK_PROJECT_NAME in run_examples.sh"
+              elif grep -rq "OPIK_PROJECT_NAME" "$folder" --include="*.py" 2>/dev/null; then
+                echo "  OK  OPIK_PROJECT_NAME in .py config"
+              else
+                echo "::error::$folder must set OPIK_PROJECT_NAME — either export it in run_examples.sh or define it in a .py config file"
+                FAILED=1
               fi
             fi
 
@@ -154,7 +160,8 @@ jobs:
           echo "Folders checked: \`${{ steps.changed-folders.outputs.folders }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Rules:**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`run_examples.sh\` must exist, contain \`set -e\`, and export \`OPIK_PROJECT_NAME\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`run_examples.sh\` must exist and contain \`set -e\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`OPIK_PROJECT_NAME\` must be set — via \`export\` in \`run_examples.sh\` (scripts) or as a constant in a \`.py\` config file (use-cases/guides)" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`README.md\` must exist" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`pyproject.toml\` must exist; \`requirements.txt\` is not allowed" >> "$GITHUB_STEP_SUMMARY"
           echo "- If \`litellm\` is a dependency, a \`.py\` file must reference \`OPIK_EXAMPLES_MODEL\`" >> "$GITHUB_STEP_SUMMARY"

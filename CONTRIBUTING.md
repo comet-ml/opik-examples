@@ -134,20 +134,43 @@ Each example is a `uv` project: declare dependencies in its `pyproject.toml` (th
 Every testable example must include a `run_examples.sh` at its root. This file is what the CI matrix runs. Requirements:
 
 - Start with `set -e` (fail fast on any error)
-- Export `OPIK_PROJECT_NAME` to a unique kebab-case name (enforced by the compliance check)
 - Call `uv sync` before invoking any Python
+- `OPIK_PROJECT_NAME` must be set — see below for where
 
 ```bash
 #!/usr/bin/env bash
 set -e
-
-export OPIK_PROJECT_NAME="my-example"
 
 uv sync
 uv run my-example run-all
 ```
 
 The scaffold tool adds a working `run_examples.sh` automatically when you create a new example.
+
+### Setting OPIK_PROJECT_NAME
+
+Every example must have a unique project name so its traces are identifiable in Opik. Where you set it depends on the example type:
+
+**Scripts** (single `.py` file, no config module) — export it in `run_examples.sh`:
+
+```bash
+export OPIK_PROJECT_NAME="my-script"
+```
+
+**Use-cases and guides** (examples with a `config.py`) — define it as a Python constant and pass it explicitly. This keeps all configuration in one place and works even when running Python directly:
+
+```python
+# config.py
+OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "my-use-case")
+```
+
+```python
+# app.py
+@opik.track(project_name=config.OPIK_PROJECT_NAME)
+def my_function(): ...
+```
+
+The compliance check accepts either pattern — it looks for `OPIK_PROJECT_NAME` in `run_examples.sh` or in any `.py` file in the folder.
 
 ### Opik workspace
 
@@ -213,7 +236,8 @@ Before opening a PR, verify:
 - [ ] Dry-run mode works (no env vars set) prints useful output without errors — e.g. `uv run <command> eval`
 - [ ] No credentials or `.env` files committed
 - [ ] Dependencies declared in `pyproject.toml` (uv project); no `requirements.txt`
-- [ ] `run_examples.sh` exists, starts with `set -e`, and exports `OPIK_PROJECT_NAME`
+- [ ] `run_examples.sh` exists and starts with `set -e`
+- [ ] `OPIK_PROJECT_NAME` is set — exported in `run_examples.sh` (scripts) or defined in `config.py` (use-cases/guides)
 - [ ] Examples that call LLMs use litellm and read `OPIK_EXAMPLES_MODEL` in `config.py`
 
 ## Questions
