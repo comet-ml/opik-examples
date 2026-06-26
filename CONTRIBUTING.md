@@ -185,7 +185,7 @@ export OPIK_WORKSPACE=<your own workspace>
 
 ### CI model convention
 
-CI uses a cheap model to keep costs low. The `OPIK_EXAMPLES_MODEL` GitHub Actions variable controls which model is used (currently `openai/gpt-4o-mini`). All examples that make LLM calls must read this variable.
+CI uses a cheap model to keep costs low. The `OPIK_EXAMPLES_MODEL` GitHub Actions variable controls which model is used (currently `anthropic/claude-haiku-4-5-20251001`). All examples that make LLM calls must read this variable.
 
 Use [litellm](https://github.com/BerriAI/litellm) as the model call layer — it routes to any provider via a single unified model name:
 
@@ -197,7 +197,7 @@ response = litellm.completion(model=config.GEN_MODEL, messages=[...])
 In `config.py`, read `OPIK_EXAMPLES_MODEL` with a sensible default for local development:
 
 ```python
-# CI sets OPIK_EXAMPLES_MODEL to a cheap model (e.g. openai/gpt-4o-mini).
+# CI sets OPIK_EXAMPLES_MODEL to a cheap model (e.g. anthropic/claude-haiku-4-5-20251001).
 # Locally, leave it unset to use the full model.
 GEN_MODEL = os.environ.get("OPIK_EXAMPLES_MODEL", "anthropic/claude-sonnet-4-6")
 JUDGE_MODEL = GEN_MODEL
