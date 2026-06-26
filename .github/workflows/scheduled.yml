@@ -6,7 +6,7 @@ name: Scheduled Example Tests
 # cheap to run, and stable enough for unattended weekly execution.
 #
 # To change the schedule: edit the cron expression below.
-# To add or remove examples: edit .github/ci-examples.json.
+# To add or remove folders: edit .github/scheduled.json.
 
 on:
   schedule:
@@ -28,7 +28,7 @@ jobs:
       - name: Load curated example list
         id: load
         run: |
-          folders=$(cat .github/ci-examples.json)
+          folders=$(cat .github/scheduled.json)
           echo "folders=$folders" >> "$GITHUB_OUTPUT"
 
   run-examples:
@@ -38,7 +38,6 @@ jobs:
       fail-fast: false
       matrix:
         folder: ${{ fromJson(needs.load-examples.outputs.folders) }}
-        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -46,7 +45,7 @@ jobs:
         with:
           version: "latest"
           enable-cache: true
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Run example
         env:
