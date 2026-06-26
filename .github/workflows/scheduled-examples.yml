@@ -58,4 +58,4 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           cd ${{ matrix.folder }}
-          bash run_examples.sh
+          bash run.sh

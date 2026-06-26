@@ -3,8 +3,8 @@ name: Example Compliance Check
 # Verifies that new example folders added in a PR follow repo conventions.
 # Only checks folders that are new (not previously on the base branch).
 # Rules enforced:
-#   1. run_examples.sh must exist and contain set -e
-#   2. OPIK_PROJECT_NAME must be set — either exported in run_examples.sh (scripts)
+#   1. run.sh must exist and contain set -e
+#   2. OPIK_PROJECT_NAME must be set — either exported in run.sh (scripts)
 #      or referenced in a .py file (use-cases/guides with a config module)
 #   3. README.md must exist
 #   4. pyproject.toml must exist; requirements.txt must not
@@ -77,7 +77,7 @@ jobs:
             fi
 
             # Only enforce on NEW folders (not yet on the base branch).
-            # Modifying an existing example does not require adding run_examples.sh.
+            # Modifying an existing example does not require adding run.sh.
             if git ls-tree "origin/${{ github.base_ref }}" "$folder" 2>/dev/null | grep -q .; then
               echo "  Skipping '$folder' (existing folder — compliance enforced on new examples only)"
               continue
@@ -86,11 +86,11 @@ jobs:
             echo ""
             echo "Checking: $folder"
 
-            if [[ ! -f "$folder/run_examples.sh" ]]; then
-              echo "::error file=$folder/run_examples.sh::$folder is missing run_examples.sh"
+            if [[ ! -f "$folder/run.sh" ]]; then
+              echo "::error file=$folder/run.sh::$folder is missing run.sh"
               FAILED=1
             else
-              echo "  OK  run_examples.sh"
+              echo "  OK  run.sh"
             fi
 
             if [[ ! -f "$folder/README.md" ]]; then
@@ -112,22 +112,22 @@ jobs:
               FAILED=1
             fi
 
-            if [[ -f "$folder/run_examples.sh" ]]; then
-              if ! grep -q "set -e" "$folder/run_examples.sh"; then
-                echo "::error file=$folder/run_examples.sh::$folder/run_examples.sh must contain 'set -e'"
+            if [[ -f "$folder/run.sh" ]]; then
+              if ! grep -q "set -e" "$folder/run.sh"; then
+                echo "::error file=$folder/run.sh::$folder/run.sh must contain 'set -e'"
                 FAILED=1
               else
-                echo "  OK  set -e in run_examples.sh"
+                echo "  OK  set -e in run.sh"
               fi
 
-              # OPIK_PROJECT_NAME may be exported in run_examples.sh (scripts)
+              # OPIK_PROJECT_NAME may be exported in run.sh (scripts)
               # or defined as a constant in a .py file (use-cases/guides with config.py).
-              if grep -q "export OPIK_PROJECT_NAME" "$folder/run_examples.sh"; then
-                echo "  OK  OPIK_PROJECT_NAME in run_examples.sh"
+              if grep -q "export OPIK_PROJECT_NAME" "$folder/run.sh"; then
+                echo "  OK  OPIK_PROJECT_NAME in run.sh"
               elif grep -rq "OPIK_PROJECT_NAME" "$folder" --include="*.py" 2>/dev/null; then
                 echo "  OK  OPIK_PROJECT_NAME in .py config"
               else
-                echo "::error::$folder must set OPIK_PROJECT_NAME — either export it in run_examples.sh or define it in a .py config file"
+                echo "::error::$folder must set OPIK_PROJECT_NAME — either export it in run.sh or define it in a .py config file"
                 FAILED=1
               fi
             fi
@@ -160,8 +160,8 @@ jobs:
           echo "Folders checked: \`${{ steps.changed-folders.outputs.folders }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Rules:**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`run_examples.sh\` must exist and contain \`set -e\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`OPIK_PROJECT_NAME\` must be set — via \`export\` in \`run_examples.sh\` (scripts) or as a constant in a \`.py\` config file (use-cases/guides)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`run.sh\` must exist and contain \`set -e\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`OPIK_PROJECT_NAME\` must be set — via \`export\` in \`run.sh\` (scripts) or as a constant in a \`.py\` config file (use-cases/guides)" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`README.md\` must exist" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`pyproject.toml\` must exist; \`requirements.txt\` is not allowed" >> "$GITHUB_STEP_SUMMARY"
           echo "- If \`litellm\` is a dependency, a \`.py\` file must reference \`OPIK_EXAMPLES_MODEL\`" >> "$GITHUB_STEP_SUMMARY"

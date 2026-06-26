@@ -86,7 +86,7 @@ Then, either way:
 - A `README.md` that explains what problem it solves, what the example does, and how to run it
 - A working dry-run mode so anyone can run it locally without an Opik account
 - Credentials loaded from environment variables only — no hardcoded keys
-- A `run_examples.sh` that exports `OPIK_PROJECT_NAME` and can run the example end-to-end
+- A `run.sh` that exports `OPIK_PROJECT_NAME` and can run the example end-to-end
 
 ### README structure
 
@@ -129,9 +129,9 @@ Never commit `.env` files or hardcoded keys. Add `.env` to the example's `.gitig
 
 Each example is a `uv` project: declare dependencies in its `pyproject.toml` (the single source of truth) and run with `uv sync` / `uv run`. No `requirements.txt`, no Poetry, and don't commit `uv.lock`. The README may still show an optional `pip install` fallback line. Do not assume the user has the repo's root virtualenv set up.
 
-### run_examples.sh
+### run.sh
 
-Every testable example must include a `run_examples.sh` at its root. This file is what the CI matrix runs. Requirements:
+Every testable example must include a `run.sh` at its root. This file is what the CI matrix runs. Requirements:
 
 - Start with `set -e` (fail fast on any error)
 - Call `uv sync` before invoking any Python
@@ -145,13 +145,13 @@ uv sync
 uv run my-example run-all
 ```
 
-The scaffold tool adds a working `run_examples.sh` automatically when you create a new example.
+The scaffold tool adds a working `run.sh` automatically when you create a new example.
 
 ### Setting OPIK_PROJECT_NAME
 
 Every example must have a unique project name so its traces are identifiable in Opik. Where you set it depends on the example type:
 
-**Scripts** (single `.py` file, no config module) — export it in `run_examples.sh`:
+**Scripts** (single `.py` file, no config module) — export it in `run.sh`:
 
 ```bash
 export OPIK_PROJECT_NAME="my-script"
@@ -170,7 +170,7 @@ OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "my-use-case")
 def my_function(): ...
 ```
 
-The compliance check accepts either pattern — it looks for `OPIK_PROJECT_NAME` in `run_examples.sh` or in any `.py` file in the folder.
+The compliance check accepts either pattern — it looks for `OPIK_PROJECT_NAME` in `run.sh` or in any `.py` file in the folder.
 
 ### Opik workspace
 
@@ -236,8 +236,8 @@ Before opening a PR, verify:
 - [ ] Dry-run mode works (no env vars set) prints useful output without errors — e.g. `uv run <command> eval`
 - [ ] No credentials or `.env` files committed
 - [ ] Dependencies declared in `pyproject.toml` (uv project); no `requirements.txt`
-- [ ] `run_examples.sh` exists and starts with `set -e`
-- [ ] `OPIK_PROJECT_NAME` is set — exported in `run_examples.sh` (scripts) or defined in `config.py` (use-cases/guides)
+- [ ] `run.sh` exists and starts with `set -e`
+- [ ] `OPIK_PROJECT_NAME` is set — exported in `run.sh` (scripts) or defined in `config.py` (use-cases/guides)
 - [ ] Examples that call LLMs use litellm and read `OPIK_EXAMPLES_MODEL` in `config.py`
 
 ## Questions
