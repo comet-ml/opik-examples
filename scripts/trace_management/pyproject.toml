@@ -1,0 +1,23 @@
+[project]
+name = "trace-management"
+version = "0.1.0"
+description = "Inspect and delete Opik traces by date range, tags, or TTL policies."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "requests",
+]
+
+[dependency-groups]
+dev = ["ruff"]
+
+# WHY: loose runnable scripts, not an installable package — uv manages the env but builds nothing.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

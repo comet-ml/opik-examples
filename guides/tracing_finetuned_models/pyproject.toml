@@ -1,0 +1,30 @@
+[project]
+name = "tracing-finetuned-models"
+version = "0.1.0"
+description = "Fine-tune a model, register it to the Comet Model Registry, then fetch and trace inference in Opik."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "comet-ml>=3.58.3",
+    "datasets>=5.0.0",
+    "opik>=2.0.74",
+    "torch>=2.12.1",
+    "transformers>=5.12.1",
+    "trl>=1.6.0",
+]
+
+[dependency-groups]
+dev = ["ruff"]
+
+# WHY: loose runnable scripts + a notebook, not an installable package — uv manages the env only.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+# WHY: ruff can't parse the demo notebook's cell schema; lint the .py files only.
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

@@ -73,7 +73,7 @@ When the raw OpenTelemetry ids are left to drive trace assembly, Opik converts t
 ## Running the examples
 
 ```bash
-pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http uuid6
+uv sync
 
 # Send to your Opik deployment:
 export OPIK_OTEL_ENDPOINT="https://<opik-host>/api/v1/private/otel/v1/traces"
@@ -81,8 +81,8 @@ export OPIK_API_KEY="<api-key>"
 export OPIK_WORKSPACE="<workspace>"
 export OPIK_PROJECT_NAME="otel-distributed-tracing-demo"
 
-python option_a_explicit_ids.py        # Option A
-python option_b_w3c_propagation.py     # Option B
+uv run python option_a_explicit_ids.py        # Option A
+uv run python option_b_w3c_propagation.py     # Option B
 ```
 
 Without the env vars set, each script runs in dry-run mode: prints the spans and the reconstructed trace tree locally without sending anything.

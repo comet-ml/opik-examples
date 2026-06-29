@@ -10,7 +10,7 @@ opik-examples/
 ├── guides/         # How-to examples for Opik workflows and patterns
 ├── use-cases/      # End-to-end applications and domain workflows
 ├── scripts/        # Utility automations and API helpers
-└── _template/      # Starter template for new examples
+└── templates/      # Starter templates (use-case-template, script-template)
 ```
 
 ## Integrations
@@ -27,7 +27,9 @@ Examples for teams using a specific framework who want to add Opik.
 
 Task-oriented examples for specific Opik workflows and patterns.
 
-*More coming soon — see [guides/](guides/) or [contribute one](CONTRIBUTING.md).*
+| | Description |
+|---|---|
+| [guides/tracing_finetuned_models](guides/tracing_finetuned_models/) | Fine-tune a model, register it to the CometML Model Registry, then fetch and trace inference in Opik |
 
 ## Use Cases
 

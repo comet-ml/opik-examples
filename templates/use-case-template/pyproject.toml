@@ -1,0 +1,38 @@
+[project]
+name = "example-use-case"
+version = "0.1.0"
+description = "One-line description of what this demo does (replace me)."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "opik>=2.0",
+    "opik-optimizer",
+    "litellm",
+    "typer",
+]
+
+[project.scripts]
+example-use-case = "example_use_case.cli:main"
+
+[dependency-groups]
+dev = [
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/example_use_case"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Typer uses function-call defaults (typer.Option/Argument) by design.
+"**/cli.py" = ["B008"]

@@ -47,7 +47,7 @@ workflow requires the Opik Python SDK because it needs to:
 ## Setup
 
 ```bash
-pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http opik
+uv sync
 ```
 
 Environment variables for `llm_app.py`:
@@ -68,10 +68,10 @@ export OPIK_URL_OVERRIDE="https://your-opik-host/opik/api"
 
 ```bash
 # Run your application normally (OTel tracing active)
-python llm_app.py
+uv run python llm_app.py
 
 # Run offline evaluation separately
-python evaluate.py
+uv run python evaluate.py
 ```
 
 ## Notes for self-hosted Opik

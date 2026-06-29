@@ -6,3 +6,20 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# Model files
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+downloaded_model/
+results_sft/
+final_model/
+
+# Skill eval scratch (e.g. skill-creator benchmark workspaces) — never commit
+*-workspace/
+.ruff_cache/
+.tmp/
+uv.lock
+.env
+poetry.lock

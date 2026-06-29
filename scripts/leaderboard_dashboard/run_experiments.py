@@ -12,13 +12,12 @@ Usage:
 
 import argparse
 import time
-import yaml
 from typing import Any
 
 import opik
+import yaml
 from opik.evaluation import evaluate
 from opik.evaluation.metrics import base_metric, score_result
-
 
 # ---------------------------------------------------------------------------
 # Dataset items — a small Q&A set used by both experiments
@@ -64,11 +63,17 @@ def model_a_respond(question: str) -> str:
     Always includes the correct answer with full sentences.
     """
     answers = {
-        "What is the capital of France?": "The capital of France is Paris, a major European city known for the Eiffel Tower.",
+        "What is the capital of France?": (
+            "The capital of France is Paris, a major European city known for the Eiffel Tower."
+        ),
         "What is 12 multiplied by 8?": "12 multiplied by 8 equals 96.",
         "Who wrote Hamlet?": "Hamlet was written by William Shakespeare, the famous English playwright.",
-        "What is the boiling point of water in Celsius?": "Water boils at 100 degrees Celsius at standard atmospheric pressure.",
-        "What year did World War II end?": "World War II ended in 1945 with the surrender of Germany and Japan.",
+        "What is the boiling point of water in Celsius?": (
+            "Water boils at 100 degrees Celsius at standard atmospheric pressure."
+        ),
+        "What year did World War II end?": (
+            "World War II ended in 1945 with the surrender of Germany and Japan."
+        ),
     }
     return answers.get(question, "I don't know.")
 
