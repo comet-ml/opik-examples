@@ -34,7 +34,8 @@ import time
 import opik
 from opik import opik_context
 
-PROJECT_NAME    = os.environ.get("OPIK_PROJECT_NAME", "governance-data-demo")
+WORKSPACE    = os.environ["OPIK_WORKSPACE"]
+PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "governance-data-demo")
 
 # Tag applied to every trace. The oversight/reporting team filters on this tag
 # to identify which traces belong to the governance programme.
@@ -161,4 +162,4 @@ if __name__ == "__main__":
 
     opik.flush_tracker()
     print("Done. Traces are visible in the Opik UI under the project:")
-    print(f"  https://www.comet.com/opik/{os.environ['OPIK_WORKSPACE']}/{PROJECT_NAME}/traces")
+    print(f"  https://www.comet.com/opik/{WORKSPACE}/{PROJECT_NAME}/traces")
