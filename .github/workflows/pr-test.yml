@@ -1,0 +1,183 @@
+name: PR Example Tests
+
+# Runs the example folders changed in this PR.
+#   - lint + dry-run are secrets-free and run on every PR, including forks.
+#   - live-run uses real Opik credentials and runs only when secrets are available
+#     (same-repo PRs); it confirms the example executes and logs traces to the
+#     opik-examples workspace.
+# Any job failure blocks the PR.
+
+on:
+  pull_request:
+    paths:
+      - "examples/**"
+      - "integrations/**"
+      - "scripts/**"
+      - "use-cases/**"
+      - "guides/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      folders: ${{ steps.detect.outputs.folders }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+      has_secrets: ${{ steps.secrets.outputs.has_secrets }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed runnable example folders
+        id: detect
+        run: |
+          changed_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+
+          seen=()
+          folders_json="["
+
+          while IFS= read -r file; do
+            top=$(echo "$file" | cut -d'/' -f1)
+            case "$top" in
+              integrations)
+                folder=$(echo "$file" | cut -d'/' -f1,2,3)
+                ;;
+              examples|scripts|use-cases|guides)
+                folder=$(echo "$file" | cut -d'/' -f1,2)
+                ;;
+              *)
+                continue
+                ;;
+            esac
+
+            if [[ -z "$folder" ]] || [[ ! -d "$folder" ]] || [[ ! -f "$folder/run.sh" ]]; then
+              continue
+            fi
+
+            already_seen=false
+            for s in "${seen[@]}"; do
+              [[ "$s" == "$folder" ]] && already_seen=true && break
+            done
+
+            if [[ "$already_seen" == false ]]; then
+              seen+=("$folder")
+              [[ "${#seen[@]}" -gt 1 ]] && folders_json="$folders_json,"
+              folders_json="$folders_json\"$folder\""
+            fi
+          done <<< "$changed_files"
+
+          folders_json="$folders_json]"
+
+          if [[ "${#seen[@]}" -eq 0 ]]; then
+            echo "folders=[]" >> "$GITHUB_OUTPUT"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No runnable example folders changed."
+          else
+            echo "folders=$folders_json" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Runnable folders to test: ${seen[*]}"
+          fi
+
+      - name: Check whether Opik secrets are available
+        id: secrets
+        # secrets.* is not available in job-level `if:`, so resolve it here and
+        # expose a boolean output the live-run job can gate on. Fork PRs get no
+        # secrets, so this is false and only lint + dry-run run.
+        env:
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+        run: |
+          if [[ -n "$OPIK_API_KEY" ]]; then
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+            echo "Opik secrets available — live run will execute."
+          else
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            echo "No Opik secrets (fork PR) — lint + dry-run only."
+          fi
+
+  lint:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: ${{ fromJson(needs.detect-changes.outputs.folders) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Ruff check + format
+        run: |
+          cd "${{ matrix.folder }}"
+          uv sync
+          uv run ruff check .
+          uv run ruff format --check .
+
+  dry-run:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: ${{ fromJson(needs.detect-changes.outputs.folders) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Run example (dry-run, no credentials)
+        # No Opik/LLM secrets in env: the example must detect missing credentials,
+        # fall back to DRY_RUN, and exit 0. This is the only execution signal fork
+        # PRs receive, and it enforces that every example's dry-run path works.
+        run: |
+          cd "${{ matrix.folder }}"
+          bash run.sh
+
+  live-run:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true' && needs.detect-changes.outputs.has_secrets == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: ${{ fromJson(needs.detect-changes.outputs.folders) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Run example (live, real Opik credentials)
+        env:
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+          OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+          OPIK_ENVIRONMENT: ${{ vars.OPIK_ENVIRONMENT }}
+          OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd "${{ matrix.folder }}"
+          bash run.sh
