@@ -8,36 +8,30 @@ This example runs a Google ADK router agent that decides whether each query shou
 
 ## Prerequisites
 
+This is a `uv` project — dependencies live in `pyproject.toml`.
+
 ```bash
-pip install google-adk opik pypdfium2 fastembed qdrant-client ddgs tqdm
+uv sync
 ```
 
-The same dependencies are also listed in `requirements.txt`.
-
-Create a `.env` file with:
+Copy `.env.example` to `.env` (or `export` the variables). With `GOOGLE_API_KEY` / Opik credentials unset, the example runs in **DRY_RUN** and prints what it would do instead of calling Gemini/Opik.
 
 ```bash
 GOOGLE_API_KEY="<your-google-api-key>"
 OPIK_API_KEY="<your-opik-api-key>"
 OPIK_WORKSPACE="<your-opik-workspace>"
-OPIK_PROJECT_NAME="<your-project-name>"
+OPIK_PROJECT_NAME="google-adk-rag"
 ```
 
 ## Running it
 
-Index the IMF PDF or sample PDF into the local Qdrant database:
-
 ```bash
-python index.py
+uv run python index.py   # build the local Qdrant index from the IMF PDF
+uv run python main.py    # run the traced ADK router
+
+# or both, the way CI does:
+bash run.sh
 ```
-
-Run the Google ADK router agent and send traces to Opik:
-
-```bash
-python main.py
-```
-
-![Opik dashboard trace view](assets/dashboard.png)
 
 ## How it works
 
