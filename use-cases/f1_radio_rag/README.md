@@ -13,8 +13,8 @@ On top of that RAG app it demonstrates the four Opik lifecycle steps, each as a 
 - **`ingest`** — load the radio messages into ChromaDB (fully offline).
 - **`ask`** — retrieve relevant messages and summarise them with Claude (traced in Opik).
 - **`eval`** — create an Opik **dataset** and a **test suite** (plain-English assertions), then run
-  both: `run_tests` for the assertions and `evaluate` with the `ContextRecall` and `Hallucination`
-  metrics.
+  both: `run_tests` for the assertions (pass/fail → **pass rate**) and `evaluate` with the
+  `ContextRecall` and `Hallucination` metrics (numeric **feedback scores**).
 - **`optimize`** — run **Optimization Studio** (`opik-optimizer`) to improve the summariser prompt
   against the dataset, scored by an `AnswerRelevance` judge.
 - **`promote`** — save the optimised prompt to the Opik **Prompt Library** (re-running versions it).
@@ -74,9 +74,16 @@ uv run f1rag run-all     # the whole loop in one shot
    `litellm.completion(model="anthropic/claude-sonnet-4-6", ...)` with the summariser prompt from
    `prompts.py`. It's decorated with `@opik.track`, so each call appears as a trace in Opik.
 3. **Eval** (`evaluation.py`) — builds an Opik dataset and a test suite, then scores the live RAG
-   task. The test suite checks plain-English **assertions**; `evaluate` runs the `ContextRecall`
-   (retrieval quality) and `Hallucination` (faithfulness) metrics. The eval cases live in
-   `data/eval_cases.json`.
+   task two ways. The eval cases live in `data/eval_cases.json`.
+   - The **test suite** (`run_tests`) checks plain-English **assertions** (LLM-judged) and yields a
+     **pass rate** — shown as "Pass rate" on the experiment. Test suites do *not* attach per-row
+     numeric scores, so test-suite experiments show `-` in the **Feedback Scores** column. That is
+     expected, not a bug — their result is the pass rate. The judge reads only the task's
+     `input` and `output`, so the suite task (`_suite_task`) folds the retrieved messages into
+     `input`; that is what lets the groundedness assertions check against the source.
+   - `evaluate` runs the `ContextRecall` (retrieval quality) and `Hallucination` (faithfulness)
+     metrics, which produce numeric **feedback scores** that *do* populate the Feedback Scores column
+     (e.g. `context_recall_metric`, `hallucination_metric`).
 4. **Optimize** (`optimization.py`) — `MetaPromptOptimizer.optimize_prompt(...)` improves the
    `ChatPrompt` against the dataset, scored by a callable that wraps Opik's `AnswerRelevance` judge.
 5. **Promote** (`prompts.py`) — `client.create_chat_prompt(...)` saves the optimised messages to the
