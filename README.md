@@ -1,5 +1,5 @@
 <p align="center">
-<img width="924" height="290" alt="image" src="https://github.com/user-attachments/assets/dfec7fc0-016c-499d-879e-fab1276fff0d" />
+<img width="924" height="290" alt="image" src="https://github.com/user-attachments/assets/51a31b97-4fe5-4f93-805e-9933c1fb98e4" />
 </p>
 
 # opik-examples
