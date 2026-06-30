@@ -11,9 +11,10 @@ DRY_RUN = not (OPIK_API_KEY and OPIK_WORKSPACE)
 LLM_READY = bool(ANTHROPIC_API_KEY)
 
 # litellm model strings (Anthropic provider). Swap for any litellm-supported model.
-GEN_MODEL = "anthropic/claude-sonnet-4-6"  # the deployed app
-JUDGE_MODEL = "anthropic/claude-sonnet-4-6"  # LLM-as-judge for metrics
-OPTIMIZER_MODEL = "anthropic/claude-sonnet-4-6"  # meta-model that rewrites the prompt
+# CI sets OPIK_EXAMPLES_MODEL to a cheap model; locally, leave it unset to use the full model.
+GEN_MODEL = os.environ.get("OPIK_EXAMPLES_MODEL", "anthropic/claude-sonnet-4-6")  # the deployed app
+JUDGE_MODEL = GEN_MODEL  # LLM-as-judge for metrics
+OPTIMIZER_MODEL = GEN_MODEL  # meta-model that rewrites the prompt
 
 DATASET_NAME = "example-use-case-eval"
 SUITE_NAME = "example-use-case-suite"

@@ -150,6 +150,14 @@ def main() -> int:
         text = text.replace(f'{kebab} = "{entry}"', f'{command} = "{entry}"')
         pyproject.write_text(text, encoding="utf-8")
 
+        # run.sh invokes the CLI by the kebab name (from the sentinel rewrite); point it
+        # at the overridden command so `bash run.sh` matches [project.scripts].
+        run_sh = dest / "run.sh"
+        if run_sh.is_file():
+            text = run_sh.read_text(encoding="utf-8")
+            text = text.replace(f"uv run {kebab}", f"uv run {command}")
+            run_sh.write_text(text, encoding="utf-8")
+
     # Description.
     if args.description:
         pyproject = dest / "pyproject.toml"
@@ -173,11 +181,11 @@ def main() -> int:
     if kind == "package":
         print(f"  2. uv run {command} eval        # DRY_RUN smoke test (no creds needed)")
         print("  3. Fill the TODO stubs: app.py (real logic), prompts.py, data/cases.json, README.md")
-        print(f"  4. uv run ruff check . && uv run {command} run-all")
+        print("  4. uv run ruff check . && bash run.sh   # what CI runs (dry-run without creds)")
     else:
         print(f"  2. uv run {command} --dry-run   # DRY_RUN smoke test (no creds needed)")
         print(f"  3. Fill the TODO in {pkg}.py (real logic) and the README.md sections")
-        print("  4. uv run ruff check .")
+        print("  4. uv run ruff check . && bash run.sh   # what CI runs (dry-run without creds)")
     return 0
 
 
