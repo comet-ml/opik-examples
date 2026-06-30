@@ -4,7 +4,7 @@ Thank you for contributing. This repo is a reference library for Opik users — 
 
 ## Recommended workflow
 
-This is the loop we follow for non-trivial contributions. The slash-commands in brackets come from Claude Code plugins (see below) and are optional but recommended.
+This is the loop we follow for non-trivial contributions. The slash-commands in brackets come from Claude Code plugins (see below) and are optional but recommended. **Start every contribution with `/brainstorming`** to agree on scope, and **finish by reviewing your own PR with `/review`** before asking a human.
 
 1. **Plan first.** Switch Claude Code to plan mode on the best available model with reasoning effort maxed before writing any code.
 2. **Brainstorm the scope** (`/brainstorming`) — agree on *what* to build before *how*.
@@ -14,9 +14,14 @@ This is the loop we follow for non-trivial contributions. The slash-commands in 
 6. **Test and fix** — run the example in dry-run (and with credentials if you have them) until it works; `uv run ruff check .` is clean.
 7. **Update the READMEs** — the example's own README plus any index tables (see the [PR checklist](#pr-checklist)).
 8. **Open a PR with a description** — what changed and why. A human merges it.
-9. **Review the diff** (`/review`) before requesting human review.
+9. **Review your own PR** (`/review`) before requesting human review.
 
-**Recommended Claude Code plugins:** `superpowers` (provides `/brainstorming`, `/writing-plans`, and `/review`) and `caveman` (terse output mode).
+**Recommended Claude Code plugins:** `superpowers` (provides `/brainstorming`, `/writing-plans`, and `/review`) and `caveman` (terse output mode). Install `superpowers` from inside Claude Code:
+
+```text
+/plugin marketplace add anthropics/claude-plugins-official   # first time only
+/plugin install superpowers@claude-plugins-official
+```
 
 ## Repo structure
 
