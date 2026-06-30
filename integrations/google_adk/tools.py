@@ -4,7 +4,7 @@ from qdrant_client import QdrantClient
 from index import COLLECTION_NAME, MODEL_NAME, DB_PATH
 
 embed_model = TextEmbedding(model_name=MODEL_NAME)
-client = QdrantClient(path=DB_PATH)
+client = QdrantClient(path=str(DB_PATH))
 
 def retrieve_docs(query: str):
     """
