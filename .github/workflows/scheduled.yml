@@ -23,7 +23,7 @@ jobs:
     outputs:
       folders: ${{ steps.load.outputs.folders }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Load curated example list
         id: load
@@ -43,7 +43,7 @@ jobs:
       matrix:
         folder: ${{ fromJson(needs.load-examples.outputs.folders) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v5
         with:
