@@ -1,27 +1,40 @@
 """
-Before running this script, export your Opik credentials:
+Google ADK Agentic RAG router, traced with Opik.
 
+Run end-to-end:
+    export GOOGLE_API_KEY="<your-google-api-key>"
     export OPIK_API_KEY="<your-opik-api-key>"
     export OPIK_WORKSPACE="<your-opik-workspace>"
-    export OPIK_PROJECT_NAME="<your-opik-project-name>"
+    python index.py && python main.py
 
+With GOOGLE_API_KEY / Opik credentials unset, this prints a DRY_RUN line and exits 0.
 You can create an Opik API key from https://www.comet.com/opik.
 """
 
 import asyncio
-
-from opik.integrations.adk import OpikTracer, track_adk_agent_recursive
-from google.adk.agents import LlmAgent
-
-from constant import DESCRIPTION, INSTRUCTION
-from tools import retrieve_docs, web_search
+import os
 
 MODEL_NAME = "gemini-2.5-flash-lite"
 APP_NAME = "multi-agent"
-USER_ID = "tranfer_01"
+USER_ID = "transfer_01"
 SESSION_ID = "session_01"
+QUERY = "projected reach of the digital remittance market by 2034"
 
-def build_agent():    
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
+OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
+
+# No Google/Opik credentials -> print what would run instead of calling Gemini + Opik.
+DRY_RUN = not (GOOGLE_API_KEY and OPIK_API_KEY and OPIK_WORKSPACE)
+
+
+def build_agent():
+    from google.adk.agents import LlmAgent
+    from opik.integrations.adk import OpikTracer, track_adk_agent_recursive
+
+    from constant import DESCRIPTION, INSTRUCTION
+    from tools import retrieve_docs, web_search
+
     agent = LlmAgent(
         name="agent",
         model=MODEL_NAME,
@@ -29,17 +42,14 @@ def build_agent():
         instruction=INSTRUCTION,
         tools=[retrieve_docs, web_search],
     )
-
     opik_tracer = OpikTracer(name="router-agent")
     track_adk_agent_recursive(agent, opik_tracer)
     return agent
 
-async def create_session(session_service) -> None:
-    await session_service.create_session(
-        app_name=APP_NAME,
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-    )
+
+async def _create_session(session_service) -> None:
+    await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+
 
 def run_agent(query: str) -> str:
     from google.adk.runners import Runner
@@ -48,21 +58,26 @@ def run_agent(query: str) -> str:
 
     agent = build_agent()
     session_service = InMemorySessionService()
-    asyncio.run(create_session(session_service))
+    asyncio.run(_create_session(session_service))
     runner = Runner(agent=agent, app_name=APP_NAME, session_service=session_service)
 
     content = types.Content(role="user", parts=[types.Part(text=query)])
     events = runner.run(user_id=USER_ID, session_id=SESSION_ID, new_message=content)
-
     for event in events:
-        if event.is_final_response() and event.content:
-            return event.content.parts[0].text.strip()
+        if event.is_final_response() and event.content and event.content.parts:
+            return (event.content.parts[0].text or "").strip()
     return ""
 
+
 def main() -> None:
-    query = "projected reach of the digital remittance market by 2034"
-    response = run_agent(query)
-    print(response)
+    if DRY_RUN:
+        print(
+            "[DRY RUN] GOOGLE_API_KEY / Opik credentials not set — would route this query "
+            f"through the ADK router (retrieve_docs / web_search) and trace it to Opik:\n  {QUERY}"
+        )
+        return
+    print(run_agent(QUERY))
+
 
 if __name__ == "__main__":
     main()
