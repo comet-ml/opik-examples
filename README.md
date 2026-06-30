@@ -1,5 +1,8 @@
-# opik-examples
+<p align="center">
+<img width="924" height="290" alt="image" src="https://github.com/user-attachments/assets/dfec7fc0-016c-499d-879e-fab1276fff0d" />
+</p>
 
+# opik-examples
 Examples and utilities for working with [Opik](https://www.comet.com/site/products/opik/), Comet's LLM evaluation and observability platform.
 
 ## Structure
