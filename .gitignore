@@ -23,3 +23,6 @@ final_model/
 uv.lock
 .env
 poetry.lock
+
+# Local planning/process artifacts (superpowers brainstorm specs & implementation plans) — kept local, never committed
+docs/superpowers/
