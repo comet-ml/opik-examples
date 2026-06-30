@@ -31,7 +31,7 @@ jobs:
       has_changes: ${{ steps.detect.outputs.has_changes }}
       has_secrets: ${{ steps.secrets.outputs.has_secrets }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -111,7 +111,7 @@ jobs:
       matrix:
         folder: ${{ fromJson(needs.detect-changes.outputs.folders) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -136,7 +136,7 @@ jobs:
       matrix:
         folder: ${{ fromJson(needs.detect-changes.outputs.folders) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -162,7 +162,7 @@ jobs:
       matrix:
         folder: ${{ fromJson(needs.detect-changes.outputs.folders) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v7
         with:
