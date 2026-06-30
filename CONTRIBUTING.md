@@ -97,9 +97,9 @@ Use the template's README as a guide. Required sections:
 - **Running it** — exact commands, including dry-run
 - **How it works** — brief walkthrough of the key steps
 
-### Running locally without credentials
+### Dry-run mode
 
-CI always has real Opik credentials. If you want to smoke-test an example locally before obtaining credentials, you can add a dry-run guard — but this is optional and not enforced:
+Every runnable example must work without credentials. The secrets-free CI `dry-run` job runs `bash run.sh` with no Opik or LLM keys set and expects a clean exit — it is the only execution signal a fork PR receives, so a working dry-run path is required, not optional. The standard pattern:
 
 ```python
 DRY_RUN = not (os.environ.get("OPIK_API_KEY") and os.environ.get("OPIK_WORKSPACE"))
@@ -110,7 +110,7 @@ else:
     # send to Opik
 ```
 
-The recommended path is to set your own Opik credentials locally so you see real traces, the same way CI does.
+The dry-run output should be meaningful enough to verify the example is working. To see real traces, set your own Opik credentials locally — the same way CI's live run does.
 
 ### Credentials
 
@@ -142,7 +142,7 @@ Every testable example must include a `run.sh` at its root. This file is what th
 set -e
 
 uv sync
-uv run my-example run-all
+uv run my-example eval   # the command(s) that run the example end-to-end
 ```
 
 The scaffold tool adds a working `run.sh` automatically when you create a new example.
@@ -174,7 +174,7 @@ The compliance check accepts either pattern — it looks for `OPIK_PROJECT_NAME`
 
 ### Opik workspace
 
-All CI runs log to the workspace set in the `OPIK_WORKSPACE` GitHub Actions variable (currently `opik-examples`). Locally, set both vars explicitly to avoid accidentally writing to the shared workspace:
+Live CI runs log to the workspace set in the `OPIK_WORKSPACE` GitHub Actions variable (currently `opik-examples`). Locally, set both vars explicitly to avoid accidentally writing to the shared workspace:
 
 ```bash
 export OPIK_API_KEY=<your personal key>
@@ -208,7 +208,7 @@ Model names use litellm's provider-prefixed format: `openai/gpt-4o-mini`, `anthr
 
 ### Opik logging
 
-CI always has real Opik credentials (`OPIK_API_KEY`, `OPIK_WORKSPACE`, `OPIK_ENVIRONMENT`). Every CI run logs traces to the `opik-examples` workspace — this is how we verify an example is working, not just that it exits 0.
+Same-repo PRs and scheduled runs have real Opik credentials (`OPIK_API_KEY`, `OPIK_WORKSPACE`, `OPIK_ENVIRONMENT`), and a `live-run` job logs traces to the `opik-examples` workspace — this is how we verify an example is working, not just that it exits 0. Fork PRs don't receive secrets (GitHub withholds them from forks), so they run only the secrets-free `lint` + `dry-run` jobs; a maintainer runs the live job after review.
 
 `OPIK_ENVIRONMENT` is set automatically in CI; you do not need to set it locally. It tags traces so CI runs are distinguishable from local runs in the Opik UI.
 
@@ -233,7 +233,8 @@ Before opening a PR, verify:
 - [ ] Folder name is lowercase with underscores (e.g. `my_example`, not `MyExample` or `my-example`)
 - [ ] `README.md` has all required sections
 - [ ] READMEs updated — the example's `README.md`, and for added/renamed/removed examples the bucket index and the root `README.md` table
-- [ ] Dry-run mode works (no env vars set) prints useful output without errors — e.g. `uv run <command> eval`
+- [ ] Dry-run works with no credentials set — `bash run.sh` exits cleanly (this is exactly what CI's secrets-free job runs)
+- [ ] `uv run ruff check .` and `uv run ruff format --check .` are clean
 - [ ] No credentials or `.env` files committed
 - [ ] Dependencies declared in `pyproject.toml` (uv project); no `requirements.txt`
 - [ ] `run.sh` exists and starts with `set -e`

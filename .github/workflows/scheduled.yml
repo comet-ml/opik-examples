@@ -33,7 +33,11 @@ jobs:
 
   run-examples:
     needs: load-examples
+    # Skip cleanly when the curated list is empty — an empty matrix array otherwise
+    # errors with "Matrix vector 'folder' does not contain any values".
+    if: needs.load-examples.outputs.folders != '[]'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -56,5 +60,5 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          cd ${{ matrix.folder }}
+          cd "${{ matrix.folder }}"
           bash run.sh

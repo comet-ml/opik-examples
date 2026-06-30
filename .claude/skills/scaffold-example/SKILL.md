@@ -87,11 +87,14 @@ uv run <command> eval        # use-case: [DRY RUN] lists the dataset items + ass
 uv run <command> optimize    # use-case: [DRY RUN] line
 uv run <command> --dry-run   # script: [DRY RUN] line
 uv run ruff check .          # clean
+bash run.sh                  # the exact dry-run smoke test CI runs (exits 0 without creds)
 ```
 
-With credentials set (`ANTHROPIC_API_KEY`, `OPIK_API_KEY`, `OPIK_WORKSPACE`), the same commands
-talk to Claude + Opik and `eval` prints a pass rate + experiment URL. Running the eval and
-optimization workflows in depth is covered by the `run-evals` and `run-optimizations` skills.
+The scaffold includes a working `run.sh` at the project root — this is what the CI `dry-run` and
+`live-run` jobs execute. With credentials set (`ANTHROPIC_API_KEY`, `OPIK_API_KEY`,
+`OPIK_WORKSPACE`), the same commands talk to Claude + Opik and `eval` prints a pass rate +
+experiment URL. Running the eval and optimization workflows in depth is covered by the `run-evals`
+and `run-optimizations` skills.
 
 ## What this skill does NOT do
 

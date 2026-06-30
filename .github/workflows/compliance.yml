@@ -133,7 +133,9 @@ jobs:
             fi
 
             # If litellm is declared as a dependency, OPIK_EXAMPLES_MODEL must be referenced.
-            if grep -q "litellm" "$folder/pyproject.toml" 2>/dev/null; then
+            # Match a quoted dependency entry ("litellm", "litellm>=...", "litellm[extra]")
+            # so a bare mention in a comment doesn't trip the check.
+            if grep -qE '"litellm' "$folder/pyproject.toml" 2>/dev/null; then
               if grep -rq "OPIK_EXAMPLES_MODEL" "$folder" --include="*.py" 2>/dev/null; then
                 echo "  OK  OPIK_EXAMPLES_MODEL referenced (litellm dep detected)"
               else
@@ -155,13 +157,15 @@ jobs:
       - name: Write step summary
         if: always() && steps.changed-folders.outputs.folders != ''
         run: |
-          echo "## Example Compliance Check" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Folders checked: \`${{ steps.changed-folders.outputs.folders }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Rules:**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`run.sh\` must exist and contain \`set -e\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`OPIK_PROJECT_NAME\` must be set — via \`export\` in \`run.sh\` (scripts) or as a constant in a \`.py\` config file (use-cases/guides)" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`README.md\` must exist" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`pyproject.toml\` must exist; \`requirements.txt\` is not allowed" >> "$GITHUB_STEP_SUMMARY"
-          echo "- If \`litellm\` is a dependency, a \`.py\` file must reference \`OPIK_EXAMPLES_MODEL\`" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Example Compliance Check"
+            echo ""
+            echo "Folders checked: \`${{ steps.changed-folders.outputs.folders }}\`"
+            echo ""
+            echo "**Rules:**"
+            echo "- \`run.sh\` must exist and contain \`set -e\`"
+            echo "- \`OPIK_PROJECT_NAME\` must be set — via \`export\` in \`run.sh\` (scripts) or as a constant in a \`.py\` config file (use-cases/guides)"
+            echo "- \`README.md\` must exist"
+            echo "- \`pyproject.toml\` must exist; \`requirements.txt\` is not allowed"
+            echo "- If \`litellm\` is a dependency, a \`.py\` file must reference \`OPIK_EXAMPLES_MODEL\`"
+          } >> "$GITHUB_STEP_SUMMARY"
