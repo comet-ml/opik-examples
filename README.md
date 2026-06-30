@@ -28,6 +28,7 @@ Task-oriented examples for specific Opik workflows and patterns.
 
 | | Description |
 |---|---|
+| [guides/annotation_queues_with_context](guides/annotation_queues_with_context/) | Structure RAG traces for Opik annotation queues — clean SME view with retrieval context in metadata |
 | [guides/tracing_finetuned_models](guides/tracing_finetuned_models/) | Fine-tune a model, register it to the CometML Model Registry, then fetch and trace inference in Opik |
 
 ## Use Cases
