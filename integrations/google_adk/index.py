@@ -1,5 +1,6 @@
-from pathlib import Path
+import os
 import urllib.request
+from pathlib import Path
 
 import pypdfium2 as pdfium
 from fastembed import TextEmbedding
@@ -11,6 +12,12 @@ PDF_PATH = Path("annual_report.pdf")
 DB_PATH = Path("db")
 COLLECTION_NAME = "fas"
 MODEL_NAME = "jinaai/jina-embeddings-v2-small-en"
+
+OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
+OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
+# No Opik credentials -> skip the (heavy, networked) download + embedding so CI stays fast.
+DRY_RUN = not (OPIK_API_KEY and OPIK_WORKSPACE)
+
 
 def download_pdf() -> None:
     if PDF_PATH.exists():
@@ -52,6 +59,9 @@ def index_documents(chunks: list[str], batch_size: int = 16) -> None:
 
 
 def main() -> None:
+    if DRY_RUN:
+        print("[DRY RUN] Opik credentials not set — skipping PDF download + indexing.")
+        return
     download_pdf()
     chunks = load_pdf_chunks(str(PDF_PATH))
     index_documents(chunks)
