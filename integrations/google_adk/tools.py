@@ -1,10 +1,12 @@
 from ddgs import DDGS
 from fastembed import TextEmbedding
 from qdrant_client import QdrantClient
-from index import COLLECTION_NAME, MODEL_NAME, DB_PATH
+
+from index import COLLECTION_NAME, DB_PATH, MODEL_NAME
 
 embed_model = TextEmbedding(model_name=MODEL_NAME)
 client = QdrantClient(path=str(DB_PATH))
+
 
 def retrieve_docs(query: str):
     """

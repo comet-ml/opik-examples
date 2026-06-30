@@ -3,7 +3,8 @@ Routes user queries to the appropriate specialist tool based on the nature of th
 """
 
 INSTRUCTION = """
-You are a routing Agent. Your only job is to understand the user's query and delegate it to the right tool. Never answer yourself.
+You are a routing Agent. Your only job is to understand the user's query and delegate it
+to the right tool. Never answer yourself.
 
 Route to retrieve_docs tool when:
 - The question is about the Financial, Banking or Anything related to Annual Survey Report

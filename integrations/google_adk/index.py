@@ -24,11 +24,13 @@ def download_pdf() -> None:
         return
     urllib.request.urlretrieve(PDF_URL, PDF_PATH)
 
+
 def load_pdf_chunks(pdf_path: str, chunk_size: int = 500) -> list[str]:
     pdf = pdfium.PdfDocument(pdf_path)
     text = " ".join(page.get_textpage().get_text_range() for page in pdf)
     words = text.split()
     return [" ".join(words[i : i + chunk_size]) for i in range(0, len(words), chunk_size)]
+
 
 def index_documents(chunks: list[str], batch_size: int = 16) -> None:
     embed_model = TextEmbedding(model_name=MODEL_NAME)
@@ -52,7 +54,7 @@ def index_documents(chunks: list[str], batch_size: int = 16) -> None:
                 vector=vec,
                 payload={"doc_id": f"doc_{point_id + j}", "text": chunk},
             )
-            for j, (vec, chunk) in enumerate(zip(vectors, batch_chunks))
+            for j, (vec, chunk) in enumerate(zip(vectors, batch_chunks, strict=False))
         ]
         client.upsert(collection_name=COLLECTION_NAME, points=points)
         point_id += len(batch_chunks)
