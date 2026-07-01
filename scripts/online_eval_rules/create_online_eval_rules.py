@@ -7,6 +7,7 @@ Workflow:
 """
 
 import argparse
+import json
 import os
 import pathlib
 import sys
@@ -141,6 +142,38 @@ def build_payload(rule_type: str, *, name: str, project_id: str,
     else:
         raise ValueError(f"unknown rule_type: {rule_type}")
     return payload
+
+
+_SDK_VARIANT_NAME = {
+    RULE_LLM_JUDGE: "AutomationRuleEvaluatorWrite_LlmAsJudge",
+    RULE_PY: "AutomationRuleEvaluatorWrite_UserDefinedMetricPython",
+    RULE_THREAD_JUDGE: "AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge",
+    RULE_SPAN_JUDGE: "AutomationRuleEvaluatorWrite_SpanLlmAsJudge",
+    RULE_SPAN_PY: "AutomationRuleEvaluatorWrite_SpanUserDefinedMetricPython",
+}
+
+
+def render_curl(payload: dict) -> str:
+    body = json.dumps(payload, indent=2)
+    return (
+        f'curl -X POST "{OPIK_URL}{EVALUATORS_PATH}/" \\\n'
+        f'  -H "Authorization: Bearer $OPIK_API_KEY" \\\n'
+        f'  -H "Comet-Workspace: $OPIK_WORKSPACE" \\\n'
+        f'  -H "Content-Type: application/json" \\\n'
+        f"  -d '{body}'"
+    )
+
+
+def render_sdk_snippet(payload: dict) -> str:
+    variant = _SDK_VARIANT_NAME[payload["type"]]
+    body = json.dumps(payload, indent=4)
+    return (
+        "import opik\n"
+        f"from opik.rest_api.types import {variant}\n\n"
+        "client = opik.Opik()\n"
+        f"request = {variant}.model_validate({body})\n"
+        "client.rest_client.automation_rule_evaluators.create_automation_rule_evaluator(request=request)"
+    )
 
 
 if __name__ == "__main__":

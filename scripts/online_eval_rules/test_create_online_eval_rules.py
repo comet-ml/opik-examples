@@ -58,3 +58,22 @@ def test_build_payload_is_json_serializable():
                cli.RULE_SPAN_JUDGE, cli.RULE_SPAN_PY):
         json.dumps(cli.build_payload(rt, name="x", project_id="pid",
                                      sampling_rate=1.0, model="gpt-4o"))
+
+
+def test_render_curl_has_path_headers_and_valid_json():
+    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid",
+                          sampling_rate=1.0, model="gpt-4o")
+    out = cli.render_curl(p)
+    assert "/v1/private/automations/evaluators/" in out
+    assert "Authorization: Bearer $OPIK_API_KEY" in out
+    assert "Comet-Workspace: $OPIK_WORKSPACE" in out
+    body = out.split("-d '", 1)[1].rsplit("'", 1)[0]
+    assert json.loads(body)["type"] == "llm_as_judge"
+
+
+def test_render_sdk_snippet_names_variant():
+    p = cli.build_payload(cli.RULE_SPAN_PY, name="r", project_id="pid",
+                          sampling_rate=1.0, model="gpt-4o")
+    out = cli.render_sdk_snippet(p)
+    assert "AutomationRuleEvaluatorWrite_SpanUserDefinedMetricPython" in out
+    assert "create_automation_rule_evaluator" in out
