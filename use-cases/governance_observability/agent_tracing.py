@@ -34,17 +34,22 @@ import time
 import opik
 from opik import opik_context
 
-PROJECT_NAME    = os.environ.get("OPIK_PROJECT_NAME", "governance-data-demo")
+WORKSPACE = os.environ.get("OPIK_WORKSPACE")
+PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "governance-data-demo")
+
+# No Opik credentials -> describe what would be traced and exit without calling Opik.
+DRY_RUN = not (os.environ.get("OPIK_API_KEY") and WORKSPACE)
 
 # Tag applied to every trace. The oversight/reporting team filters on this tag
 # to identify which traces belong to the governance programme.
 # Replace with whatever tag your organisation uses.
-GOVERNANCE_TAG  = "governance"
+GOVERNANCE_TAG = "governance"
 
 
 # ---------------------------------------------------------------------------
 # Agent implementation
 # ---------------------------------------------------------------------------
+
 
 @opik.track(name="retrieve_context", type="tool")
 def retrieve_context(query: str) -> list[str]:
@@ -93,26 +98,26 @@ def run_agent(
         metadata={
             # Governance fields — the oversight team filters and slices on all of these.
             # Adapt field names and values to match your organisation's schema.
-            "env":                 "prod",
-            "region":              "us-east",
-            "use_case_id":         "loan-approval",
-            "use_case_version":    "2.1.0",
-            "team":                "risk-analytics",
-            "business_unit":       business_unit,
-            "model_name":          model,
-            "model_version":       "2024-11-20",
-            "risk_tier":           risk_tier,
+            "env": "prod",
+            "region": "us-east",
+            "use_case_id": "loan-approval",
+            "use_case_version": "2.1.0",
+            "team": "risk-analytics",
+            "business_unit": business_unit,
+            "model_name": model,
+            "model_version": "2024-11-20",
+            "risk_tier": risk_tier,
             "data_classification": "confidential",
-            "regulatory_scope":    "internal",
+            "regulatory_scope": "internal",
             # Call-level runtime fields
-            "request_id":          request_id,
-            "channel":             "api",
+            "request_id": request_id,
+            "channel": "api",
         }
     )
 
     context_docs = retrieve_context(query)
-    answer       = call_llm(query, context_docs, model)
-        
+    answer = call_llm(query, context_docs, model)
+
     return {"answer": answer, "sources": context_docs}
 
 
@@ -122,35 +127,42 @@ def run_agent(
 
 SAMPLE_RUNS = [
     {
-        "query":              "Assess the risk for a $20,000 personal loan application.",
-        "request_id":         "req-001",
-        "business_unit":      "retail",
-        "risk_tier":          "high",
+        "query": "Assess the risk for a $20,000 personal loan application.",
+        "request_id": "req-001",
+        "business_unit": "retail",
+        "risk_tier": "high",
         "hallucination_rate": 0.03,
-        "response_quality":   0.91,
-        "cost_usd":           0.0042,
+        "response_quality": 0.91,
+        "cost_usd": 0.0042,
     },
     {
-        "query":              "Evaluate eligibility for a $500,000 business loan.",
-        "request_id":         "req-002",
-        "business_unit":      "commercial",
-        "risk_tier":          "medium",
+        "query": "Evaluate eligibility for a $500,000 business loan.",
+        "request_id": "req-002",
+        "business_unit": "commercial",
+        "risk_tier": "medium",
         "hallucination_rate": 0.07,
-        "response_quality":   0.84,
-        "cost_usd":           0.0061,
+        "response_quality": 0.84,
+        "cost_usd": 0.0061,
     },
     {
-        "query":              "Review a credit limit increase request from $10,000 to $25,000.",
-        "request_id":         "req-003",
-        "business_unit":      "wealth",
-        "risk_tier":          "low",
+        "query": "Review a credit limit increase request from $10,000 to $25,000.",
+        "request_id": "req-003",
+        "business_unit": "wealth",
+        "risk_tier": "low",
         "hallucination_rate": 0.01,
-        "response_quality":   0.97,
-        "cost_usd":           0.0038,
+        "response_quality": 0.97,
+        "cost_usd": 0.0038,
     },
 ]
 
 if __name__ == "__main__":
+    if DRY_RUN:
+        print(
+            "[DRY RUN] Opik creds not set — would trace 3 governance-tagged "
+            f"loan-approval agent runs to project '{PROJECT_NAME}'."
+        )
+        raise SystemExit(0)
+
     print(f"Project  : {PROJECT_NAME}")
     print(f"Tag      : {GOVERNANCE_TAG}\n")
 
@@ -161,4 +173,4 @@ if __name__ == "__main__":
 
     opik.flush_tracker()
     print("Done. Traces are visible in the Opik UI under the project:")
-    print(f"  https://www.comet.com/opik/{os.environ['OPIK_WORKSPACE']}/{PROJECT_NAME}/traces")
+    print(f"  https://www.comet.com/opik/{WORKSPACE}/{PROJECT_NAME}/traces")
