@@ -90,8 +90,7 @@ tracer = trace.get_tracer("agent.otel.w3c.demo")
 def set_attrs(span, attributes: dict) -> None:
     """OTel attribute values must be primitives; JSON-encode structured payloads."""
     span.set_attributes(
-        {k: (v if isinstance(v, (str, bool, int, float)) else json.dumps(v))
-         for k, v in attributes.items()}
+        {k: (v if isinstance(v, (str, bool, int, float)) else json.dumps(v)) for k, v in attributes.items()}
     )
 
 
@@ -130,28 +129,47 @@ def backend_request_1(session_id: str, user_prompt: str) -> dict:
             with tracer.start_as_current_span("routing.generic_agent"):
                 time.sleep(0.05)
                 with tracer.start_as_current_span("llm.request") as llm1:
-                    set_attrs(llm1, llm_attrs(
-                        model="gpt-4o",
-                        prompt=[{"role": "user", "content": user_prompt}],
-                        completion=[{"role": "assistant", "tool_calls": [
-                            {"id": "call_1", "name": "web_search", "arguments": {"query": user_prompt}}]}],
-                        usage={"input_tokens": 412, "output_tokens": 37},
-                    ))
+                    set_attrs(
+                        llm1,
+                        llm_attrs(
+                            model="gpt-4o",
+                            prompt=[{"role": "user", "content": user_prompt}],
+                            completion=[
+                                {
+                                    "role": "assistant",
+                                    "tool_calls": [
+                                        {
+                                            "id": "call_1",
+                                            "name": "web_search",
+                                            "arguments": {"query": user_prompt},
+                                        }
+                                    ],
+                                }
+                            ],
+                            usage={"input_tokens": 412, "output_tokens": 37},
+                        ),
+                    )
                     time.sleep(0.2)
                     # Inject WHILE tool_dispatch is the current span so the carrier
                     # encodes it as the parent for the tool execution in request 2.
                     with tracer.start_as_current_span("tool_dispatch") as dispatch:
-                        set_attrs(dispatch, {
-                            "gen_ai.tool.name": "web_search",
-                            "gen_ai.tool.call.id": "call_1",
-                            "input": {"query": user_prompt},
-                        })
+                        set_attrs(
+                            dispatch,
+                            {
+                                "gen_ai.tool.name": "web_search",
+                                "gen_ai.tool.call.id": "call_1",
+                                "input": {"query": user_prompt},
+                            },
+                        )
                         inject(carrier)  # -> carrier["traceparent"] = 00-<trace>-<dispatch span>-01
 
-    SESSION_STORE[session_id] = {"orchestrator": orchestrator, "carrier": carrier,
-                                 "user_prompt": user_prompt}
-    return {"tool": "web_search", "args": {"query": user_prompt},
-            "session_id": session_id, "traceparent": carrier.get("traceparent")}
+    SESSION_STORE[session_id] = {"orchestrator": orchestrator, "carrier": carrier, "user_prompt": user_prompt}
+    return {
+        "tool": "web_search",
+        "args": {"query": user_prompt},
+        "session_id": session_id,
+        "traceparent": carrier.get("traceparent"),
+    }
 
 
 def backend_request_2(session_id: str, tool_result: dict) -> str:
@@ -163,12 +181,15 @@ def backend_request_2(session_id: str, tool_result: dict) -> str:
     # THE KEY LINE: context=parent_ctx -> tool_execution becomes a child of
     # tool_dispatch, sharing the same trace id.
     with tracer.start_as_current_span("tool_execution", context=parent_ctx) as tool:
-        set_attrs(tool, {
-            "gen_ai.tool.name": "web_search",
-            "gen_ai.tool.call.id": "call_1",
-            "input": ctx_data["user_prompt"],
-            "output": tool_result,
-        })
+        set_attrs(
+            tool,
+            {
+                "gen_ai.tool.name": "web_search",
+                "gen_ai.tool.call.id": "call_1",
+                "input": ctx_data["user_prompt"],
+                "output": tool_result,
+            },
+        )
         time.sleep(0.1)
         with tracer.start_as_current_span("routing.invoke"):
             time.sleep(0.05)
@@ -176,12 +197,15 @@ def backend_request_2(session_id: str, tool_result: dict) -> str:
                 time.sleep(0.05)
                 final_answer = "The capital of France is Paris."
                 with tracer.start_as_current_span("llm.request") as llm2:
-                    set_attrs(llm2, llm_attrs(
-                        model="gpt-4o",
-                        prompt=[{"role": "tool", "content": tool_result}],
-                        completion=[{"role": "assistant", "content": final_answer}],
-                        usage={"input_tokens": 690, "output_tokens": 122},
-                    ))
+                    set_attrs(
+                        llm2,
+                        llm_attrs(
+                            model="gpt-4o",
+                            prompt=[{"role": "tool", "content": tool_result}],
+                            completion=[{"role": "assistant", "content": final_answer}],
+                            usage={"input_tokens": 690, "output_tokens": 122},
+                        ),
+                    )
                     time.sleep(0.2)
 
     ctx_data["final_answer"] = final_answer
