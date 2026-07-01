@@ -1,0 +1,6 @@
+# Maintainer-owned CI + automation. Edits to these paths require a maintainer review.
+# The scheduled-run curation list and the workflows are intentionally not contributor-editable.
+/.github/workflows/      @fschlz @LeoRoccoBreedt
+/.github/scheduled.json  @fschlz @LeoRoccoBreedt
+/.github/CODEOWNERS      @fschlz @LeoRoccoBreedt
+/.github/dependabot.yml  @fschlz @LeoRoccoBreedt

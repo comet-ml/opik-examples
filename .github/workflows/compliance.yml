@@ -1,0 +1,181 @@
+name: Example Compliance Check
+
+# Verifies that new example folders added in a PR follow repo conventions.
+# Only checks folders that are new (not previously on the base branch).
+# Rules enforced:
+#   1. run.sh must exist and contain set -e — EXCEPT notebook examples (folders with a
+#      .ipynb), which are executed by test-notebooks.yml and need no run.sh
+#   2. OPIK_PROJECT_NAME must be set — exported in run.sh (scripts), or referenced in a
+#      .py file (use-cases/guides) or a notebook cell (notebook examples)
+#   3. README.md must exist
+#   4. pyproject.toml must exist; requirements.txt must not
+#   5. If litellm is a dependency, OPIK_EXAMPLES_MODEL must be referenced in a .py/.ipynb file
+#
+# This check is secrets-free so it runs safely on PRs from forks.
+
+on:
+  pull_request:
+    paths:
+      - "examples/**"
+      - "integrations/**"
+      - "scripts/**"
+      - "use-cases/**"
+      - "guides/**"
+
+permissions:
+  contents: read
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Find changed example folders
+        id: changed-folders
+        run: |
+          changed_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+
+          folders=""
+          while IFS= read -r file; do
+            top=$(echo "$file" | cut -d'/' -f1)
+            case "$top" in
+              integrations)
+                parent=$(echo "$file" | cut -d'/' -f1,2,3)
+                ;;
+              examples|scripts|use-cases|guides)
+                parent=$(echo "$file" | cut -d'/' -f1,2)
+                ;;
+              *)
+                continue
+                ;;
+            esac
+            folders="$folders $parent"
+          done <<< "$changed_files"
+
+          # Deduplicate and trim
+          folders=$(echo "$folders" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ' ' | xargs)
+          echo "folders=$folders" >> "$GITHUB_OUTPUT"
+
+          if [[ -z "$folders" ]]; then
+            echo "No example folders changed."
+          else
+            echo "Changed example folders: $folders"
+          fi
+
+      - name: Check compliance
+        if: steps.changed-folders.outputs.folders != ''
+        run: |
+          FAILED=0
+
+          for folder in ${{ steps.changed-folders.outputs.folders }}; do
+            # Skip if the folder was deleted entirely
+            if [[ ! -d "$folder" ]]; then
+              echo "Skipping deleted folder: $folder"
+              continue
+            fi
+
+            # Only enforce on NEW folders (not yet on the base branch).
+            # Modifying an existing example does not require adding run.sh.
+            if git ls-tree "origin/${{ github.base_ref }}" "$folder" 2>/dev/null | grep -q .; then
+              echo "  Skipping '$folder' (existing folder — compliance enforced on new examples only)"
+              continue
+            fi
+
+            echo ""
+            echo "Checking: $folder"
+
+            # Notebook examples (folders with a .ipynb) are executed by test-notebooks.yml
+            # and don't need run.sh.
+            is_notebook=false
+            if ls "$folder"/*.ipynb >/dev/null 2>&1; then
+              is_notebook=true
+            fi
+
+            if [[ -f "$folder/run.sh" ]]; then
+              echo "  OK  run.sh"
+            elif [[ "$is_notebook" == true ]]; then
+              echo "  OK  notebook example (run.sh not required — executed by test-notebooks.yml)"
+            else
+              echo "::error file=$folder/run.sh::$folder is missing run.sh"
+              FAILED=1
+            fi
+
+            if [[ ! -f "$folder/README.md" ]]; then
+              echo "::error file=$folder/README.md::$folder is missing README.md"
+              FAILED=1
+            else
+              echo "  OK  README.md"
+            fi
+
+            if [[ ! -f "$folder/pyproject.toml" ]]; then
+              echo "::error::$folder is missing pyproject.toml (uv projects only — no requirements.txt)"
+              FAILED=1
+            else
+              echo "  OK  pyproject.toml"
+            fi
+
+            if [[ -f "$folder/requirements.txt" ]]; then
+              echo "::error file=$folder/requirements.txt::$folder has requirements.txt — declare deps in pyproject.toml instead"
+              FAILED=1
+            fi
+
+            if [[ -f "$folder/run.sh" ]]; then
+              if ! grep -q "set -e" "$folder/run.sh"; then
+                echo "::error file=$folder/run.sh::$folder/run.sh must contain 'set -e'"
+                FAILED=1
+              else
+                echo "  OK  set -e in run.sh"
+              fi
+            fi
+
+            # OPIK_PROJECT_NAME may be exported in run.sh (scripts), defined as a constant
+            # in a .py file (use-cases/guides), or set in a notebook cell (notebook examples).
+            if [[ -f "$folder/run.sh" ]] && grep -q "export OPIK_PROJECT_NAME" "$folder/run.sh"; then
+              echo "  OK  OPIK_PROJECT_NAME in run.sh"
+            elif grep -rq "OPIK_PROJECT_NAME" "$folder" --include="*.py" --include="*.ipynb" 2>/dev/null; then
+              echo "  OK  OPIK_PROJECT_NAME in .py/.ipynb"
+            else
+              echo "::error::$folder must set OPIK_PROJECT_NAME — export it in run.sh, or define it in a .py config or notebook cell"
+              FAILED=1
+            fi
+
+            # If litellm is declared as a dependency, OPIK_EXAMPLES_MODEL must be referenced.
+            # Match a quoted dependency entry ("litellm", "litellm>=...", "litellm[extra]")
+            # so a bare mention in a comment doesn't trip the check.
+            if grep -qE '"litellm' "$folder/pyproject.toml" 2>/dev/null; then
+              if grep -rq "OPIK_EXAMPLES_MODEL" "$folder" --include="*.py" --include="*.ipynb" 2>/dev/null; then
+                echo "  OK  OPIK_EXAMPLES_MODEL referenced (litellm dep detected)"
+              else
+                echo "::error::$folder uses litellm but no .py file references OPIK_EXAMPLES_MODEL"
+                echo "::error::Add: os.environ.get(\"OPIK_EXAMPLES_MODEL\", \"<default-model>\") to your config"
+                FAILED=1
+              fi
+            fi
+          done
+
+          echo ""
+          if [[ "$FAILED" -ne 0 ]]; then
+            echo "Compliance check failed. Fix the errors above before merging."
+            exit 1
+          fi
+
+          echo "All compliance checks passed."
+
+      - name: Write step summary
+        if: always() && steps.changed-folders.outputs.folders != ''
+        run: |
+          {
+            echo "## Example Compliance Check"
+            echo ""
+            echo "Folders checked: \`${{ steps.changed-folders.outputs.folders }}\`"
+            echo ""
+            echo "**Rules:**"
+            echo "- \`run.sh\` must exist and contain \`set -e\` (except notebook examples, executed by test-notebooks.yml)"
+            echo "- \`OPIK_PROJECT_NAME\` must be set — via \`export\` in \`run.sh\` (scripts), a \`.py\` config (use-cases/guides), or a notebook cell"
+            echo "- \`README.md\` must exist"
+            echo "- \`pyproject.toml\` must exist; \`requirements.txt\` is not allowed"
+            echo "- If \`litellm\` is a dependency, a \`.py\` file must reference \`OPIK_EXAMPLES_MODEL\`"
+          } >> "$GITHUB_STEP_SUMMARY"
