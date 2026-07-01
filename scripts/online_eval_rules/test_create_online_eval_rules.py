@@ -179,3 +179,45 @@ def test_via_sdk_create_calls_client_with_typed_request():
     sent = client.rest_client.automation_rule_evaluators.created
     assert isinstance(sent, AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge)
     assert sent.name == "t"
+
+
+class _Page:
+    def __init__(self, content):
+        self.content = content
+
+
+class _Proj:
+    def __init__(self, id, name):
+        self.id = id
+        self.name = name
+
+
+class _FakeProjects:
+    def __init__(self, existing=None):
+        self._existing = list(existing or [])
+        self.created_names = []
+
+    def find_projects(self, *, name=None, **kw):
+        return _Page([p for p in self._existing if p.name == name])
+
+    def create_project(self, *, name, **kw):
+        self.created_names.append(name)
+        self._existing.append(_Proj("new-id", name))
+        return None
+
+
+class _ClientWithProjects:
+    def __init__(self, projects):
+        self.rest_client = type("R", (), {"projects": projects})()
+
+
+def test_resolve_project_id_found():
+    client = _ClientWithProjects(_FakeProjects([_Proj("pid-1", "demo")]))
+    assert cli.resolve_project_id(client, "demo") == "pid-1"
+
+
+def test_resolve_project_id_creates_when_missing():
+    projects = _FakeProjects([])
+    client = _ClientWithProjects(projects)
+    assert cli.resolve_project_id(client, "demo") == "new-id"
+    assert projects.created_names == ["demo"]

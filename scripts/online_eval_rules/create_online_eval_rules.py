@@ -274,5 +274,19 @@ def via_sdk(client, op: str, *, payload=None, rule_id=None, project_id=None, ses
     raise ValueError(f"unsupported sdk op: {op}")
 
 
+def resolve_project_id(client, name: str) -> str:
+    projects = client.rest_client.projects
+    page = projects.find_projects(name=name)
+    if not page.content:
+        projects.create_project(name=name)
+        page = projects.find_projects(name=name)
+    for project in page.content:
+        if project.name == name:
+            return project.id
+    if page.content:
+        return page.content[0].id
+    raise RuntimeError(f"Could not resolve or create project '{name}'.")
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
