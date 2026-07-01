@@ -144,10 +144,10 @@ def llm_attrs(model: str, prompt, completion, usage: dict) -> dict:
     `usage` keys map under gen_ai.usage.* (input_tokens, output_tokens, etc.).
     """
     attrs = {
-        "gen_ai.system": "openai",                # -> provider
-        "gen_ai.request.model": model,            # -> model, forces span type = llm
-        "input": prompt,                          # -> input
-        "output": completion,                     # -> output
+        "gen_ai.system": "openai",  # -> provider
+        "gen_ai.request.model": model,  # -> model, forces span type = llm
+        "input": prompt,  # -> input
+        "output": completion,  # -> output
     }
     for token_type, count in usage.items():
         attrs[f"gen_ai.usage.{token_type}"] = count
@@ -167,32 +167,50 @@ def backend_request_1(session_id: str, user_prompt: str) -> dict:
     then dispatches it to the UI/external service (out of process).
     """
     trace_id = new_id()
-    s_orchestrator = new_id()   # root span (closes last, in finalize())
+    s_orchestrator = new_id()  # root span (closes last, in finalize())
     s_routing = new_id()
     s_agent = new_id()
     s_llm1 = new_id()
-    s_dispatch = new_id()       # tool_dispatch: tool result must nest UNDER this
+    s_dispatch = new_id()  # tool_dispatch: tool result must nest UNDER this
 
-    emit_span("routing.invoke", trace_id=trace_id, span_id=s_routing,
-              parent_span_id=s_orchestrator, duration_s=0.1)
-    emit_span("routing.generic_agent", trace_id=trace_id, span_id=s_agent,
-              parent_span_id=s_routing, duration_s=0.1)
-    emit_span("llm.request", trace_id=trace_id, span_id=s_llm1, parent_span_id=s_agent,
-              duration_s=0.3,
-              attributes=llm_attrs(
-                  model="gpt-4o",
-                  prompt=[{"role": "user", "content": user_prompt}],
-                  completion=[{"role": "assistant", "tool_calls": [
-                      {"id": "call_1", "name": "web_search", "arguments": {"query": user_prompt}}]}],
-                  usage={"input_tokens": 412, "output_tokens": 37},
-              ))
-    emit_span("tool_dispatch", trace_id=trace_id, span_id=s_dispatch,
-              parent_span_id=s_llm1, duration_s=0.02,
-              attributes={
-                  "gen_ai.tool.name": "web_search",
-                  "gen_ai.tool.call.id": "call_1",
-                  "input": {"query": user_prompt},
-              })
+    emit_span(
+        "routing.invoke", trace_id=trace_id, span_id=s_routing, parent_span_id=s_orchestrator, duration_s=0.1
+    )
+    emit_span(
+        "routing.generic_agent", trace_id=trace_id, span_id=s_agent, parent_span_id=s_routing, duration_s=0.1
+    )
+    emit_span(
+        "llm.request",
+        trace_id=trace_id,
+        span_id=s_llm1,
+        parent_span_id=s_agent,
+        duration_s=0.3,
+        attributes=llm_attrs(
+            model="gpt-4o",
+            prompt=[{"role": "user", "content": user_prompt}],
+            completion=[
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"id": "call_1", "name": "web_search", "arguments": {"query": user_prompt}}
+                    ],
+                }
+            ],
+            usage={"input_tokens": 412, "output_tokens": 37},
+        ),
+    )
+    emit_span(
+        "tool_dispatch",
+        trace_id=trace_id,
+        span_id=s_dispatch,
+        parent_span_id=s_llm1,
+        duration_s=0.02,
+        attributes={
+            "gen_ai.tool.name": "web_search",
+            "gen_ai.tool.call.id": "call_1",
+            "input": {"query": user_prompt},
+        },
+    )
 
     # Persist the two ids the second request needs to stitch the trace correctly.
     SESSION_STORE[session_id] = {
@@ -221,28 +239,42 @@ def backend_request_2(session_id: str, tool_result: dict) -> str:
 
     # THE KEY LINE: parent is the dispatch span id from request 1 — no longer a
     # disconnected root.
-    emit_span("tool_execution", trace_id=trace_id, span_id=s_tool,
-              parent_span_id=ctx["dispatch_span_id"], duration_s=0.2,
-              attributes={
-                  "gen_ai.tool.name": "web_search",
-                  "gen_ai.tool.call.id": "call_1",
-                  "input": ctx["user_prompt"],
-                  "output": tool_result,
-              })
-    emit_span("routing.invoke", trace_id=trace_id, span_id=s_routing2,
-              parent_span_id=s_tool, duration_s=0.1)
-    emit_span("routing.generic_agent", trace_id=trace_id, span_id=s_agent2,
-              parent_span_id=s_routing2, duration_s=0.1)
+    emit_span(
+        "tool_execution",
+        trace_id=trace_id,
+        span_id=s_tool,
+        parent_span_id=ctx["dispatch_span_id"],
+        duration_s=0.2,
+        attributes={
+            "gen_ai.tool.name": "web_search",
+            "gen_ai.tool.call.id": "call_1",
+            "input": ctx["user_prompt"],
+            "output": tool_result,
+        },
+    )
+    emit_span("routing.invoke", trace_id=trace_id, span_id=s_routing2, parent_span_id=s_tool, duration_s=0.1)
+    emit_span(
+        "routing.generic_agent",
+        trace_id=trace_id,
+        span_id=s_agent2,
+        parent_span_id=s_routing2,
+        duration_s=0.1,
+    )
 
     final_answer = "The capital of France is Paris."
-    emit_span("llm.request", trace_id=trace_id, span_id=s_llm2, parent_span_id=s_agent2,
-              duration_s=0.3,
-              attributes=llm_attrs(
-                  model="gpt-4o",
-                  prompt=[{"role": "tool", "content": tool_result}],
-                  completion=[{"role": "assistant", "content": final_answer}],
-                  usage={"input_tokens": 690, "output_tokens": 122},
-              ))
+    emit_span(
+        "llm.request",
+        trace_id=trace_id,
+        span_id=s_llm2,
+        parent_span_id=s_agent2,
+        duration_s=0.3,
+        attributes=llm_attrs(
+            model="gpt-4o",
+            prompt=[{"role": "tool", "content": tool_result}],
+            completion=[{"role": "assistant", "content": final_answer}],
+            usage={"input_tokens": 690, "output_tokens": 122},
+        ),
+    )
 
     ctx["final_answer"] = final_answer
     return final_answer
@@ -254,14 +286,19 @@ def finalize(session_id: str) -> None:
     thread_id groups the trace into a conversation thread in Opik.
     """
     ctx = SESSION_STORE[session_id]
-    emit_span("orchestrator_request", trace_id=ctx["trace_id"],
-              span_id=ctx["orchestrator_span_id"], parent_span_id=None, duration_s=0.05,
-              attributes={
-                  "thread_id": session_id,         # -> Opik thread grouping
-                  "input": ctx["user_prompt"],      # -> trace input
-                  "output": ctx["final_answer"],    # -> trace output
-                  "opik.tags": ["tool-call", "distributed", "demo"],
-              })
+    emit_span(
+        "orchestrator_request",
+        trace_id=ctx["trace_id"],
+        span_id=ctx["orchestrator_span_id"],
+        parent_span_id=None,
+        duration_s=0.05,
+        attributes={
+            "thread_id": session_id,  # -> Opik thread grouping
+            "input": ctx["user_prompt"],  # -> trace input
+            "output": ctx["final_answer"],  # -> trace output
+            "opik.tags": ["tool-call", "distributed", "demo"],
+        },
+    )
 
 
 def print_tree() -> None:

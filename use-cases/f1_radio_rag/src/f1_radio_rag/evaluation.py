@@ -17,6 +17,19 @@ def _rag_task(item: dict) -> dict:
     return answer(item["query"])
 
 
+def _suite_task(item: dict) -> dict:
+    # The assertion judge reads ONLY `input` and `output`, so fold the retrieved messages
+    # into `input` — otherwise the groundedness assertions ("grounded in the messages",
+    # "does not invent events absent from the messages") have no source to check against.
+    # Keep expected_output OUT of `input`, or the judge can use it to pass assertions that
+    # should fail.
+    result = answer(item["query"])
+    return {
+        "input": {"query": result["input"], "messages": result["context"]},
+        "output": result["output"],
+    }
+
+
 def build_dataset(client, eval_cases: list[dict]):
     dataset = client.get_or_create_dataset(name=config.DATASET_NAME)
     dataset.insert(
@@ -51,12 +64,15 @@ def run_eval(eval_cases: list[dict]):
     dataset = build_dataset(client, eval_cases)
     suite = build_suite(client, eval_cases)
 
+    # Assertions, LLM-judged -> a pass rate. Test suites do NOT attach per-row feedback scores,
+    # so these experiments show "-" in the UI's Feedback Scores column (expected; result is pass rate).
     suite_result = run_tests(
         test_suite=suite,
-        task=_rag_task,
+        task=_suite_task,
         model=config.JUDGE_MODEL,
         experiment_name=experiment_name(),
     )
+    # scoring_metrics produce the numeric feedback scores that populate the UI's Feedback Scores column.
     eval_result = evaluate(
         dataset=dataset,
         task=_rag_task,
