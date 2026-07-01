@@ -77,13 +77,113 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+_CREATE_COMMANDS = {
+    "create-llm-judge": RULE_LLM_JUDGE,
+    "create-python": RULE_PY,
+    "create-thread": RULE_THREAD_JUDGE,
+    "create-span": RULE_SPAN_JUDGE,  # overridden to RULE_SPAN_PY when --python is set
+}
+
+
+def _rule_type_for_args(args) -> str:
+    rule_type = _CREATE_COMMANDS[args.command]
+    if args.command == "create-span" and getattr(args, "python", False):
+        return RULE_SPAN_PY
+    return rule_type
+
+
+def _print_both_surfaces(payload: dict) -> None:
+    print("── Python SDK ──")
+    print(render_sdk_snippet(payload))
+    print("\n── REST (curl) ──")
+    print(render_curl(payload))
+
+
+def _dispatch_create(args, dry_run: bool) -> int:
+    rule_type = _rule_type_for_args(args)
+    if dry_run:
+        payload = build_payload(rule_type, name=args.name, project_id=PLACEHOLDER_PROJECT_ID,
+                                sampling_rate=args.sampling_rate, model=args.model)
+        _print_both_surfaces(payload)
+        return 0
+
+    import opik
+    client = opik.Opik()
+    project_id = resolve_project_id(client, args.project)
+    payload = build_payload(rule_type, name=args.name, project_id=project_id,
+                            sampling_rate=args.sampling_rate, model=args.model)
+    try:
+        if args.surface == "sdk":
+            via_sdk(client, "create", payload=payload)
+        else:
+            via_rest("create", payload=payload)
+    except Exception as exc:  # noqa: BLE001 — surface an actionable message to the client
+        msg = str(exc)
+        if "llm_as_judge" in rule_type and ("provider" in msg.lower() or "api key" in msg.lower()):
+            print("Create failed: this workspace has no LLM provider key configured. "
+                  "Add one in Opik → Configuration → AI providers, then retry.", file=sys.stderr)
+        raise
+    created = via_rest("list", project_id=project_id)
+    print(f"Created rule '{args.name}' in project '{args.project}'. Current rules:")
+    print(json.dumps(created, indent=2, default=str))
+    return 0
+
+
+def _dispatch_manage(args, dry_run: bool) -> int:
+    if dry_run:
+        print(f"[DRY RUN] would '{args.command}' via {getattr(args, 'surface', 'sdk')} "
+              f"at {OPIK_URL}{EVALUATORS_PATH}")
+        if args.command == "delete":
+            print("[DRY RUN] delete requires --yes on a live run.")
+        return 0
+
+    import opik
+    client = opik.Opik()
+    project_id = resolve_project_id(client, args.project)
+
+    if args.command == "list":
+        result = (via_sdk(client, "list", project_id=project_id) if args.surface == "sdk"
+                  else via_rest("list", project_id=project_id))
+        print(json.dumps(result, indent=2, default=str))
+        return 0
+    if args.command == "get":
+        result = (via_sdk(client, "get", rule_id=args.id, project_id=project_id) if args.surface == "sdk"
+                  else via_rest("get", rule_id=args.id, project_id=project_id))
+        print(json.dumps(result, indent=2, default=str))
+        return 0
+    if args.command == "update":
+        current = via_rest("get", rule_id=args.id, project_id=project_id)
+        patch = {"name": current["name"], "type": current["type"], "action": "evaluator"}
+        if args.sampling_rate is not None:
+            patch["sampling_rate"] = args.sampling_rate
+        if args.enabled is not None:
+            patch["enabled"] = args.enabled
+        via_rest("update", rule_id=args.id, payload=patch)
+        changed = {k: patch[k] for k in patch if k not in ("name", "type", "action")}
+        print(f"Updated rule {args.id}: {json.dumps(changed)}")
+        return 0
+    if args.command == "delete":
+        if not args.yes:
+            print("Refusing to delete without --yes.", file=sys.stderr)
+            return 1
+        if args.surface == "sdk":
+            via_sdk(client, "delete", rule_id=args.id, project_id=project_id)
+        else:
+            via_rest("delete", rule_id=args.id)
+        print(f"Deleted rule {args.id}.")
+        return 0
+    raise ValueError(f"unknown command: {args.command}")
+
+
 def main() -> int:
     args = build_parser().parse_args()
     dry_run = DRY_RUN or getattr(args, "dry_run", False)
     if dry_run and not getattr(args, "dry_run", False):
         print("OPIK_API_KEY / OPIK_WORKSPACE not set — running in DRY_RUN.", file=sys.stderr)
-    print(f"[stub] command={args.command} dry_run={dry_run}")  # replaced in Task 8
-    return 0
+
+    if args.command in _CREATE_COMMANDS:
+        return _dispatch_create(args, dry_run)
+    return _dispatch_manage(args, dry_run)
 
 
 _JUDGE_SYSTEM = (

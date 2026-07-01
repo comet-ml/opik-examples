@@ -1,4 +1,6 @@
+import importlib
 import json
+import sys
 
 import create_online_eval_rules as cli
 
@@ -221,3 +223,15 @@ def test_resolve_project_id_creates_when_missing():
     client = _ClientWithProjects(projects)
     assert cli.resolve_project_id(client, "demo") == "new-id"
     assert projects.created_names == ["demo"]
+
+
+def test_main_dry_run_prints_sdk_and_curl(capsys, monkeypatch):
+    monkeypatch.setattr(sys, "argv",
+                        ["create-online-eval-rules", "create-llm-judge", "--name", "r", "--dry-run"])
+    importlib.reload(cli)  # pick up argv-independent state cleanly
+    rc = cli.main()
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Python SDK" in out and "REST (curl)" in out
+    assert "create_automation_rule_evaluator" in out
+    assert "/v1/private/automations/evaluators/" in out
