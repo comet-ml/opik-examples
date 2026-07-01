@@ -12,6 +12,8 @@ import os
 import pathlib
 import sys
 
+import requests
+
 OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
 OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
 OPIK_URL = os.environ.get("OPIK_URL_OVERRIDE", "https://www.comet.com/opik/api").rstrip("/")
@@ -174,6 +176,47 @@ def render_sdk_snippet(payload: dict) -> str:
         f"request = {variant}.model_validate({body})\n"
         "client.rest_client.automation_rule_evaluators.create_automation_rule_evaluator(request=request)"
     )
+
+
+def _rest_headers() -> dict:
+    return {
+        "Authorization": f"Bearer {OPIK_API_KEY}",
+        "Comet-Workspace": OPIK_WORKSPACE or "",
+        "Content-Type": "application/json",
+    }
+
+
+def _check(resp) -> None:
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Opik REST error {resp.status_code}: {resp.text}")
+
+
+def via_rest(op: str, *, payload=None, rule_id=None, project_id=None, session=None):
+    http = session or requests
+    base = f"{OPIK_URL}{EVALUATORS_PATH}"
+    headers = _rest_headers()
+
+    if op == "create":
+        resp = http.post(f"{base}/", headers=headers, json=payload)
+        _check(resp)
+        return resp
+    if op == "list":
+        resp = http.get(f"{base}/", headers=headers, params={"project_id": project_id})
+        _check(resp)
+        return resp.json()
+    if op == "get":
+        resp = http.get(f"{base}/{rule_id}", headers=headers, params={"project_id": project_id})
+        _check(resp)
+        return resp.json()
+    if op == "update":
+        resp = http.patch(f"{base}/{rule_id}", headers=headers, json=payload)
+        _check(resp)
+        return resp
+    if op == "delete":
+        resp = http.post(f"{base}/delete", headers=headers, json={"ids": [rule_id]})
+        _check(resp)
+        return resp
+    raise ValueError(f"unknown op: {op}")
 
 
 if __name__ == "__main__":

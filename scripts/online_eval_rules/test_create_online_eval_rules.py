@@ -77,3 +77,61 @@ def test_render_sdk_snippet_names_variant():
     out = cli.render_sdk_snippet(p)
     assert "AutomationRuleEvaluatorWrite_SpanUserDefinedMetricPython" in out
     assert "create_automation_rule_evaluator" in out
+
+
+class _FakeResp:
+    def __init__(self, status=200, payload=None):
+        self.status_code = status
+        self._payload = payload if payload is not None else {}
+        self.text = json.dumps(self._payload)
+
+    def json(self):
+        return self._payload
+
+
+class _FakeSession:
+    def __init__(self):
+        self.calls = []
+
+    def _record(self, method, url, **kw):
+        self.calls.append((method, url, kw))
+        return _FakeResp(200, {"content": [], "url": url})
+
+    def post(self, url, **kw):
+        return self._record("POST", url, **kw)
+
+    def get(self, url, **kw):
+        return self._record("GET", url, **kw)
+
+    def patch(self, url, **kw):
+        return self._record("PATCH", url, **kw)
+
+
+def test_via_rest_create_posts_to_collection():
+    s = _FakeSession()
+    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid",
+                          sampling_rate=1.0, model="gpt-4o")
+    cli.via_rest("create", payload=p, session=s)
+    method, url, kw = s.calls[0]
+    assert method == "POST"
+    assert url.endswith("/v1/private/automations/evaluators/")
+    assert kw["json"]["type"] == "llm_as_judge"
+    assert kw["headers"]["Comet-Workspace"] is not None
+
+
+def test_via_rest_delete_posts_ids():
+    s = _FakeSession()
+    cli.via_rest("delete", rule_id="abc", session=s)
+    method, url, kw = s.calls[0]
+    assert method == "POST"
+    assert url.endswith("/v1/private/automations/evaluators/delete")
+    assert kw["json"] == {"ids": ["abc"]}
+
+
+def test_via_rest_get_uses_id_path_and_project_param():
+    s = _FakeSession()
+    cli.via_rest("get", rule_id="abc", project_id="pid", session=s)
+    method, url, kw = s.calls[0]
+    assert method == "GET"
+    assert url.endswith("/v1/private/automations/evaluators/abc")
+    assert kw["params"] == {"project_id": "pid"}
