@@ -158,7 +158,10 @@ def _dispatch_manage(args, dry_run: bool) -> int:
         return 0
     if args.command == "update":
         current = via_rest("get", rule_id=args.id, project_id=project_id)
-        patch = {"name": current["name"], "type": current["type"], "action": "evaluator"}
+        # The evaluators PATCH endpoint requires at least one project on every update
+        # (400 "At least one project must be specified" otherwise), so carry it forward.
+        patch = {"name": current["name"], "type": current["type"], "action": "evaluator",
+                 "project_ids": [current.get("project_id") or project_id]}
         if current.get("code") is not None:
             patch["code"] = current["code"]
         if args.sampling_rate is not None:
@@ -166,7 +169,8 @@ def _dispatch_manage(args, dry_run: bool) -> int:
         if args.enabled is not None:
             patch["enabled"] = args.enabled
         via_rest("update", rule_id=args.id, payload=patch)
-        changed = {k: patch[k] for k in patch if k not in ("name", "type", "action")}
+        carried = ("name", "type", "action", "project_ids", "code")
+        changed = {k: v for k, v in patch.items() if k not in carried}
         print(f"Updated rule {args.id}: {json.dumps(changed)}")
         return 0
     if args.command == "delete":
