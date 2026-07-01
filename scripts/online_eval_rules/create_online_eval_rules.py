@@ -219,5 +219,60 @@ def via_rest(op: str, *, payload=None, rule_id=None, project_id=None, session=No
     raise ValueError(f"unknown op: {op}")
 
 
+def _sdk_variant_classes() -> dict:
+    from opik.rest_api.types import (
+        AutomationRuleEvaluatorWrite_LlmAsJudge,
+        AutomationRuleEvaluatorWrite_SpanLlmAsJudge,
+        AutomationRuleEvaluatorWrite_SpanUserDefinedMetricPython,
+        AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge,
+        AutomationRuleEvaluatorWrite_UserDefinedMetricPython,
+    )
+    return {
+        RULE_LLM_JUDGE: AutomationRuleEvaluatorWrite_LlmAsJudge,
+        RULE_PY: AutomationRuleEvaluatorWrite_UserDefinedMetricPython,
+        RULE_THREAD_JUDGE: AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge,
+        RULE_SPAN_JUDGE: AutomationRuleEvaluatorWrite_SpanLlmAsJudge,
+        RULE_SPAN_PY: AutomationRuleEvaluatorWrite_SpanUserDefinedMetricPython,
+    }
+
+
+def _coerce_payload_for_sdk(payload: dict) -> dict:
+    """Rename the ``schema`` key in the ``code`` sub-dict to ``schema_``.
+
+    The Opik SDK's LLM-judge code types store the output schema in a field
+    named ``schema_`` (Python reserves ``schema`` as a Pydantic class method).
+    The ``FieldMetadata(alias="schema")`` annotation only controls *serialisation*
+    (JSON output), not *deserialisation* — pydantic's ``model_validate`` looks up
+    fields by their Python name, so the ``schema`` key from ``build_payload`` must
+    be renamed to ``schema_`` before the SDK class can be instantiated.
+    """
+    if "code" not in payload or not isinstance(payload["code"], dict):
+        return payload
+    code = payload["code"]
+    if "schema" not in code:
+        return payload
+    fixed_code = dict(code)
+    fixed_code["schema_"] = fixed_code.pop("schema")
+    return {**payload, "code": fixed_code}
+
+
+def build_sdk_request(payload: dict):
+    cls = _sdk_variant_classes()[payload["type"]]
+    return cls.model_validate(_coerce_payload_for_sdk(payload))
+
+
+def via_sdk(client, op: str, *, payload=None, rule_id=None, project_id=None, session=None):
+    api = client.rest_client.automation_rule_evaluators
+    if op == "create":
+        return api.create_automation_rule_evaluator(request=build_sdk_request(payload))
+    if op == "list":
+        return api.find_evaluators(project_id=project_id)
+    if op == "get":
+        return api.get_evaluator_by_id(rule_id, project_id=project_id)
+    if op == "delete":
+        return api.delete_automation_rule_evaluator_batch(ids=[rule_id], project_id=project_id)
+    raise ValueError(f"unsupported sdk op: {op}")
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

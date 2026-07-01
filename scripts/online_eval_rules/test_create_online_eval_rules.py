@@ -135,3 +135,47 @@ def test_via_rest_get_uses_id_path_and_project_param():
     assert method == "GET"
     assert url.endswith("/v1/private/automations/evaluators/abc")
     assert kw["params"] == {"project_id": "pid"}
+
+
+def test_build_sdk_request_returns_correct_variant():
+    from opik.rest_api.types import AutomationRuleEvaluatorWrite_LlmAsJudge
+
+    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid",
+                          sampling_rate=0.25, model="gpt-4o")
+    req = cli.build_sdk_request(p)
+    assert isinstance(req, AutomationRuleEvaluatorWrite_LlmAsJudge)
+    assert req.name == "r"
+    assert req.sampling_rate == 0.25
+    # `schema` JSON alias maps to the typed `schema_` field:
+    assert req.code.schema_[0].name == "relevance_score"
+
+
+class _FakeEvaluators:
+    def __init__(self):
+        self.created = None
+
+    def create_automation_rule_evaluator(self, *, request):
+        self.created = request
+        return None
+
+
+class _FakeRestClient:
+    def __init__(self):
+        self.automation_rule_evaluators = _FakeEvaluators()
+
+
+class _FakeClient:
+    def __init__(self):
+        self.rest_client = _FakeRestClient()
+
+
+def test_via_sdk_create_calls_client_with_typed_request():
+    from opik.rest_api.types import AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge
+
+    client = _FakeClient()
+    p = cli.build_payload(cli.RULE_THREAD_JUDGE, name="t", project_id="pid",
+                          sampling_rate=1.0, model="gpt-4o")
+    cli.via_sdk(client, "create", payload=p)
+    sent = client.rest_client.automation_rule_evaluators.created
+    assert isinstance(sent, AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge)
+    assert sent.name == "t"
