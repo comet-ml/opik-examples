@@ -1,5 +1,8 @@
-# opik-examples
+<p align="center">
+<img width="924" height="290" alt="image" src="https://github.com/user-attachments/assets/51a31b97-4fe5-4f93-805e-9933c1fb98e4" />
+</p>
 
+# opik-examples
 Examples and utilities for working with [Opik](https://www.comet.com/site/products/opik/), Comet's LLM evaluation and observability platform.
 
 ## Structure
@@ -28,6 +31,7 @@ Task-oriented examples for specific Opik workflows and patterns.
 
 | | Description |
 |---|---|
+| [guides/annotation_queues_with_context](guides/annotation_queues_with_context/) | Structure RAG traces for Opik annotation queues — clean answer in output, context in metadata, full detail in child spans |
 | [guides/tracing_finetuned_models](guides/tracing_finetuned_models/) | Fine-tune a model, register it to the CometML Model Registry, then fetch and trace inference in Opik |
 
 ## Use Cases
@@ -37,6 +41,7 @@ End-to-end applications and domain-specific workflows.
 | | Description |
 |---|---|
 | [use-cases/call_summarizer](use-cases/call_summarizer/) | Streamlit app that summarises customer calls using an LLM, traced with Opik |
+| [use-cases/f1_radio_rag](use-cases/f1_radio_rag/) | Typer CLI walking the full Opik loop over F1 team-radio messages: RAG (ChromaDB) → eval dataset + test suite → optimization studio → prompt library |
 | [use-cases/governance_observability](use-cases/governance_observability/) | Instrument agents with governance metadata, derive composite metrics, and extract scores for oversight reporting |
 
 ## Scripts

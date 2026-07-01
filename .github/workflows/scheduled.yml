@@ -1,0 +1,64 @@
+name: Scheduled Example Tests
+
+# Runs a curated set of examples on a schedule to verify they stay working.
+# The list is maintainer-managed — contributors do not need to add their example here.
+# Criteria for inclusion: self-contained (no GPU, no pre-existing Opik data required),
+# cheap to run, and stable enough for unattended weekly execution.
+#
+# To change the schedule: edit the cron expression below.
+# To add or remove folders: edit .github/scheduled.json.
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC. Edit this line to change the cadence.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  load-examples:
+    runs-on: ubuntu-latest
+    outputs:
+      folders: ${{ steps.load.outputs.folders }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Load curated example list
+        id: load
+        run: |
+          folders=$(cat .github/scheduled.json)
+          echo "folders=$folders" >> "$GITHUB_OUTPUT"
+
+  run-examples:
+    needs: load-examples
+    # Skip cleanly when the curated list is empty — an empty matrix array otherwise
+    # errors with "Matrix vector 'folder' does not contain any values".
+    if: needs.load-examples.outputs.folders != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: ${{ fromJson(needs.load-examples.outputs.folders) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Run example
+        env:
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+          OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+          OPIK_ENVIRONMENT: ${{ vars.OPIK_ENVIRONMENT }}
+          OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd "${{ matrix.folder }}"
+          bash run.sh

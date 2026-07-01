@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Keep the GitHub Actions pinned in .github/workflows/ (checkout, setup-uv, …) current,
+  # so a "stay-working" examples repo doesn't silently drift onto stale/abandoned action versions.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"
