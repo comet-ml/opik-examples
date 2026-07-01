@@ -35,16 +35,19 @@ from opik.rest_api.types.trace_filter_public import TraceFilterPublic
 # Config
 # ---------------------------------------------------------------------------
 
-WORKSPACE       = os.environ["OPIK_WORKSPACE"]
-OPIK_BASE_URL   = os.environ.get("OPIK_URL_OVERRIDE", "https://www.comet.com/opik/api")
-GOVERNANCE_TAG  = "governance"  # must match the tag used in agent_tracing.py
+WORKSPACE = os.environ.get("OPIK_WORKSPACE")
+OPIK_BASE_URL = os.environ.get("OPIK_URL_OVERRIDE", "https://www.comet.com/opik/api")
+GOVERNANCE_TAG = "governance"  # must match the tag used in agent_tracing.py
+
+# No Opik credentials -> describe the extraction and exit without calling the Opik API.
+DRY_RUN = not (os.environ.get("OPIK_API_KEY") and WORKSPACE)
 
 _now = datetime.now(UTC)
 
 # Metric types to extract. Each maps to one get_project_metrics() call.
 # See the full list of available values in the SDK docs linked above.
 METRIC_TYPES = [
-    "FEEDBACK_SCORES",   # average per named feedback score
+    "FEEDBACK_SCORES",  # average per named feedback score
 ]
 
 # Interval for aggregation. Choose one: "HOURLY" | "DAILY" | "WEEKLY" | "TOTAL"
@@ -65,6 +68,7 @@ def build_client() -> OpikApi:
 # ---------------------------------------------------------------------------
 # Project enumeration
 # ---------------------------------------------------------------------------
+
 
 def list_all_projects(client: OpikApi) -> list[dict]:
     """Page through find_projects() and return [{"id": ..., "name": ...}, ...]."""
@@ -96,6 +100,7 @@ def list_all_projects(client: OpikApi) -> list[dict]:
 #   TraceFilterPublic(field="metadata", key="business_unit", operator="=", value="retail")
 # ---------------------------------------------------------------------------
 
+
 def _governance_filters(metadata_slice: dict[str, str] | None = None) -> list[TraceFilterPublic]:
     """
     Build the filter list for a governance extraction.
@@ -105,9 +110,7 @@ def _governance_filters(metadata_slice: dict[str, str] | None = None) -> list[Tr
         TraceFilterPublic(field="tags", operator="contains", value=GOVERNANCE_TAG),
     ]
     for key, value in (metadata_slice or {}).items():
-        filters.append(
-            TraceFilterPublic(field="metadata", key=key, operator="=", value=value)
-        )
+        filters.append(TraceFilterPublic(field="metadata", key=key, operator="=", value=value))
     return filters
 
 
@@ -138,6 +141,7 @@ METADATA_SLICES: list[dict[str, str]] = [
 # Metrics extraction
 # ---------------------------------------------------------------------------
 
+
 def fetch_metrics_for_project(
     client: OpikApi,
     project_id: str,
@@ -153,7 +157,7 @@ def fetch_metrics_for_project(
         result.name     — score name (e.g. "composite_risk_score")
         result.data     — list of DataPointNumberPublic (time, value) data points
     """
-    trace_filters  = _governance_filters(metadata_slice)
+    trace_filters = _governance_filters(metadata_slice)
     interval_start = _now - timedelta(days=LOOKBACK_DAYS)
     req_opts: RequestOptions = {"timeout_in_seconds": 60}
     metrics: dict = {}
@@ -192,15 +196,16 @@ def fetch_metrics_for_project(
 # Main pipeline
 # ---------------------------------------------------------------------------
 
+
 def run_extraction() -> list[dict]:
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Governance Metrics Extraction  {_now.strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"Workspace : {WORKSPACE}")
     print(f"Tag       : {GOVERNANCE_TAG}")
     print(f"Interval  : {INTERVAL}  |  Look-back: {LOOKBACK_DAYS} days")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
-    client   = build_client()
+    client = build_client()
     projects = list_all_projects(client)
     payloads = []
 
@@ -220,11 +225,7 @@ def run_extraction() -> list[dict]:
             trace_filters=_governance_filters(),
             request_options={"timeout_in_seconds": 60},
         )
-        probe_has_data = any(
-            point.value
-            for result in (probe.results or [])
-            for point in (result.data or [])
-        )
+        probe_has_data = any(point.value for result in (probe.results or []) for point in (result.data or []))
         if not probe_has_data:
             print("  No governance-tagged traces — skipping.\n")
             continue
@@ -239,17 +240,17 @@ def run_extraction() -> list[dict]:
         for label, metadata_slice in slices_to_run:
             sliced_metrics[label] = {
                 "slice_filter": metadata_slice,
-                "metrics":      fetch_metrics_for_project(client, project["id"], metadata_slice),
+                "metrics": fetch_metrics_for_project(client, project["id"], metadata_slice),
             }
 
         payload = {
-            "schema_version":  "2.0",
-            "extracted_at":    _now.isoformat(),
-            "workspace":       WORKSPACE,
-            "project_id":      project["id"],
-            "project_name":    project["name"],
-            "governance_tag":  GOVERNANCE_TAG,
-            "slices":          sliced_metrics,
+            "schema_version": "2.0",
+            "extracted_at": _now.isoformat(),
+            "workspace": WORKSPACE,
+            "project_id": project["id"],
+            "project_name": project["name"],
+            "governance_tag": GOVERNANCE_TAG,
+            "slices": sliced_metrics,
         }
         payloads.append(payload)
 
@@ -282,4 +283,11 @@ def _push_to_reporting_endpoint(payloads: list[dict]) -> None:
 
 
 if __name__ == "__main__":
+    if DRY_RUN:
+        print(
+            "[DRY RUN] Opik creds not set — would extract governance metrics across "
+            f"all projects for '{GOVERNANCE_TAG}'-tagged traces and build the reporting payload."
+        )
+        raise SystemExit(0)
+
     run_extraction()
