@@ -37,10 +37,13 @@ from opik.rest_api.types.feedback_score_source import FeedbackScoreSource
 # Config
 # ---------------------------------------------------------------------------
 
-WORKSPACE       = os.environ["OPIK_WORKSPACE"]
-PROJECT_NAME    = os.environ.get("OPIK_PROJECT_NAME", "governance-data-demo")
-OPIK_BASE_URL   = os.environ.get("OPIK_URL_OVERRIDE", "https://www.comet.com/opik/api")
-GOVERNANCE_TAG  = "governance"
+WORKSPACE = os.environ.get("OPIK_WORKSPACE")
+PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "governance-data-demo")
+OPIK_BASE_URL = os.environ.get("OPIK_URL_OVERRIDE", "https://www.comet.com/opik/api")
+GOVERNANCE_TAG = "governance"
+
+# No Opik credentials -> describe the batch and exit without calling the Opik API.
+DRY_RUN = not (os.environ.get("OPIK_API_KEY") and WORKSPACE)
 
 
 def build_client() -> OpikApi:
@@ -100,7 +103,7 @@ def derive_oversight_risk_flag(composite_risk: float | None) -> float | None:
 
 def derive_cost_per_quality_unit(scores: dict[str, float]) -> float | None:
     """Cost in USD divided by response quality. Returns None when either score is absent."""
-    cost    = scores.get("cost_usd")
+    cost = scores.get("cost_usd")
     quality = scores.get("response_quality")
     if cost is None or quality is None or quality == 0:
         return None
@@ -111,11 +114,12 @@ def derive_cost_per_quality_unit(scores: dict[str, float]) -> float | None:
 # Batch job
 # ---------------------------------------------------------------------------
 
+
 def run_retrospective_batch(client: OpikApi, project_id: str) -> None:
-    now       = datetime.now(UTC)
+    now = datetime.now(UTC)
     yesterday = now - timedelta(days=1)
-    from_time = yesterday.replace(hour=0,  minute=0,  second=0,  microsecond=0)
-    to_time   = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+    from_time = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+    to_time = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     print(f"Date range : {from_time.date()} 00:00 → 23:59 UTC")
 
@@ -123,7 +127,7 @@ def run_retrospective_batch(client: OpikApi, project_id: str) -> None:
 
     page, page_size = 1, 100
     total_processed = 0
-    total_scored    = 0
+    total_scored = 0
 
     while True:
         response = client.traces.get_traces_by_project(
@@ -142,30 +146,32 @@ def run_retrospective_batch(client: OpikApi, project_id: str) -> None:
             total_processed += 1
 
             existing: dict[str, float] = {
-                fs.name: fs.value
-                for fs in (trace.feedback_scores or [])
-                if fs.name and fs.value is not None
+                fs.name: fs.value for fs in (trace.feedback_scores or []) if fs.name and fs.value is not None
             }
 
-            composite_risk   = derive_composite_risk_score(existing)
-            risk_flag        = derive_oversight_risk_flag(composite_risk)
+            composite_risk = derive_composite_risk_score(existing)
+            risk_flag = derive_oversight_risk_flag(composite_risk)
             cost_per_quality = derive_cost_per_quality_unit(existing)
 
             derived = [
-                s for s in [
-                    composite_risk is not None and {
-                        "name":   "composite_risk_score",
-                        "value":  composite_risk,
+                s
+                for s in [
+                    composite_risk is not None
+                    and {
+                        "name": "composite_risk_score",
+                        "value": composite_risk,
                         "reason": "0.5×compliance + 0.3×(1−hallucination) + 0.2×quality",
                     },
-                    risk_flag is not None and {
-                        "name":   "oversight_risk_flag",
-                        "value":  risk_flag,
+                    risk_flag is not None
+                    and {
+                        "name": "oversight_risk_flag",
+                        "value": risk_flag,
                         "reason": f"1.0 = composite_risk_score < {RISK_THRESHOLD}",
                     },
-                    cost_per_quality is not None and {
-                        "name":   "cost_per_quality_unit",
-                        "value":  cost_per_quality,
+                    cost_per_quality is not None
+                    and {
+                        "name": "cost_per_quality_unit",
+                        "value": cost_per_quality,
                         "reason": "cost_usd / response_quality",
                     },
                 ]
@@ -200,10 +206,17 @@ def run_retrospective_batch(client: OpikApi, project_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    if DRY_RUN:
+        print(
+            "[DRY RUN] Opik creds not set — would derive composite governance scores "
+            f"for yesterday's '{GOVERNANCE_TAG}'-tagged traces in project '{PROJECT_NAME}'."
+        )
+        raise SystemExit(0)
+
     print(f"\nProject  : {PROJECT_NAME}")
     print(f"Workspace: {WORKSPACE}\n")
 
-    client     = build_client()
+    client = build_client()
     project_id = get_project_id(client)
 
     run_retrospective_batch(client, project_id)
