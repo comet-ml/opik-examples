@@ -8,9 +8,9 @@ app = typer.Typer(add_completion=False, help="Example Opik use-case demo — the
 
 @app.command()
 def run(input: str, context: list[str] = typer.Option(None, "--context", "-c")) -> None:
-    """Run the app on a single input (traced in Opik when an LLM key is set)."""
-    if not config.LLM_READY:
-        typer.echo("[DRY RUN] ANTHROPIC_API_KEY not set — would run the app on:")
+    """Run the app on a single input (traced in Opik when credentials are set)."""
+    if config.DRY_RUN:
+        typer.echo("[DRY RUN] Opik creds not set — would run the app on:")
         typer.echo(f"  input: {input}")
         for line in context or []:
             typer.echo(f"  context: {line}")
