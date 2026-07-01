@@ -1,0 +1,144 @@
+name: PR Notebook Tests
+
+# Executes notebook examples changed in a PR end-to-end against Opik.
+#   - Notebook examples are credential-gated: they log live traces, so there is no
+#     secrets-free dry-run. Fork PRs (no secrets) skip execution; the compliance
+#     check still runs. Same-repo PRs run them live with real Opik credentials.
+#   - Each notebook is executed with `ipython <notebook>.ipynb`, which runs every cell
+#     top-to-bottom and exits non-zero on the first error.
+# Any job failure blocks the PR.
+
+on:
+  pull_request:
+    paths:
+      - "examples/**"
+      - "integrations/**"
+      - "scripts/**"
+      - "use-cases/**"
+      - "guides/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-notebooks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      folders: ${{ steps.detect.outputs.folders }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+      has_secrets: ${{ steps.secrets.outputs.has_secrets }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed notebook example folders
+        id: detect
+        run: |
+          changed_files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+
+          seen=()
+          folders_json="["
+
+          while IFS= read -r file; do
+            top=$(echo "$file" | cut -d'/' -f1)
+            case "$top" in
+              integrations)
+                folder=$(echo "$file" | cut -d'/' -f1,2,3)
+                ;;
+              examples|scripts|use-cases|guides)
+                folder=$(echo "$file" | cut -d'/' -f1,2)
+                ;;
+              *)
+                continue
+                ;;
+            esac
+
+            # Notebook examples only: the folder must contain at least one .ipynb.
+            if [[ -z "$folder" ]] || [[ ! -d "$folder" ]]; then
+              continue
+            fi
+            if ! ls "$folder"/*.ipynb >/dev/null 2>&1; then
+              continue
+            fi
+
+            already_seen=false
+            for s in "${seen[@]}"; do
+              [[ "$s" == "$folder" ]] && already_seen=true && break
+            done
+
+            if [[ "$already_seen" == false ]]; then
+              seen+=("$folder")
+              [[ "${#seen[@]}" -gt 1 ]] && folders_json="$folders_json,"
+              folders_json="$folders_json\"$folder\""
+            fi
+          done <<< "$changed_files"
+
+          folders_json="$folders_json]"
+
+          if [[ "${#seen[@]}" -eq 0 ]]; then
+            echo "folders=[]" >> "$GITHUB_OUTPUT"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No notebook example folders changed."
+          else
+            echo "folders=$folders_json" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Notebook folders to test: ${seen[*]}"
+          fi
+
+      - name: Check whether Opik secrets are available
+        id: secrets
+        # secrets.* is not available in job-level `if:`, so resolve it here and expose a
+        # boolean the run job gates on. Fork PRs get no secrets, so notebooks don't run.
+        env:
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+        run: |
+          if [[ -n "$OPIK_API_KEY" ]]; then
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+            echo "Opik secrets available — notebooks will run live."
+          else
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            echo "No Opik secrets (fork PR) — notebook execution skipped."
+          fi
+
+  run-notebooks:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true' && needs.detect-changes.outputs.has_secrets == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: ${{ fromJson(needs.detect-changes.outputs.folders) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Execute notebooks (live, real Opik credentials)
+        uses: nick-fields/retry@v3
+        env:
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+          OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+          OPIK_ENVIRONMENT: ${{ vars.OPIK_ENVIRONMENT }}
+          OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          timeout_minutes: 25
+          max_attempts: 2
+          command: |
+            cd "${{ matrix.folder }}"
+            uv sync
+            for nb in *.ipynb; do
+              echo "Executing $nb ..."
+              uv run --with ipython --with nbformat ipython "$nb"
+            done

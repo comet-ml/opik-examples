@@ -93,6 +93,8 @@ Then, either way:
 - Credentials loaded from environment variables only — no hardcoded keys
 - A `run.sh` that exports `OPIK_PROJECT_NAME` and can run the example end-to-end
 
+> **Notebook examples are the exception.** A `.ipynb` guide ships `notebook.ipynb` + `pyproject.toml` + `README.md` and is executed live by [`test-notebooks.yml`](.github/workflows/test-notebooks.yml) — no `run.sh` and no dry-run. See [Notebook examples](#notebook-examples).
+
 ### README structure
 
 Use the template's README as a guide. Required sections:
@@ -103,6 +105,8 @@ Use the template's README as a guide. Required sections:
 - **How it works** — brief walkthrough of the key steps
 
 ### Dry-run mode
+
+> Notebook examples are exempt — they require credentials and have no dry-run (see [Notebook examples](#notebook-examples)).
 
 Every runnable example must work without credentials. The secrets-free CI `dry-run` job runs `bash run.sh` with no Opik or LLM keys set and expects a clean exit — it is the only execution signal a fork PR receives, so a working dry-run path is required, not optional. The standard pattern:
 
@@ -135,6 +139,8 @@ Never commit `.env` files or hardcoded keys. Add `.env` to the example's `.gitig
 Each example is a `uv` project: declare dependencies in its `pyproject.toml` (the single source of truth) and run with `uv sync` / `uv run`. No `requirements.txt`, no Poetry, and don't commit `uv.lock`. The README may still show an optional `pip install` fallback line. Do not assume the user has the repo's root virtualenv set up.
 
 ### run.sh
+
+> Notebook examples don't use `run.sh` — they're executed by [`test-notebooks.yml`](.github/workflows/test-notebooks.yml). See [Notebook examples](#notebook-examples).
 
 Every testable example must include a `run.sh` at its root. This file is what the CI matrix runs. Requirements:
 
@@ -175,7 +181,18 @@ OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "my-use-case")
 def my_function(): ...
 ```
 
-The compliance check accepts either pattern — it looks for `OPIK_PROJECT_NAME` in `run.sh` or in any `.py` file in the folder.
+The compliance check accepts any of these — it looks for `OPIK_PROJECT_NAME` exported in `run.sh`, or referenced in any `.py` or `.ipynb` file in the folder.
+
+### Notebook examples
+
+Some guides are Jupyter notebooks rather than runnable scripts. They follow a lighter contract:
+
+- Ship `notebook.ipynb` + `pyproject.toml` + `README.md`. **No `run.sh`.**
+- Set `OPIK_PROJECT_NAME` in a notebook cell (e.g. `OPIK_PROJECT_NAME = "my-guide"`) and pass it via `@opik.track(project_name=...)`.
+- Commit with **outputs cleared** — no baked-in execution state (cleaner diffs, no stale/leaked run details).
+- Keep the install cell simple: `%pip install --quiet --upgrade opik` (works in Colab and locally). `pyproject.toml` stays the dependency source of truth and the hook for notebook CI.
+
+A notebook teaches by logging real traces you watch render in Opik, so it needs credentials and has **no dry-run**. [`test-notebooks.yml`](.github/workflows/test-notebooks.yml) executes each changed notebook end-to-end with `ipython <notebook>.ipynb` (every cell runs; non-zero exit on the first error) — but only on same-repo PRs where Opik secrets are available. Fork PRs skip execution; the compliance check still runs. Because there's no secrets-free run, a notebook nobody edits isn't re-tested until it changes (a scheduled run for stable notebooks is a future addition).
 
 ### Opik workspace
 
@@ -238,12 +255,12 @@ Before opening a PR, verify:
 - [ ] Folder name is lowercase with underscores (e.g. `my_example`, not `MyExample` or `my-example`)
 - [ ] `README.md` has all required sections
 - [ ] READMEs updated — the example's `README.md`, and for added/renamed/removed examples the bucket index and the root `README.md` table
-- [ ] Dry-run works with no credentials set — `bash run.sh` exits cleanly (this is exactly what CI's secrets-free job runs)
+- [ ] Dry-run works with no credentials set — `bash run.sh` exits cleanly (this is exactly what CI's secrets-free job runs) — *not applicable to notebook examples*
 - [ ] `uv run ruff check .` and `uv run ruff format --check .` are clean
 - [ ] No credentials or `.env` files committed
 - [ ] Dependencies declared in `pyproject.toml` (uv project); no `requirements.txt`
-- [ ] `run.sh` exists and starts with `set -e`
-- [ ] `OPIK_PROJECT_NAME` is set — exported in `run.sh` (scripts) or defined in `config.py` (use-cases/guides)
+- [ ] `run.sh` exists and starts with `set -e` — *or, for notebook examples, the folder ships a `.ipynb` (no `run.sh`) and notebook outputs are cleared*
+- [ ] `OPIK_PROJECT_NAME` is set — exported in `run.sh` (scripts), defined in `config.py` (use-cases/guides), or set in a notebook cell
 - [ ] Examples that call LLMs use litellm and read `OPIK_EXAMPLES_MODEL` in `config.py`
 
 ## Questions
