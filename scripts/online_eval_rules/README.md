@@ -56,8 +56,11 @@ uv run create-online-eval-rules create-llm-judge --name relevance --surface rest
 uv run create-online-eval-rules list
 uv run create-online-eval-rules get    --id <rule-id>
 uv run create-online-eval-rules update --id <rule-id> --sampling-rate 0.2 --disabled
+uv run create-online-eval-rules update --id <rule-id> --enabled          # re-enable
 uv run create-online-eval-rules delete --id <rule-id> --yes
 ```
+
+> Note: `update` always uses the REST surface (the SDK update-union types differ).
 
 ## How it works
 

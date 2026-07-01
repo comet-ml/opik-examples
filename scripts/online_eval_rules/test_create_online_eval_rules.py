@@ -1,6 +1,9 @@
+import ast
 import importlib
 import json
 import sys
+
+import pytest
 
 import create_online_eval_rules as cli
 
@@ -73,12 +76,39 @@ def test_render_curl_has_path_headers_and_valid_json():
     assert json.loads(body)["type"] == "llm_as_judge"
 
 
+def test_render_curl_apostrophe_in_name():
+    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="O'Brien", project_id="pid",
+                          sampling_rate=1.0, model="gpt-4o")
+    out = cli.render_curl(p)
+    # The shell-safe escape sequence must appear
+    assert "'\\''" in out
+    # No bare unescaped apostrophe inside the JSON value (between -d ' and the closing ')
+    # Extract the body between -d ' and last '
+    body_part = out.split("-d '", 1)[1].rsplit("'", 1)[0]
+    # Reconstruct: replacing the shell-escape back to get the actual JSON
+    json_str = body_part.replace("'\\''", "'")
+    data = json.loads(json_str)
+    assert data["name"] == "O'Brien"
+
+
 def test_render_sdk_snippet_names_variant():
     p = cli.build_payload(cli.RULE_SPAN_PY, name="r", project_id="pid",
                           sampling_rate=1.0, model="gpt-4o")
     out = cli.render_sdk_snippet(p)
     assert "AutomationRuleEvaluatorWrite_SpanUserDefinedMetricPython" in out
     assert "create_automation_rule_evaluator" in out
+
+
+def test_render_sdk_snippet_payload_is_valid_python_and_validates():
+    import pprint as _pprint
+
+    from opik.rest_api import types as _t
+    for rt in (cli.RULE_LLM_JUDGE, cli.RULE_PY, cli.RULE_THREAD_JUDGE, cli.RULE_SPAN_JUDGE, cli.RULE_SPAN_PY):
+        p = cli.build_payload(rt, name="r", project_id="pid", sampling_rate=1.0, model="gpt-4o")
+        coerced = cli._coerce_payload_for_sdk(p)
+        assert ast.literal_eval(_pprint.pformat(coerced, sort_dicts=False)) == coerced  # no true/false/null
+        variant = getattr(_t, cli._SDK_VARIANT_NAME[rt])
+        assert variant.model_validate(coerced).name == "r"                               # schema_ present
 
 
 class _FakeResp:
@@ -225,13 +255,17 @@ def test_resolve_project_id_creates_when_missing():
     assert projects.created_names == ["demo"]
 
 
-def test_main_dry_run_prints_sdk_and_curl(capsys, monkeypatch):
-    monkeypatch.setattr(sys, "argv",
-                        ["create-online-eval-rules", "create-llm-judge", "--name", "r", "--dry-run"])
-    importlib.reload(cli)  # pick up argv-independent state cleanly
+@pytest.mark.parametrize("argv_suffix", [
+    ["create-llm-judge", "--name", "r", "--dry-run"],
+    ["create-python",    "--name", "r", "--dry-run"],
+    ["create-thread",    "--name", "r", "--dry-run"],
+    ["create-span",      "--name", "r", "--dry-run"],
+    ["create-span",      "--name", "r", "--dry-run", "--python"],
+])
+def test_main_dry_run_prints_sdk_and_curl(capsys, monkeypatch, argv_suffix):
+    monkeypatch.setattr(sys, "argv", ["create-online-eval-rules"] + argv_suffix)
+    importlib.reload(cli)
     rc = cli.main()
     out = capsys.readouterr().out
     assert rc == 0
-    assert "Python SDK" in out and "REST (curl)" in out
-    assert "create_automation_rule_evaluator" in out
-    assert "/v1/private/automations/evaluators/" in out
+    assert "── Python SDK ──" in out and "── REST (curl) ──" in out

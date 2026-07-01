@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import pathlib
+import pprint
 import sys
 
 import requests
@@ -61,7 +62,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(p_get)
     p_get.add_argument("--id", required=True, help="Rule id (UUID).")
 
-    p_upd = sub.add_parser("update", help="Update a rule's sampling rate and/or enabled flag.")
+    p_upd = sub.add_parser("update",
+                           help="Update a rule's sampling rate and/or enabled flag (always uses REST).")
     add_common(p_upd)
     p_upd.add_argument("--id", required=True, help="Rule id (UUID).")
     p_upd.add_argument("--sampling-rate", type=float, default=None, help="New sampling rate.")
@@ -123,9 +125,12 @@ def _dispatch_create(args, dry_run: bool) -> int:
             print("Create failed: this workspace has no LLM provider key configured. "
                   "Add one in Opik → Configuration → AI providers, then retry.", file=sys.stderr)
         raise
-    created = via_rest("list", project_id=project_id)
-    print(f"Created rule '{args.name}' in project '{args.project}'. Current rules:")
-    print(json.dumps(created, indent=2, default=str))
+    try:
+        created = via_rest("list", project_id=project_id)
+        print(f"Created rule '{args.name}' in project '{args.project}'. Current rules:")
+        print(json.dumps(created, indent=2, default=str))
+    except Exception as exc:  # noqa: BLE001
+        print(f"Rule created; could not list rules: {exc}", file=sys.stderr)
     return 0
 
 
@@ -154,6 +159,8 @@ def _dispatch_manage(args, dry_run: bool) -> int:
     if args.command == "update":
         current = via_rest("get", rule_id=args.id, project_id=project_id)
         patch = {"name": current["name"], "type": current["type"], "action": "evaluator"}
+        if current.get("code") is not None:
+            patch["code"] = current["code"]
         if args.sampling_rate is not None:
             patch["sampling_rate"] = args.sampling_rate
         if args.enabled is not None:
@@ -257,18 +264,19 @@ _SDK_VARIANT_NAME = {
 
 def render_curl(payload: dict) -> str:
     body = json.dumps(payload, indent=2)
+    safe = body.replace("'", "'\\''")
     return (
         f'curl -X POST "{OPIK_URL}{EVALUATORS_PATH}/" \\\n'
         f'  -H "Authorization: Bearer $OPIK_API_KEY" \\\n'
         f'  -H "Comet-Workspace: $OPIK_WORKSPACE" \\\n'
         f'  -H "Content-Type: application/json" \\\n'
-        f"  -d '{body}'"
+        f"  -d '{safe}'"
     )
 
 
 def render_sdk_snippet(payload: dict) -> str:
     variant = _SDK_VARIANT_NAME[payload["type"]]
-    body = json.dumps(payload, indent=4)
+    body = pprint.pformat(_coerce_payload_for_sdk(payload), sort_dicts=False, width=100)
     return (
         "import opik\n"
         f"from opik.rest_api.types import {variant}\n\n"
