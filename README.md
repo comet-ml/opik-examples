@@ -41,6 +41,7 @@ End-to-end applications and domain-specific workflows.
 | | Description |
 |---|---|
 | [use-cases/call_summarizer](use-cases/call_summarizer/) | Streamlit app that summarises customer calls using an LLM, traced with Opik |
+| [use-cases/f1_radio_rag](use-cases/f1_radio_rag/) | Typer CLI walking the full Opik loop over F1 team-radio messages: RAG (ChromaDB) → eval dataset + test suite → optimization studio → prompt library |
 | [use-cases/governance_observability](use-cases/governance_observability/) | Instrument agents with governance metadata, derive composite metrics, and extract scores for oversight reporting |
 
 ## Scripts
