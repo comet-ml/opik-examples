@@ -1,9 +1,3 @@
-.env
-.venv
-__pycache__/
-*.pyc
-.ruff_cache/
-*.log
-uv.lock
+# Example-specific artifacts (generic ignores live in the repo-root .gitignore)
 db/
 annual_report.pdf

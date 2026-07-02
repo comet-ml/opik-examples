@@ -40,4 +40,4 @@ def web_search(query: str) -> str:
     with DDGS() as ddgs:
         results = ddgs.text(query, max_results=5)
 
-    return "\n\n".join(r["body"] for r in results)
+    return "\n\n".join(r.get("body", "") for r in results)
