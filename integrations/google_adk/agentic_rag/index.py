@@ -13,10 +13,12 @@ DB_PATH = Path("db")
 COLLECTION_NAME = "fas"
 MODEL_NAME = "jinaai/jina-embeddings-v2-small-en"
 
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
 OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
-# No Opik credentials -> skip the (heavy, networked) download + embedding so CI stays fast.
-DRY_RUN = not (OPIK_API_KEY and OPIK_WORKSPACE)
+# Gate on the same creds as main.py: no point doing the heavy, networked download +
+# embedding unless the traced run that consumes this index (main.py) will actually run.
+DRY_RUN = not (GOOGLE_API_KEY and OPIK_API_KEY and OPIK_WORKSPACE)
 
 
 def download_pdf() -> None:

@@ -14,15 +14,16 @@ You can create an Opik API key from https://www.comet.com/opik.
 import asyncio
 import os
 
-MODEL_NAME = "gemini-2.5-flash-lite"
-APP_NAME = "multi-agent"
-USER_ID = "transfer_01"
+MODEL_NAME = os.environ.get("GADK_MODEL", "gemini-2.5-flash")
+APP_NAME = "agentic-rag"
+USER_ID = "user"
 SESSION_ID = "session_01"
 QUERY = "projected reach of the digital remittance market by 2034"
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
 OPIK_WORKSPACE = os.environ.get("OPIK_WORKSPACE")
+OPIK_PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "google-adk-rag")
 
 # No Google/Opik credentials -> print what would run instead of calling Gemini + Opik.
 DRY_RUN = not (GOOGLE_API_KEY and OPIK_API_KEY and OPIK_WORKSPACE)
@@ -36,13 +37,13 @@ def build_agent():
     from tools import retrieve_docs, web_search
 
     agent = LlmAgent(
-        name="agent",
+        name="router_agent",
         model=MODEL_NAME,
         description=DESCRIPTION,
         instruction=INSTRUCTION,
         tools=[retrieve_docs, web_search],
     )
-    opik_tracer = OpikTracer(name="router-agent")
+    opik_tracer = OpikTracer(name="router-agent", project_name=OPIK_PROJECT_NAME)
     track_adk_agent_recursive(agent, opik_tracer)
     return agent
 
