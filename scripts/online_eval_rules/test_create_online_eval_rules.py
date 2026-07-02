@@ -182,6 +182,21 @@ def test_build_sdk_request_returns_correct_variant():
     assert req.code.schema_[0].name == "relevance_score"
 
 
+def test_dump_unwraps_pydantic_model_to_structured_json():
+    # SDK-surface list/get return pydantic models; _dump must emit structured JSON,
+    # not a single repr string (json.dumps(model, default=str) would do the latter).
+    req = cli.build_sdk_request(
+        cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid",
+                          sampling_rate=1.0, model="gpt-4o")
+    )
+    parsed = json.loads(cli._dump(req))
+    assert isinstance(parsed, dict) and parsed["name"] == "r"
+
+
+def test_dump_passes_through_rest_dict():
+    assert json.loads(cli._dump({"content": [], "ok": True})) == {"content": [], "ok": True}
+
+
 class _FakeEvaluators:
     def __init__(self):
         self.created = None

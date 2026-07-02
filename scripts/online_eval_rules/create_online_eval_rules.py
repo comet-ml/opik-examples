@@ -134,6 +134,15 @@ def _dispatch_create(args, dry_run: bool) -> int:
     return 0
 
 
+def _dump(result) -> str:
+    """JSON-print a result from either surface. REST returns a dict; the SDK returns a
+    pydantic model, which json.dumps can't serialise (default=str would collapse it to a
+    single repr string), so unwrap it with model_dump first."""
+    if hasattr(result, "model_dump"):
+        result = result.model_dump(mode="json")
+    return json.dumps(result, indent=2, default=str)
+
+
 def _dispatch_manage(args, dry_run: bool) -> int:
     if dry_run:
         print(f"[DRY RUN] would '{args.command}' via {getattr(args, 'surface', 'sdk')} "
@@ -149,12 +158,12 @@ def _dispatch_manage(args, dry_run: bool) -> int:
     if args.command == "list":
         result = (via_sdk(client, "list", project_id=project_id) if args.surface == "sdk"
                   else via_rest("list", project_id=project_id))
-        print(json.dumps(result, indent=2, default=str))
+        print(_dump(result))
         return 0
     if args.command == "get":
         result = (via_sdk(client, "get", rule_id=args.id, project_id=project_id) if args.surface == "sdk"
                   else via_rest("get", rule_id=args.id, project_id=project_id))
-        print(json.dumps(result, indent=2, default=str))
+        print(_dump(result))
         return 0
     if args.command == "update":
         current = via_rest("get", rule_id=args.id, project_id=project_id)
