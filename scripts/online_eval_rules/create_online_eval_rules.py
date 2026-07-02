@@ -38,8 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     def add_common(p: argparse.ArgumentParser, *, surface: bool = True) -> None:
         if surface:
-            p.add_argument("--surface", choices=["sdk", "rest"], default="sdk",
-                           help="Surface for a live call (default: sdk). DRY_RUN always prints both.")
+            p.add_argument(
+                "--surface",
+                choices=["sdk", "rest"],
+                default="sdk",
+                help="Surface for a live call (default: sdk). DRY_RUN always prints both.",
+            )
         p.add_argument("--project", default=DEFAULT_PROJECT, help="Project name (created if absent).")
         p.add_argument("--dry-run", action="store_true", help="Print SDK + curl; touch nothing.")
 
@@ -63,8 +67,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(p_get)
     p_get.add_argument("--id", required=True, help="Rule id (UUID).")
 
-    p_upd = sub.add_parser("update",
-                           help="Update a rule's sampling rate and/or enabled flag (always uses REST).")
+    p_upd = sub.add_parser(
+        "update", help="Update a rule's sampling rate and/or enabled flag (always uses REST)."
+    )
     add_common(p_upd, surface=False)  # update has no SDK path; don't offer a --surface no-op
     p_upd.add_argument("--id", required=True, help="Rule id (UUID).")
     p_upd.add_argument("--sampling-rate", type=float, default=None, help="New sampling rate.")
@@ -105,16 +110,23 @@ def _print_both_surfaces(payload: dict) -> None:
 def _dispatch_create(args, dry_run: bool) -> int:
     rule_type = _rule_type_for_args(args)
     if dry_run:
-        payload = build_payload(rule_type, name=args.name, project_id=PLACEHOLDER_PROJECT_ID,
-                                sampling_rate=args.sampling_rate, model=args.model)
+        payload = build_payload(
+            rule_type,
+            name=args.name,
+            project_id=PLACEHOLDER_PROJECT_ID,
+            sampling_rate=args.sampling_rate,
+            model=args.model,
+        )
         _print_both_surfaces(payload)
         return 0
 
     import opik
+
     client = opik.Opik()
     project_id = resolve_project_id(client, args.project)
-    payload = build_payload(rule_type, name=args.name, project_id=project_id,
-                            sampling_rate=args.sampling_rate, model=args.model)
+    payload = build_payload(
+        rule_type, name=args.name, project_id=project_id, sampling_rate=args.sampling_rate, model=args.model
+    )
     try:
         if args.surface == "sdk":
             via_sdk(client, "create", payload=payload)
@@ -123,8 +135,11 @@ def _dispatch_create(args, dry_run: bool) -> int:
     except Exception as exc:  # noqa: BLE001 — surface an actionable message to the client
         msg = str(exc)
         if "llm_as_judge" in rule_type and ("provider" in msg.lower() or "api key" in msg.lower()):
-            print("Create failed: this workspace has no LLM provider key configured. "
-                  "Add one in Opik → Configuration → AI providers, then retry.", file=sys.stderr)
+            print(
+                "Create failed: this workspace has no LLM provider key configured. "
+                "Add one in Opik → Configuration → AI providers, then retry.",
+                file=sys.stderr,
+            )
         raise
     try:
         created = via_rest("list", project_id=project_id)
@@ -154,25 +169,36 @@ def _dispatch_manage(args, dry_run: bool) -> int:
         return 0
 
     import opik
+
     client = opik.Opik()
     project_id = resolve_project_id(client, args.project)
 
     if args.command == "list":
-        result = (via_sdk(client, "list", project_id=project_id) if args.surface == "sdk"
-                  else via_rest("list", project_id=project_id))
+        result = (
+            via_sdk(client, "list", project_id=project_id)
+            if args.surface == "sdk"
+            else via_rest("list", project_id=project_id)
+        )
         print(_dump(result))
         return 0
     if args.command == "get":
-        result = (via_sdk(client, "get", rule_id=args.id, project_id=project_id) if args.surface == "sdk"
-                  else via_rest("get", rule_id=args.id, project_id=project_id))
+        result = (
+            via_sdk(client, "get", rule_id=args.id, project_id=project_id)
+            if args.surface == "sdk"
+            else via_rest("get", rule_id=args.id, project_id=project_id)
+        )
         print(_dump(result))
         return 0
     if args.command == "update":
         current = via_rest("get", rule_id=args.id, project_id=project_id)
         # The evaluators PATCH endpoint requires at least one project on every update
         # (400 "At least one project must be specified" otherwise), so carry it forward.
-        patch = {"name": current["name"], "type": current["type"], "action": "evaluator",
-                 "project_ids": [current.get("project_id") or project_id]}
+        patch = {
+            "name": current["name"],
+            "type": current["type"],
+            "action": "evaluator",
+            "project_ids": [current.get("project_id") or project_id],
+        }
         if current.get("code") is not None:
             patch["code"] = current["code"]
         if args.sampling_rate is not None:
@@ -245,8 +271,7 @@ def _python_code() -> dict:
     }
 
 
-def build_payload(rule_type: str, *, name: str, project_id: str,
-                  sampling_rate: float, model: str) -> dict:
+def build_payload(rule_type: str, *, name: str, project_id: str, sampling_rate: float, model: str) -> dict:
     payload: dict = {
         "name": name,
         "project_ids": [project_id],
@@ -338,28 +363,21 @@ def via_rest(op: str, *, payload=None, rule_id=None, project_id=None, session=No
     if op == "delete":
         # Pass project_id to match the SDK's delete_automation_rule_evaluator_batch, which scopes
         # the batch delete by project; requests drops params whose value is None.
-        resp = http.post(f"{base}/delete", headers=headers, json={"ids": [rule_id]},
-                         params={"project_id": project_id})
+        resp = http.post(
+            f"{base}/delete", headers=headers, json={"ids": [rule_id]}, params={"project_id": project_id}
+        )
         _check(resp)
         return resp
     raise ValueError(f"unknown op: {op}")
 
 
 def _sdk_variant_classes() -> dict:
-    from opik.rest_api.types import (
-        AutomationRuleEvaluatorWrite_LlmAsJudge,
-        AutomationRuleEvaluatorWrite_SpanLlmAsJudge,
-        AutomationRuleEvaluatorWrite_SpanUserDefinedMetricPython,
-        AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge,
-        AutomationRuleEvaluatorWrite_UserDefinedMetricPython,
-    )
-    return {
-        RULE_LLM_JUDGE: AutomationRuleEvaluatorWrite_LlmAsJudge,
-        RULE_PY: AutomationRuleEvaluatorWrite_UserDefinedMetricPython,
-        RULE_THREAD_JUDGE: AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge,
-        RULE_SPAN_JUDGE: AutomationRuleEvaluatorWrite_SpanLlmAsJudge,
-        RULE_SPAN_PY: AutomationRuleEvaluatorWrite_SpanUserDefinedMetricPython,
-    }
+    # Derive the classes from the single _SDK_VARIANT_NAME map (kept as strings so the
+    # render/dry-run path can name the variant without importing opik). Lazy import keeps
+    # opik out of DRY_RUN and the curl/snippet path.
+    from opik.rest_api import types
+
+    return {rule_type: getattr(types, name) for rule_type, name in _SDK_VARIANT_NAME.items()}
 
 
 def _coerce_payload_for_sdk(payload: dict) -> dict:
@@ -402,15 +420,24 @@ def via_sdk(client, op: str, *, payload=None, rule_id=None, project_id=None, ses
 
 def resolve_project_id(client, name: str) -> str:
     projects = client.rest_client.projects
-    page = projects.find_projects(name=name)
-    if not page.content:
-        projects.create_project(name=name)
-        page = projects.find_projects(name=name)
-    for project in page.content:
-        if project.name == name:
-            return project.id
-    if page.content:
-        return page.content[0].id
+
+    def _exact_match(page) -> "str | None":
+        # find_projects does a *contains* search, so a non-empty page can hold only
+        # near-name siblings (e.g. "demo-staging" when asked for "demo"). Match the
+        # exact name — never fall back to the first result, or a rule gets attached
+        # to the wrong project.
+        for project in page.content:
+            if project.name == name:
+                return project.id
+        return None
+
+    found = _exact_match(projects.find_projects(name=name))
+    if found is not None:
+        return found
+    projects.create_project(name=name)
+    found = _exact_match(projects.find_projects(name=name))
+    if found is not None:
+        return found
     raise RuntimeError(f"Could not resolve or create project '{name}'.")
 
 

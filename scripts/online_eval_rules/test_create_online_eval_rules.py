@@ -27,8 +27,7 @@ def test_update_rejects_surface_flag():
 
 
 def test_build_payload_llm_judge_shape():
-    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="rel", project_id="pid",
-                          sampling_rate=0.5, model="gpt-4o")
+    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="rel", project_id="pid", sampling_rate=0.5, model="gpt-4o")
     assert p["type"] == "llm_as_judge"
     assert p["action"] == "evaluator"
     assert p["project_ids"] == ["pid"]
@@ -38,42 +37,43 @@ def test_build_payload_llm_judge_shape():
     assert p["code"]["variables"]  # trace judge maps variables
     types = {f["type"] for f in p["code"]["schema"]}
     assert types <= {"BOOLEAN", "INTEGER", "DOUBLE"}  # STRING is forbidden by the API
-    assert {m["role"] for m in p["code"]["messages"]} <= {"SYSTEM", "USER", "AI",
-                                                          "TOOL_EXECUTION_RESULT", "CUSTOM"}
+    assert {m["role"] for m in p["code"]["messages"]} <= {
+        "SYSTEM",
+        "USER",
+        "AI",
+        "TOOL_EXECUTION_RESULT",
+        "CUSTOM",
+    }
 
 
 def test_build_payload_thread_judge_omits_variables():
-    p = cli.build_payload(cli.RULE_THREAD_JUDGE, name="t", project_id="pid",
-                          sampling_rate=1.0, model="gpt-4o")
+    p = cli.build_payload(
+        cli.RULE_THREAD_JUDGE, name="t", project_id="pid", sampling_rate=1.0, model="gpt-4o"
+    )
     assert p["type"] == "trace_thread_llm_as_judge"
     assert "variables" not in p["code"]
 
 
 def test_build_payload_python_embeds_metric_source():
-    p = cli.build_payload(cli.RULE_PY, name="eq", project_id="pid",
-                          sampling_rate=1.0, model="gpt-4o")
+    p = cli.build_payload(cli.RULE_PY, name="eq", project_id="pid", sampling_rate=1.0, model="gpt-4o")
     assert p["type"] == "user_defined_metric_python"
     assert "class" in p["code"]["metric"] and "BaseMetric" in p["code"]["metric"]
     assert set(p["code"]["arguments"]) == {"output", "reference"}
 
 
 def test_build_payload_span_python_via_flag_type():
-    p = cli.build_payload(cli.RULE_SPAN_PY, name="s", project_id="pid",
-                          sampling_rate=1.0, model="gpt-4o")
+    p = cli.build_payload(cli.RULE_SPAN_PY, name="s", project_id="pid", sampling_rate=1.0, model="gpt-4o")
     assert p["type"] == "span_user_defined_metric_python"
     assert "metric" in p["code"]
 
 
 def test_build_payload_is_json_serializable():
-    for rt in (cli.RULE_LLM_JUDGE, cli.RULE_PY, cli.RULE_THREAD_JUDGE,
-               cli.RULE_SPAN_JUDGE, cli.RULE_SPAN_PY):
-        json.dumps(cli.build_payload(rt, name="x", project_id="pid",
-                                     sampling_rate=1.0, model="gpt-4o"))
+    for rt in (cli.RULE_LLM_JUDGE, cli.RULE_PY, cli.RULE_THREAD_JUDGE, cli.RULE_SPAN_JUDGE, cli.RULE_SPAN_PY):
+        json.dumps(cli.build_payload(rt, name="x", project_id="pid", sampling_rate=1.0, model="gpt-4o"))
 
 
 def test_render_curl_has_path_headers_and_valid_json():
-    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid",
-                          sampling_rate=1.0, model="gpt-4o")
+    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid", sampling_rate=1.0, model="gpt-4o")
     out = cli.render_curl(p)
     assert "/v1/private/automations/evaluators/" in out
     assert "Authorization: Bearer $OPIK_API_KEY" in out
@@ -83,8 +83,9 @@ def test_render_curl_has_path_headers_and_valid_json():
 
 
 def test_render_curl_apostrophe_in_name():
-    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="O'Brien", project_id="pid",
-                          sampling_rate=1.0, model="gpt-4o")
+    p = cli.build_payload(
+        cli.RULE_LLM_JUDGE, name="O'Brien", project_id="pid", sampling_rate=1.0, model="gpt-4o"
+    )
     out = cli.render_curl(p)
     # The shell-safe escape sequence must appear
     assert "'\\''" in out
@@ -98,8 +99,7 @@ def test_render_curl_apostrophe_in_name():
 
 
 def test_render_sdk_snippet_names_variant():
-    p = cli.build_payload(cli.RULE_SPAN_PY, name="r", project_id="pid",
-                          sampling_rate=1.0, model="gpt-4o")
+    p = cli.build_payload(cli.RULE_SPAN_PY, name="r", project_id="pid", sampling_rate=1.0, model="gpt-4o")
     out = cli.render_sdk_snippet(p)
     assert "AutomationRuleEvaluatorWrite_SpanUserDefinedMetricPython" in out
     assert "create_automation_rule_evaluator" in out
@@ -109,12 +109,13 @@ def test_render_sdk_snippet_payload_is_valid_python_and_validates():
     import pprint as _pprint
 
     from opik.rest_api import types as _t
+
     for rt in (cli.RULE_LLM_JUDGE, cli.RULE_PY, cli.RULE_THREAD_JUDGE, cli.RULE_SPAN_JUDGE, cli.RULE_SPAN_PY):
         p = cli.build_payload(rt, name="r", project_id="pid", sampling_rate=1.0, model="gpt-4o")
         coerced = cli._coerce_payload_for_sdk(p)
         assert ast.literal_eval(_pprint.pformat(coerced, sort_dicts=False)) == coerced  # no true/false/null
         variant = getattr(_t, cli._SDK_VARIANT_NAME[rt])
-        assert variant.model_validate(coerced).name == "r"                               # schema_ present
+        assert variant.model_validate(coerced).name == "r"  # schema_ present
 
 
 class _FakeResp:
@@ -147,8 +148,7 @@ class _FakeSession:
 
 def test_via_rest_create_posts_to_collection():
     s = _FakeSession()
-    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid",
-                          sampling_rate=1.0, model="gpt-4o")
+    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid", sampling_rate=1.0, model="gpt-4o")
     cli.via_rest("create", payload=p, session=s)
     method, url, kw = s.calls[0]
     assert method == "POST"
@@ -178,8 +178,7 @@ def test_via_rest_get_uses_id_path_and_project_param():
 def test_build_sdk_request_returns_correct_variant():
     from opik.rest_api.types import AutomationRuleEvaluatorWrite_LlmAsJudge
 
-    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid",
-                          sampling_rate=0.25, model="gpt-4o")
+    p = cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid", sampling_rate=0.25, model="gpt-4o")
     req = cli.build_sdk_request(p)
     assert isinstance(req, AutomationRuleEvaluatorWrite_LlmAsJudge)
     assert req.name == "r"
@@ -192,8 +191,7 @@ def test_dump_unwraps_pydantic_model_to_structured_json():
     # SDK-surface list/get return pydantic models; _dump must emit structured JSON,
     # not a single repr string (json.dumps(model, default=str) would do the latter).
     req = cli.build_sdk_request(
-        cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid",
-                          sampling_rate=1.0, model="gpt-4o")
+        cli.build_payload(cli.RULE_LLM_JUDGE, name="r", project_id="pid", sampling_rate=1.0, model="gpt-4o")
     )
     parsed = json.loads(cli._dump(req))
     assert isinstance(parsed, dict) and parsed["name"] == "r"
@@ -226,8 +224,9 @@ def test_via_sdk_create_calls_client_with_typed_request():
     from opik.rest_api.types import AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge
 
     client = _FakeClient()
-    p = cli.build_payload(cli.RULE_THREAD_JUDGE, name="t", project_id="pid",
-                          sampling_rate=1.0, model="gpt-4o")
+    p = cli.build_payload(
+        cli.RULE_THREAD_JUDGE, name="t", project_id="pid", sampling_rate=1.0, model="gpt-4o"
+    )
     cli.via_sdk(client, "create", payload=p)
     sent = client.rest_client.automation_rule_evaluators.created
     assert isinstance(sent, AutomationRuleEvaluatorWrite_TraceThreadLlmAsJudge)
@@ -276,13 +275,34 @@ def test_resolve_project_id_creates_when_missing():
     assert projects.created_names == ["demo"]
 
 
-@pytest.mark.parametrize("argv_suffix", [
-    ["create-llm-judge", "--name", "r", "--dry-run"],
-    ["create-python",    "--name", "r", "--dry-run"],
-    ["create-thread",    "--name", "r", "--dry-run"],
-    ["create-span",      "--name", "r", "--dry-run"],
-    ["create-span",      "--name", "r", "--dry-run", "--python"],
-])
+class _FuzzyProjects(_FakeProjects):
+    """find_projects does a *contains* search on the real backend: a query returns
+    every project whose name contains it. resolve_project_id must not attach to a
+    near-name sibling."""
+
+    def find_projects(self, *, name=None, **kw):
+        return _Page([p for p in self._existing if name in p.name])
+
+
+def test_resolve_project_id_creates_when_only_fuzzy_siblings_exist():
+    # "demo" absent, but "demo-staging" contains "demo": must create "demo", not
+    # return the sibling's id.
+    projects = _FuzzyProjects([_Proj("sibling-id", "demo-staging")])
+    client = _ClientWithProjects(projects)
+    assert cli.resolve_project_id(client, "demo") == "new-id"
+    assert projects.created_names == ["demo"]
+
+
+@pytest.mark.parametrize(
+    "argv_suffix",
+    [
+        ["create-llm-judge", "--name", "r", "--dry-run"],
+        ["create-python", "--name", "r", "--dry-run"],
+        ["create-thread", "--name", "r", "--dry-run"],
+        ["create-span", "--name", "r", "--dry-run"],
+        ["create-span", "--name", "r", "--dry-run", "--python"],
+    ],
+)
 def test_main_dry_run_prints_sdk_and_curl(capsys, monkeypatch, argv_suffix):
     monkeypatch.setattr(sys, "argv", ["create-online-eval-rules"] + argv_suffix)
     importlib.reload(cli)
