@@ -11,3 +11,7 @@ for cmd in create-llm-judge create-python create-thread create-span; do
   echo "=== ${cmd} ==="
   uv run create-online-eval-rules "${cmd}" --name "example-${cmd}"
 done
+
+# The span-level Python metric is a distinct rule type (--python flag on create-span).
+echo "=== create-span --python ==="
+uv run create-online-eval-rules create-span --name "example-create-span-python" --python

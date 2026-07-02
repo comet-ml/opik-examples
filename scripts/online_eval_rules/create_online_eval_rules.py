@@ -36,9 +36,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
 
-    def add_common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--surface", choices=["sdk", "rest"], default="sdk",
-                       help="Which surface runs on a live call (default: sdk). DRY_RUN always prints both.")
+    def add_common(p: argparse.ArgumentParser, *, surface: bool = True) -> None:
+        if surface:
+            p.add_argument("--surface", choices=["sdk", "rest"], default="sdk",
+                           help="Surface for a live call (default: sdk). DRY_RUN always prints both.")
         p.add_argument("--project", default=DEFAULT_PROJECT, help="Project name (created if absent).")
         p.add_argument("--dry-run", action="store_true", help="Print SDK + curl; touch nothing.")
 
@@ -64,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_upd = sub.add_parser("update",
                            help="Update a rule's sampling rate and/or enabled flag (always uses REST).")
-    add_common(p_upd)
+    add_common(p_upd, surface=False)  # update has no SDK path; don't offer a --surface no-op
     p_upd.add_argument("--id", required=True, help="Rule id (UUID).")
     p_upd.add_argument("--sampling-rate", type=float, default=None, help="New sampling rate.")
     enabled = p_upd.add_mutually_exclusive_group()
@@ -145,8 +146,9 @@ def _dump(result) -> str:
 
 def _dispatch_manage(args, dry_run: bool) -> int:
     if dry_run:
-        print(f"[DRY RUN] would '{args.command}' via {getattr(args, 'surface', 'sdk')} "
-              f"at {OPIK_URL}{EVALUATORS_PATH}")
+        # update has no --surface (always REST); other manage commands default to sdk.
+        surface = getattr(args, "surface", None) or "rest"
+        print(f"[DRY RUN] would '{args.command}' via {surface} at {OPIK_URL}{EVALUATORS_PATH}")
         if args.command == "delete":
             print("[DRY RUN] delete requires --yes on a live run.")
         return 0
@@ -189,7 +191,7 @@ def _dispatch_manage(args, dry_run: bool) -> int:
         if args.surface == "sdk":
             via_sdk(client, "delete", rule_id=args.id, project_id=project_id)
         else:
-            via_rest("delete", rule_id=args.id)
+            via_rest("delete", rule_id=args.id, project_id=project_id)
         print(f"Deleted rule {args.id}.")
         return 0
     raise ValueError(f"unknown command: {args.command}")
@@ -334,7 +336,10 @@ def via_rest(op: str, *, payload=None, rule_id=None, project_id=None, session=No
         _check(resp)
         return resp
     if op == "delete":
-        resp = http.post(f"{base}/delete", headers=headers, json={"ids": [rule_id]})
+        # Pass project_id to match the SDK's delete_automation_rule_evaluator_batch, which scopes
+        # the batch delete by project; requests drops params whose value is None.
+        resp = http.post(f"{base}/delete", headers=headers, json={"ids": [rule_id]},
+                         params={"project_id": project_id})
         _check(resp)
         return resp
     raise ValueError(f"unknown op: {op}")

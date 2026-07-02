@@ -20,6 +20,12 @@ def test_parser_defaults_surface_to_sdk():
     assert args.surface == "sdk"
 
 
+def test_update_rejects_surface_flag():
+    # update has no SDK path; --surface must error loudly, not be a silent no-op.
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["update", "--id", "x", "--surface", "sdk"])
+
+
 def test_build_payload_llm_judge_shape():
     p = cli.build_payload(cli.RULE_LLM_JUDGE, name="rel", project_id="pid",
                           sampling_rate=0.5, model="gpt-4o")
