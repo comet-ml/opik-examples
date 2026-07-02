@@ -33,7 +33,7 @@ Or, with `uv` (recommended — this folder is a `uv` project): `uv sync`.
 
 | Environment variable | Required | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | for `run`/`eval`/`optimize`/`promote` | Anthropic key; used via litellm for generation, judge metrics, and the optimizer |
+| `ANTHROPIC_API_KEY` (or the key for your `OPIK_EXAMPLES_MODEL` provider) | for live `run`/`eval`/`optimize`/`promote` | Model-provider key used via litellm for generation, judge metrics, and the optimizer |
 | `OPIK_API_KEY` | for `eval`/`optimize`/`promote` | Your Opik API key. Unset → those commands run in DRY_RUN |
 | `OPIK_WORKSPACE` | for `eval`/`optimize`/`promote` | Your Opik workspace name |
 | `OPIK_PROJECT_NAME` | No | Opik project for traces/experiments (default `example-use-case`) |

@@ -23,8 +23,8 @@ def ask(query: str, k: int = 5) -> None:
     typer.echo("Retrieved messages:")
     for message in context:
         typer.echo(f"  - {message}")
-    if not config.LLM_READY:
-        typer.echo("\n[DRY RUN] ANTHROPIC_API_KEY not set — would summarise the above with Claude.")
+    if config.DRY_RUN:
+        typer.echo(f"\n[DRY RUN] Opik creds not set — would summarise with {config.GEN_MODEL}.")
         return
     result = rag.answer(query, k)
     typer.echo(f"\nSummary:\n{result['output']}")

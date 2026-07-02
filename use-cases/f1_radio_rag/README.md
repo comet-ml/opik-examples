@@ -13,8 +13,8 @@ On top of that RAG app it demonstrates the four Opik lifecycle steps, each as a 
 - **`ingest`** — load the radio messages into ChromaDB (fully offline).
 - **`ask`** — retrieve relevant messages and summarise them with Claude (traced in Opik).
 - **`eval`** — create an Opik **dataset** and a **test suite** (plain-English assertions), then run
-  both: `run_tests` for the assertions and `evaluate` with the `ContextRecall` and `Hallucination`
-  metrics.
+  both: `run_tests` for the assertions (pass/fail → **pass rate**) and `evaluate` with the
+  `ContextRecall` and `Hallucination` metrics (numeric **feedback scores**).
 - **`optimize`** — run **Optimization Studio** (`opik-optimizer`) to improve the summariser prompt
   against the dataset, scored by an `AnswerRelevance` judge.
 - **`promote`** — save the optimised prompt to the Opik **Prompt Library** (re-running versions it).
@@ -38,10 +38,11 @@ Or, with `uv` (recommended — this folder is a `uv` project): `uv sync`.
 
 | Environment variable | Required | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | for `ask`/`eval`/`optimize`/`promote` | Anthropic key; used via litellm for generation, the LLM-judge metrics, and the optimizer |
+| `ANTHROPIC_API_KEY` (or the key for your `OPIK_EXAMPLES_MODEL` provider) | for live `ask`/`eval`/`optimize`/`promote` | Model-provider key used via litellm for generation, the LLM-judge metrics, and the optimizer |
 | `OPIK_API_KEY` | for `eval`/`optimize`/`promote` | Your Opik API key. Unset → those commands run in DRY_RUN |
 | `OPIK_WORKSPACE` | for `eval`/`optimize`/`promote` | Your Opik workspace name |
 | `OPIK_PROJECT_NAME` | No | Opik project for traces/experiments (default `f1-radio-rag`) |
+| `OPIK_EXAMPLES_MODEL` | No | litellm model for generation/judging/optimising. Unset → `anthropic/claude-sonnet-4-6`; CI sets a cheap model (e.g. `openai/gpt-4o-mini`) |
 | `OPIK_URL_OVERRIDE` | No | Base URL for self-hosted Opik (default: Opik Cloud) |
 
 ## Running it
@@ -66,17 +67,33 @@ uv run f1rag promote     # optimised prompt saved to the Prompt Library (version
 uv run f1rag run-all     # the whole loop in one shot
 ```
 
+`run.sh` is the entrypoint CI runs: it exports `OPIK_PROJECT_NAME`, then `uv sync` and runs
+`ingest` + `ask`. With no credentials it stays in dry-run and exits 0 (the secrets-free CI check);
+with credentials set it logs a live trace to Opik.
+
+```bash
+bash run.sh
+```
+
 ## How it works
 
 1. **Ingest** (`rag.py`) — `chromadb.PersistentClient` stores one document per radio message with
    session/driver/lap metadata, using ChromaDB's default local embeddings (no embedding-API cost).
 2. **Ask** (`rag.py`) — `answer()` retrieves the top-k messages, then calls
-   `litellm.completion(model="anthropic/claude-sonnet-4-6", ...)` with the summariser prompt from
-   `prompts.py`. It's decorated with `@opik.track`, so each call appears as a trace in Opik.
+   `litellm.completion(model=config.GEN_MODEL, ...)` with the summariser prompt from `prompts.py`
+   (`GEN_MODEL` defaults to `anthropic/claude-sonnet-4-6`, overridable via `OPIK_EXAMPLES_MODEL`).
+   It's decorated with `@opik.track`, so each call appears as a trace in Opik.
 3. **Eval** (`evaluation.py`) — builds an Opik dataset and a test suite, then scores the live RAG
-   task. The test suite checks plain-English **assertions**; `evaluate` runs the `ContextRecall`
-   (retrieval quality) and `Hallucination` (faithfulness) metrics. The eval cases live in
-   `data/eval_cases.json`.
+   task two ways. The eval cases live in `data/eval_cases.json`.
+   - The **test suite** (`run_tests`) checks plain-English **assertions** (LLM-judged) and yields a
+     **pass rate** — shown as "Pass rate" on the experiment. Test suites do *not* attach per-row
+     numeric scores, so test-suite experiments show `-` in the **Feedback Scores** column. That is
+     expected, not a bug — their result is the pass rate. The judge reads only the task's
+     `input` and `output`, so the suite task (`_suite_task`) folds the retrieved messages into
+     `input`; that is what lets the groundedness assertions check against the source.
+   - `evaluate` runs the `ContextRecall` (retrieval quality) and `Hallucination` (faithfulness)
+     metrics, which produce numeric **feedback scores** that *do* populate the Feedback Scores column
+     (e.g. `context_recall_metric`, `hallucination_metric`).
 4. **Optimize** (`optimization.py`) — `MetaPromptOptimizer.optimize_prompt(...)` improves the
    `ChatPrompt` against the dataset, scored by a callable that wraps Opik's `AnswerRelevance` judge.
 5. **Promote** (`prompts.py`) — `client.create_chat_prompt(...)` saves the optimised messages to the
