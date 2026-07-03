@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -62,4 +63,56 @@ def validate_meta(entry: Path) -> list[str]:
     if not isinstance(data.get("hosted"), bool):
         errors.append(f"{name}: meta.yaml 'hosted' must be a boolean (true/false)")
 
+    return errors
+
+
+def _section_bodies(markdown: str) -> dict[str, str]:
+    bodies: dict[str, str] = {}
+    current: str | None = None
+    buffer: list[str] = []
+    for line in markdown.splitlines():
+        heading = re.match(r"^##\s+(.*?)\s*$", line)
+        if heading:
+            if current is not None:
+                bodies[current] = "\n".join(buffer).strip()
+            current = heading.group(1).strip()
+            buffer = []
+        elif current is not None:
+            buffer.append(line)
+    if current is not None:
+        bodies[current] = "\n".join(buffer).strip()
+    return bodies
+
+
+def _looks_like_placeholder(body: str) -> bool:
+    lowered = body.lower()
+    return body == "" or any(token.lower() in lowered for token in PLACEHOLDER_TOKENS)
+
+
+def validate_readme(entry: Path) -> list[str]:
+    readme_path = entry / "README.md"
+    if not readme_path.is_file():
+        return [f"{entry.name}: missing README.md"]
+
+    bodies = _section_bodies(readme_path.read_text())
+    errors: list[str] = []
+    for section in REQUIRED_SECTIONS:
+        if section not in bodies:
+            errors.append(f"{entry.name}: README.md missing required section '## {section}'")
+        elif _looks_like_placeholder(bodies[section]):
+            errors.append(
+                f"{entry.name}: README.md section '## {section}' is empty or still a placeholder"
+            )
+    return errors
+
+
+def validate_proof(entry: Path) -> list[str]:
+    errors: list[str] = []
+    if not (entry / "opik-proof.png").is_file():
+        errors.append(f"{entry.name}: missing opik-proof.png (screenshot of your Opik traces)")
+        return errors
+    readme_path = entry / "README.md"
+    text = readme_path.read_text() if readme_path.is_file() else ""
+    if "opik-proof.png" not in text:
+        errors.append(f"{entry.name}: opik-proof.png must be referenced from README.md")
     return errors
