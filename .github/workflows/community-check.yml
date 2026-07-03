@@ -2,8 +2,9 @@ name: Community Entry Check
 
 # Lightweight, non-executing gate for community showcase entries.
 # It does NOT run contributor code. It validates entry structure, scans for
-# committed secrets, confirms hosted entries use Opik, and verifies the
-# generated showcase index is up to date. Secrets-free, so it runs on forks.
+# committed secrets, and confirms hosted entries use Opik. Secrets-free, so it
+# runs on forks. The showcase index (community/README.md) is regenerated
+# separately on merge by community-index.yml — contributors run nothing.
 #
 # Community entries are intentionally exempt from the verified-bucket workflows
 # (compliance / pr-test / test-notebooks / scheduled), which are path-scoped to
@@ -32,26 +33,21 @@ jobs:
 
       - name: Install tooling
         run: |
-          cd community/scripts
+          cd community/_ci
           uv sync
 
       - name: Unit-test the check tooling
         run: |
-          cd community/scripts
+          cd community/_ci
           uv run pytest -q
 
       - name: Lint the check tooling
         run: |
-          cd community/scripts
+          cd community/_ci
           uv run ruff check .
           uv run ruff format --check .
 
       - name: Validate all community entries
         run: |
-          cd community/scripts
+          cd community/_ci
           uv run python check_entry.py
-
-      - name: Verify showcase index is up to date
-        run: |
-          cd community/scripts
-          uv run python build_index.py --check

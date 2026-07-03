@@ -13,7 +13,7 @@ from entry_rules import (
 )
 
 COMMUNITY_DIR = Path(__file__).resolve().parent.parent
-RESERVED_DIRS = {"scripts", "templates"}
+RESERVED_DIRS = {"_ci", "templates"}
 
 
 def discover_entries(community_dir: Path) -> list[Path]:

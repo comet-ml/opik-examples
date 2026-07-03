@@ -20,8 +20,8 @@ def test_check_entry_aggregates_multiple_failures(tmp_path: Path):
 
 def test_discover_skips_reserved_dirs(tmp_path: Path):
     write_entry(tmp_path, slug="jane_agent")
-    (tmp_path / "scripts").mkdir()
-    (tmp_path / "scripts" / "meta.yaml").write_text("title: x\n")
+    (tmp_path / "_ci").mkdir()
+    (tmp_path / "_ci" / "meta.yaml").write_text("title: x\n")
     (tmp_path / "templates").mkdir()
     (tmp_path / "templates" / "meta.yaml").write_text("title: x\n")
     found = {p.name for p in discover_entries(tmp_path)}

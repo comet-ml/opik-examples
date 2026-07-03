@@ -28,13 +28,15 @@ either Comet cloud or the self-hosted open-source platform.
    dashboard.
 4. If you want it considered for hosting, include your code in the folder — it
    must genuinely use Opik (`import opik`, `@opik.track`, ...).
-5. Regenerate the index: `cd community/scripts && uv run python build_index.py`
-   (commit the updated `community/README.md`).
-6. Open a PR. A maintainer reviews it.
+5. Open a PR. A maintainer reviews it.
+
+That's it — you don't need to run anything. The showcase index
+(`community/README.md`) is regenerated automatically when your entry merges, so
+your project appears there without any manual step on your part.
 
 ## What the automated check enforces
 
-`community/scripts/check_entry.py` runs on your PR (a hard gate). It does **not**
+`community/_ci/check_entry.py` runs on your PR (a hard gate). It does **not**
 run your code. It checks:
 
 - `meta.yaml` has all required fields, at least one link, and a valid
