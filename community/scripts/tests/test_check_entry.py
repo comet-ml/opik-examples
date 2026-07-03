@@ -28,6 +28,29 @@ def test_discover_skips_reserved_dirs(tmp_path: Path):
     assert found == {"jane_agent"}
 
 
+def test_discover_includes_dir_without_meta_yaml(tmp_path: Path):
+    entry = write_entry(tmp_path, slug="no_meta_here")
+    (entry / "meta.yaml").unlink()
+    found = {p.name for p in discover_entries(tmp_path)}
+    assert "no_meta_here" in found
+
+
+def test_check_entry_flags_missing_meta_yaml(tmp_path: Path):
+    entry = write_entry(tmp_path, slug="no_meta_here")
+    (entry / "meta.yaml").unlink()
+    errors = check_entry(entry)
+    assert any("missing meta.yaml" in e for e in errors)
+
+
+def test_main_no_args_returns_one_when_entry_missing_meta_yaml(tmp_path: Path, monkeypatch):
+    entry = write_entry(tmp_path, slug="no_meta_here")
+    (entry / "meta.yaml").unlink()
+    import check_entry as check_entry_module
+
+    monkeypatch.setattr(check_entry_module, "COMMUNITY_DIR", tmp_path)
+    assert main([]) == 1
+
+
 def test_main_returns_zero_for_valid_entry(tmp_path: Path):
     entry = write_entry(tmp_path)
     assert main([str(entry)]) == 0

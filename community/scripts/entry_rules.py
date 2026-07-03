@@ -121,6 +121,7 @@ def validate_proof(entry: Path) -> list[str]:
 _FOLDER_NAME_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)+$")
 _SECRET_PATTERNS = [
     re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"sk-(?:proj|svcacct)-[A-Za-z0-9_-]{20,}"),
     re.compile(r"sk-[A-Za-z0-9]{20,}"),
     re.compile(r"""OPIK_API_KEY\s*[=:]\s*["'][^"']+["']"""),
 ]

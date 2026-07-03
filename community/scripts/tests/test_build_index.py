@@ -42,3 +42,20 @@ def test_check_index_detects_stale(tmp_path: Path):
     write_entry(tmp_path, slug="jane_agent")
     (tmp_path / "README.md").write_text("# stale\n")
     assert check_index(tmp_path) is False
+
+
+def test_pipe_in_description_is_escaped_in_table_row(tmp_path: Path):
+    write_entry(
+        tmp_path,
+        slug="jane_agent",
+        meta={"description": "Handles A | B and C | D cases"},
+    )
+    out = render_index(load_entries(tmp_path))
+    table_line = next(line for line in out.splitlines() if line.startswith("| [Real"))
+    assert "A \\| B and C \\| D" in table_line
+    # Stripping the leading/trailing "| " and splitting on " | " must yield
+    # exactly 7 columns; escaped pipes must not be miscounted as separators.
+    stripped = table_line.strip()
+    assert stripped.startswith("| ") and stripped.endswith(" |")
+    inner = stripped[2:-2]
+    assert len(inner.split(" | ")) == 7

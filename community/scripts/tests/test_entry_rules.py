@@ -158,6 +158,14 @@ def test_hardcoded_key_is_flagged(tmp_path: Path):
     assert any("hardcoded" in e.lower() or "key" in e.lower() for e in validate_no_secrets(entry))
 
 
+def test_sk_proj_key_is_flagged(tmp_path: Path):
+    entry = write_entry(
+        tmp_path,
+        code={"app.py": 'client = OpenAI(api_key="sk-proj-abcdefghijklmnopqrstuvwxyz012345")\n'},
+    )
+    assert any("hardcoded" in e.lower() or "key" in e.lower() for e in validate_no_secrets(entry))
+
+
 def test_hosted_without_opik_usage_is_error(tmp_path: Path):
     entry = write_entry(
         tmp_path,

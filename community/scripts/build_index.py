@@ -47,23 +47,33 @@ def load_entries(community_dir: Path) -> list[dict]:
     return entries
 
 
+def _escape_pipes(value: str) -> str:
+    return value.replace("|", "\\|")
+
+
 def _links_cell(links: dict) -> str:
-    parts = [f"[{label}]({url})" for label, url in links.items() if str(url).startswith("http")]
+    parts = [
+        f"[{_escape_pipes(str(label))}]({url})"
+        for label, url in links.items()
+        if str(url).startswith("http")
+    ]
     return "<br>".join(parts) if parts else ""
 
 
 def _row(entry: dict) -> str:
-    project = f"[{entry['title']}]({entry['slug']}/)"
+    project = f"[{_escape_pipes(entry['title'])}]({entry['slug']}/)"
     author = (
-        f"[@{entry['author']}](https://github.com/{entry['author']})" if entry["author"] else ""
+        f"[@{_escape_pipes(entry['author'])}](https://github.com/{entry['author']})"
+        if entry["author"]
+        else ""
     )
-    tags = ", ".join(str(t) for t in entry["tags"])
+    tags = _escape_pipes(", ".join(str(t) for t in entry["tags"]))
     hosted = "hosted" if entry["hosted"] else ""
     cells = [
         project,
         author,
-        entry["description"],
-        entry["opik_platform"],
+        _escape_pipes(entry["description"]),
+        _escape_pipes(entry["opik_platform"]),
         _links_cell(entry["links"]),
         hosted,
         tags,
@@ -83,12 +93,14 @@ def render_index(entries: list[dict]) -> str:
 
 
 def write_index(community_dir: Path) -> None:
-    (community_dir / "README.md").write_text(render_index(load_entries(community_dir)))
+    (community_dir / "README.md").write_text(
+        render_index(load_entries(community_dir)), encoding="utf-8"
+    )
 
 
 def check_index(community_dir: Path) -> bool:
     readme = community_dir / "README.md"
-    current = readme.read_text() if readme.is_file() else ""
+    current = readme.read_text(encoding="utf-8") if readme.is_file() else ""
     return current == render_index(load_entries(community_dir))
 
 

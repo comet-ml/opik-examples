@@ -17,12 +17,11 @@ RESERVED_DIRS = {"scripts", "templates"}
 
 
 def discover_entries(community_dir: Path) -> list[Path]:
-    entries = [
+    return [
         child
         for child in sorted(community_dir.iterdir())
-        if child.is_dir() and child.name not in RESERVED_DIRS and (child / "meta.yaml").is_file()
+        if child.is_dir() and child.name not in RESERVED_DIRS
     ]
-    return entries
 
 
 def check_entry(entry: Path) -> list[str]:
