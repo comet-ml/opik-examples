@@ -187,3 +187,28 @@ def test_hosted_with_opik_usage_ok(tmp_path: Path):
 def test_listed_entry_skips_code_check(tmp_path: Path):
     entry = write_entry(tmp_path, meta={"hosted": False})
     assert validate_code_uses_opik(entry) == []
+
+
+def test_non_ascii_readme_and_meta_are_read_as_utf8(tmp_path: Path):
+    readme = (
+        "# 支持代理 — Real-time support agent’s Opik tracing\n\n"
+        "## What I built\n"
+        "一个通过 RAG 索引回答账单问题的支持代理 — built with love.\n\n"
+        "## Problem it solves\n"
+        "客服代表花费数小时处理重复的账单问题。\n\n"
+        "## What I learned\n"
+        "Opik’s span metadata made it obvious which retrieval step was dropping context.\n\n"
+        "## How I used Opik\n"
+        "Traced each agent turn with `@opik.track` — see the screenshot:\n\n"
+        "![Opik traces](opik-proof.png)\n"
+    )
+    entry = write_entry(
+        tmp_path,
+        readme=readme,
+        meta={
+            "title": "支持代理 — Real-time support agent",
+            "description": "客服支持代理 — traced end-to-end with an LLM-judge eval loop’s help.",
+        },
+    )
+    assert validate_readme(entry) == []
+    assert validate_meta(entry) == []

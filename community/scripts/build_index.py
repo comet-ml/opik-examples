@@ -53,7 +53,7 @@ def _escape_pipes(value: str) -> str:
 
 def _links_cell(links: dict) -> str:
     parts = [
-        f"[{_escape_pipes(str(label))}]({url})"
+        f"[{_escape_pipes(str(label))}]({_escape_pipes(str(url))})"
         for label, url in links.items()
         if str(url).startswith("http")
     ]
@@ -63,7 +63,7 @@ def _links_cell(links: dict) -> str:
 def _row(entry: dict) -> str:
     project = f"[{_escape_pipes(entry['title'])}]({entry['slug']}/)"
     author = (
-        f"[@{_escape_pipes(entry['author'])}](https://github.com/{entry['author']})"
+        f"[@{_escape_pipes(entry['author'])}](https://github.com/{_escape_pipes(entry['author'])})"
         if entry["author"]
         else ""
     )

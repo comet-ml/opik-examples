@@ -22,7 +22,7 @@ def load_meta(entry: Path) -> tuple[dict, list[str]]:
     if not meta_path.is_file():
         return {}, [f"{entry.name}: missing meta.yaml"]
     try:
-        data = yaml.safe_load(meta_path.read_text())
+        data = yaml.safe_load(meta_path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         return {}, [f"{entry.name}: meta.yaml is not valid YAML ({exc})"]
     if not isinstance(data, dict):
@@ -94,7 +94,7 @@ def validate_readme(entry: Path) -> list[str]:
     if not readme_path.is_file():
         return [f"{entry.name}: missing README.md"]
 
-    bodies = _section_bodies(readme_path.read_text())
+    bodies = _section_bodies(readme_path.read_text(encoding="utf-8"))
     errors: list[str] = []
     for section in REQUIRED_SECTIONS:
         if section not in bodies:
@@ -112,7 +112,7 @@ def validate_proof(entry: Path) -> list[str]:
         errors.append(f"{entry.name}: missing opik-proof.png (screenshot of your Opik traces)")
         return errors
     readme_path = entry / "README.md"
-    text = readme_path.read_text() if readme_path.is_file() else ""
+    text = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
     if "opik-proof.png" not in text:
         errors.append(f"{entry.name}: opik-proof.png must be referenced from README.md")
     return errors
@@ -154,7 +154,7 @@ def validate_no_secrets(entry: Path) -> list[str]:
 
     for path in _iter_text_files(entry):
         try:
-            text = path.read_text(errors="ignore")
+            text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
         for pattern in _SECRET_PATTERNS:
@@ -176,7 +176,7 @@ def validate_code_uses_opik(entry: Path) -> list[str]:
 
     for path in entry.rglob("*"):
         if path.is_file() and path.suffix.lower() in {".py", ".ipynb"}:
-            text = path.read_text(errors="ignore")
+            text = path.read_text(encoding="utf-8", errors="ignore")
             if any(marker in text for marker in _OPIK_MARKERS):
                 return []
     return [
