@@ -2,7 +2,14 @@ from pathlib import Path
 
 from conftest import write_entry
 
-from entry_rules import validate_meta, validate_proof, validate_readme
+from entry_rules import (
+    validate_code_uses_opik,
+    validate_folder_name,
+    validate_meta,
+    validate_no_secrets,
+    validate_proof,
+    validate_readme,
+)
 
 
 def test_valid_meta_has_no_errors(tmp_path: Path):
@@ -109,3 +116,66 @@ def test_png_not_referenced_is_error(tmp_path: Path):
     )
     entry = write_entry(tmp_path, readme=readme)
     assert any("referenced" in e.lower() for e in validate_proof(entry))
+
+
+def test_valid_folder_name_ok(tmp_path: Path):
+    entry = write_entry(tmp_path, slug="jane_agent")
+    assert validate_folder_name(entry) == []
+
+
+def test_bad_folder_name_is_error(tmp_path: Path):
+    entry = write_entry(tmp_path, slug="JaneAgent")
+    assert any("folder name" in e.lower() for e in validate_folder_name(entry))
+
+
+def test_folder_name_without_underscore_is_error(tmp_path: Path):
+    entry = write_entry(tmp_path, slug="janeagent")
+    assert any("folder name" in e.lower() for e in validate_folder_name(entry))
+
+
+def test_clean_entry_has_no_secret_findings(tmp_path: Path):
+    entry = write_entry(tmp_path)
+    assert validate_no_secrets(entry) == []
+
+
+def test_dotenv_file_is_flagged(tmp_path: Path):
+    entry = write_entry(tmp_path)
+    (entry / ".env").write_text("OPIK_API_KEY=abc\n")
+    assert any(".env" in e for e in validate_no_secrets(entry))
+
+
+def test_dotenv_example_is_not_flagged(tmp_path: Path):
+    entry = write_entry(tmp_path)
+    (entry / ".env.example").write_text("OPIK_API_KEY=\n")
+    assert validate_no_secrets(entry) == []
+
+
+def test_hardcoded_key_is_flagged(tmp_path: Path):
+    entry = write_entry(
+        tmp_path,
+        code={"app.py": 'client = OpenAI(api_key="sk-abcdefghijklmnopqrstuvwxyz123456")\n'},
+    )
+    assert any("hardcoded" in e.lower() or "key" in e.lower() for e in validate_no_secrets(entry))
+
+
+def test_hosted_without_opik_usage_is_error(tmp_path: Path):
+    entry = write_entry(
+        tmp_path,
+        meta={"hosted": True},
+        code={"app.py": "def run():\n    return 1\n"},
+    )
+    assert any("opik" in e.lower() for e in validate_code_uses_opik(entry))
+
+
+def test_hosted_with_opik_usage_ok(tmp_path: Path):
+    entry = write_entry(
+        tmp_path,
+        meta={"hosted": True},
+        code={"app.py": "import opik\n\n@opik.track\ndef run():\n    return 1\n"},
+    )
+    assert validate_code_uses_opik(entry) == []
+
+
+def test_listed_entry_skips_code_check(tmp_path: Path):
+    entry = write_entry(tmp_path, meta={"hosted": False})
+    assert validate_code_uses_opik(entry) == []

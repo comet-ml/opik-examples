@@ -116,3 +116,69 @@ def validate_proof(entry: Path) -> list[str]:
     if "opik-proof.png" not in text:
         errors.append(f"{entry.name}: opik-proof.png must be referenced from README.md")
     return errors
+
+
+_FOLDER_NAME_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)+$")
+_SECRET_PATTERNS = [
+    re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"sk-[A-Za-z0-9]{20,}"),
+    re.compile(r"""OPIK_API_KEY\s*[=:]\s*["'][^"']+["']"""),
+]
+_TEXT_SUFFIXES = {".py", ".ipynb", ".md", ".txt", ".yaml", ".yml", ".toml", ".sh", ".json"}
+_OPIK_MARKERS = ["import opik", "from opik", "@opik.track", "opik.Opik(", "OPIK_"]
+
+
+def validate_folder_name(entry: Path) -> list[str]:
+    if not _FOLDER_NAME_RE.match(entry.name):
+        return [
+            f"{entry.name}: folder name must be lowercase '<author>_<project>' "
+            f"(letters/digits/underscores, at least one underscore)"
+        ]
+    return []
+
+
+def _iter_text_files(entry: Path):
+    for path in entry.rglob("*"):
+        if path.is_file() and path.suffix.lower() in _TEXT_SUFFIXES:
+            yield path
+
+
+def validate_no_secrets(entry: Path) -> list[str]:
+    errors: list[str] = []
+    for path in entry.rglob(".env"):
+        if path.is_file() and path.name == ".env":
+            errors.append(
+                f"{entry.name}: committed .env file at {path.relative_to(entry)} — remove it"
+            )
+
+    for path in _iter_text_files(entry):
+        try:
+            text = path.read_text(errors="ignore")
+        except OSError:
+            continue
+        for pattern in _SECRET_PATTERNS:
+            if pattern.search(text):
+                errors.append(
+                    f"{entry.name}: possible hardcoded secret/key in {path.relative_to(entry)} "
+                    f"— load credentials from environment variables instead"
+                )
+                break
+    return errors
+
+
+def validate_code_uses_opik(entry: Path) -> list[str]:
+    data, load_errors = load_meta(entry)
+    if load_errors:
+        return []  # meta problems are reported by validate_meta; don't double-report
+    if data.get("hosted") is not True:
+        return []
+
+    for path in entry.rglob("*"):
+        if path.is_file() and path.suffix.lower() in {".py", ".ipynb"}:
+            text = path.read_text(errors="ignore")
+            if any(marker in text for marker in _OPIK_MARKERS):
+                return []
+    return [
+        f"{entry.name}: hosted entry has no code that uses Opik "
+        f"(expected one of: import opik, @opik.track, opik.Opik(, OPIK_)"
+    ]
