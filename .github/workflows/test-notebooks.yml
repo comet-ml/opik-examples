@@ -124,7 +124,7 @@ jobs:
           python-version: "3.12"
 
       - name: Execute notebooks (live, real Opik credentials)
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         env:
           OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
           OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
