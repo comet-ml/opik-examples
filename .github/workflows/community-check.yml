@@ -1,0 +1,53 @@
+name: Community Entry Check
+
+# Lightweight, non-executing gate for community showcase entries.
+# It does NOT run contributor code. It validates entry structure, scans for
+# committed secrets, and confirms hosted entries use Opik. Secrets-free, so it
+# runs on forks. The showcase index (community/README.md) is regenerated
+# separately on merge by community-index.yml — contributors run nothing.
+#
+# Community entries are intentionally exempt from the verified-bucket workflows
+# (compliance / pr-test / test-notebooks / scheduled), which are path-scoped to
+# examples|integrations|scripts|use-cases|guides and never match community/**.
+
+on:
+  pull_request:
+    paths:
+      - "community/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install tooling
+        run: |
+          cd community/_ci
+          uv sync
+
+      - name: Unit-test the check tooling
+        run: |
+          cd community/_ci
+          uv run pytest -q
+
+      - name: Lint the check tooling
+        run: |
+          cd community/_ci
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Validate all community entries
+        run: |
+          cd community/_ci
+          uv run python check_entry.py
