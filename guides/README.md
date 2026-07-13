@@ -5,6 +5,7 @@ Task-oriented examples for doing something specific with Opik — combining Opik
 | Guide | Description |
 |---|---|
 | [annotation_queues_with_context/](./annotation_queues_with_context/) | Structure RAG traces for Opik annotation queues — clean answer in output, context in metadata, full detail in child spans |
+| [multimodal_online_evaluation/](./multimodal_online_evaluation/) | Run an online LLM-as-judge eval over multimodal (text + image) traces — create the rule in the UI and with the SDK |
 | [tracing_finetuned_models/](./tracing_finetuned_models/) | Fine-tune a model, register it to the CometML Model Registry, then fetch and trace inference in Opik |
 
 [Contribute one](../CONTRIBUTING.md).
