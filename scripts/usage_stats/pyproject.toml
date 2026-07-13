@@ -7,11 +7,10 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
     "opik>=1.11.0",
     "pandas>=2.0",
-    "matplotlib>=3.7",
 ]
 
 [dependency-groups]
-dev = ["ruff"]
+dev = ["ruff", "pytest>=8.0"]
 
 # WHY: loose runnable script, not an installable package — uv manages the env but builds nothing.
 [tool.uv]
@@ -23,3 +22,10 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["report"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["."]
