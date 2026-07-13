@@ -1,0 +1,29 @@
+[project]
+name = "google-adk-rag"
+version = "0.1.0"
+description = "Trace a Google ADK Agentic RAG router (Qdrant + web search) with Opik."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "google-adk",
+    "opik>=2.0",
+    "pypdfium2",
+    "fastembed",
+    "qdrant-client",
+    "ddgs",
+    "tqdm",
+]
+
+[dependency-groups]
+dev = ["ruff"]
+
+# WHY: loose runnable scripts, not an installable package — uv manages the env but builds nothing.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

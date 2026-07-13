@@ -2,6 +2,12 @@
 
 Thank you for contributing. This repo is a reference library for Opik users — the goal is examples that are easy to find, easy to run, and easy to adapt.
 
+> **Contributing community showcase work instead of a verified example?** The
+> `community/` folder has its own, lighter-weight contract — see
+> [community/CONTRIBUTING.md](community/CONTRIBUTING.md). The rules below apply
+> to the verified `integrations/`, `guides/`, `use-cases/`, and `scripts/`
+> buckets.
+
 ## Recommended workflow
 
 This is the loop we follow for non-trivial contributions. The slash-commands in brackets come from Claude Code plugins (see below) and are optional but recommended. **Start every contribution with `/brainstorming`** to agree on scope, and **finish by reviewing your own PR with `/review`** before asking a human.

@@ -26,4 +26,6 @@ poetry.lock
 
 # Local planning/process artifacts (superpowers brainstorm specs & implementation plans) — kept local, never committed
 docs/superpowers/
-*.log
+
+# Community proof screenshots are intentionally committed (overrides the global *.png rule above)
+!community/**/*.png

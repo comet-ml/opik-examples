@@ -1,0 +1,56 @@
+name: Community Index
+
+# Regenerates the community showcase index (community/README.md) from every
+# entry's meta.yaml after changes land on main. This keeps the index current
+# with zero manual action — contributors never run the generator, and no one
+# hand-edits community/README.md.
+#
+# It runs build_index.py (which only parses YAML — it never executes contributor
+# code) and commits the result back to main only if it changed. The path filter
+# excludes community/README.md so this workflow's own index commit does not
+# re-trigger it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "community/**"
+      - "!community/README.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: community-index
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Regenerate showcase index
+        run: |
+          cd community/_ci
+          uv sync
+          uv run python build_index.py
+
+      - name: Commit index if it changed
+        run: |
+          if [[ -n "$(git status --porcelain community/README.md)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add community/README.md
+            git commit -m "chore: regenerate community showcase index"
+            git push
+          else
+            echo "Showcase index already up to date."
+          fi

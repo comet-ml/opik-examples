@@ -22,6 +22,7 @@ Examples for teams using a specific framework who want to add Opik.
 
 | | Description |
 |---|---|
+| [integrations/google_adk/agentic_rag](integrations/google_adk/agentic_rag/) | Trace a Google ADK Agentic RAG router with Opik |
 | [integrations/otel/offline_evaluation](integrations/otel/offline_evaluation/) | OTel tracing alongside Opik's offline evaluation workflow |
 | [integrations/otel/distributed_tracing](integrations/otel/distributed_tracing/) | Stitch out-of-process tool call spans into a single trace |
 
@@ -32,6 +33,7 @@ Task-oriented examples for specific Opik workflows and patterns.
 | | Description |
 |---|---|
 | [guides/annotation_queues_with_context](guides/annotation_queues_with_context/) | Structure RAG traces for Opik annotation queues — clean answer in output, context in metadata, full detail in child spans |
+| [guides/multimodal_online_evaluation](guides/multimodal_online_evaluation/) | Online LLM-as-judge evaluation over multimodal (text + image) traces, created both in the UI and via the SDK |
 | [guides/tracing_finetuned_models](guides/tracing_finetuned_models/) | Fine-tune a model, register it to the CometML Model Registry, then fetch and trace inference in Opik |
 
 ## Use Cases
@@ -54,6 +56,16 @@ Standalone scripts for automating and managing Opik resources.
 | [scripts/automate_annotation_queue](scripts/automate_annotation_queue/) | Route traces into annotation queues via batch or real-time assignment |
 | [scripts/usage_stats](scripts/usage_stats/) | Fetch trace and span counts per project and visualise trends |
 | [scripts/leaderboard_dashboard](scripts/leaderboard_dashboard/) | Create an Experiment Leaderboard dashboard via the REST API |
+
+## Community
+
+Work built with Opik by the open-source community. Unlike the buckets above,
+these entries are **community-contributed and not maintainer-verified** — they
+showcase what people are building. Standout real-world projects get hosted
+in-repo and spotlighted in our community forums.
+
+Browse them in [community/](community/), or add your own via
+[community/CONTRIBUTING.md](community/CONTRIBUTING.md).
 
 ## Contributing
 
