@@ -57,6 +57,16 @@ Standalone scripts for automating and managing Opik resources.
 | [scripts/usage_stats](scripts/usage_stats/) | Fetch trace and span counts per project and visualise trends |
 | [scripts/leaderboard_dashboard](scripts/leaderboard_dashboard/) | Create an Experiment Leaderboard dashboard via the REST API |
 
+## Community
+
+Work built with Opik by the open-source community. Unlike the buckets above,
+these entries are **community-contributed and not maintainer-verified** — they
+showcase what people are building. Standout real-world projects get hosted
+in-repo and spotlighted in our community forums.
+
+Browse them in [community/](community/), or add your own via
+[community/CONTRIBUTING.md](community/CONTRIBUTING.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution guide and example template.

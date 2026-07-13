@@ -1,0 +1,10 @@
+# Copy this whole folder to community/<your-github-handle>_<project>/ and fill it in.
+title: Short project title
+description: One line describing what you built (shows in the showcase index).
+author: your-github-handle
+links:
+  repo: https://github.com/your-handle/your-project   # at least one http(s) link required
+  # blog: https://...                                 # optional extra links
+opik_platform: cloud        # cloud | self-hosted
+tags: [agent, rag]          # free-form; may be empty []
+hosted: false               # leave false; a maintainer sets this true when promoting

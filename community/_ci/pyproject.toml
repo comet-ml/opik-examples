@@ -1,0 +1,20 @@
+[project]
+name = "opik-community-scripts"
+version = "0.1.0"
+description = "Validation and index tooling for the Opik community folder"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
