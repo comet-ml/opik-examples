@@ -12,15 +12,16 @@ Thank you for contributing. This repo is a reference library for Opik users — 
 
 This is the loop we follow for non-trivial contributions. The slash-commands in brackets come from Claude Code plugins (see below) and are optional but recommended. **Start every contribution with `/brainstorming`** to agree on scope, and **finish by reviewing your own PR with `/review`** before asking a human.
 
-1. **Plan first.** Switch Claude Code to plan mode on the best available model with reasoning effort maxed before writing any code.
-2. **Brainstorm the scope** (`/brainstorming`) — agree on *what* to build before *how*.
-3. **Write the plan** (`/writing-plans`) — turn the agreed scope into an implementation plan.
-4. **Cut a feature branch** — `git switch -c <user>/<topic>` (never commit on `main`).
-5. **Implement and commit frequently** — small [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`).
-6. **Test and fix** — run the example in dry-run (and with credentials if you have them) until it works; `uv run ruff check .` is clean.
-7. **Update the READMEs** — the example's own README plus any index tables (see the [PR checklist](#pr-checklist)).
-8. **Open a PR with a description** — what changed and why. A human merges it.
-9. **Review your own PR** (`/review`) before requesting human review.
+1. **Find or open an issue, and claim it.** Planned examples are tracked in [GitHub Issues](https://github.com/comet-ml/opik-examples/issues). Pick one you want to build (or file one with the *Example proposal* form), then **comment on it to claim it** so we don't double up.
+2. **Plan first.** Switch Claude Code to plan mode on the best available model with reasoning effort maxed before writing any code.
+3. **Brainstorm the scope** (`/brainstorming`) — agree on *what* to build before *how*.
+4. **Write the plan** (`/writing-plans`) — turn the agreed scope into an implementation plan.
+5. **Cut a feature branch** — `git switch -c <user>/<topic>` (never commit on `main`).
+6. **Open a draft PR early that links the issue.** As soon as you branch, open a **draft** PR with `Closes #<issue>` in the description — this is how we track what's in-flight.
+7. **Implement and commit frequently** — small [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`).
+8. **Test and fix** — run the example in dry-run (and with credentials if you have them) until it works; `uv run ruff check .` is clean.
+9. **Update the READMEs** — the example's own README plus any index tables (see the [PR checklist](#pr-checklist)).
+10. **Mark the PR ready for review** with a description of what changed and why, then **review your own PR** (`/review`) before requesting human review. A human merges it.
 
 **Recommended Claude Code plugins:** `superpowers` (provides `/brainstorming`, `/writing-plans`, and `/review`) and `caveman` (terse output mode). Install `superpowers` from inside Claude Code:
 

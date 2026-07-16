@@ -69,4 +69,6 @@ Browse them in [community/](community/), or add your own via
 
 ## Contributing
 
+Planned examples are tracked in [Issues](https://github.com/comet-ml/opik-examples/issues) — browse open ones to see what's wanted, or propose your own with the **Example proposal** template. Comment to claim an issue before you start.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution guide and example template.

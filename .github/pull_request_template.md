@@ -1,11 +1,14 @@
 ## What & why
 
-<!-- What does this PR change, and why? Link any related issue. -->
+<!-- What does this PR change, and why? -->
+
+Closes #<!-- the tracking issue this PR implements; comment on it to claim it before starting -->
 
 ## Checklist
 
 <!-- See CONTRIBUTING.md for details. Tick what applies; delete rows that don't. -->
 
+- [ ] Linked to its tracking issue (commented to claim it before starting)
 - [ ] Example is in the right bucket (`integrations` / `guides` / `use-cases` / `scripts`)
 - [ ] Folder name is `lowercase_with_underscores`
 - [ ] `README.md` has all required sections; index tables updated if examples were added/renamed/removed

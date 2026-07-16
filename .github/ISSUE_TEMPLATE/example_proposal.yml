@@ -1,0 +1,53 @@
+name: 💡 Example proposal
+description: Propose a new Opik example, guide, integration, or utility script
+title: "[Example]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an example! **Want to build it yourself?**
+        Comment on this issue to claim it, then open a **draft PR that links back here**
+        (`Closes #<this issue>`) so we can see it's in-flight.
+        See the [contributing guide](https://github.com/comet-ml/opik-examples/blob/main/CONTRIBUTING.md).
+  - type: dropdown
+    id: bucket
+    attributes:
+      label: Bucket
+      description: Which part of the repo would this live in?
+      options:
+        - Guide (how-to for an Opik workflow)
+        - Integration (add Opik to a framework/library)
+        - Use-case (end-to-end app using Opik)
+        - Utility script (automate/manage Opik resources)
+        - Chore (repo maintenance / CI)
+    validations:
+      required: true
+  - type: textarea
+    id: what-why
+    attributes:
+      label: What & why
+      description: What problem does this solve, and what should the example demonstrate?
+      placeholder: e.g. Show how to visualise multi-turn feedback scores to understand conversation trajectory.
+    validations:
+      required: true
+  - type: dropdown
+    id: opik-products
+    attributes:
+      label: Opik products / features involved
+      description: Select all that apply (optional).
+      multiple: true
+      options:
+        - Tracing / observability
+        - Datasets
+        - Experiments & evaluation (offline)
+        - Online evaluation (LLM-as-judge rules)
+        - Test suites
+        - Prompt optimization (Optimizer)
+        - Prompt library / versioning
+        - Annotation queues
+        - Feedback scores / human review
+        - Threads (multi-turn conversations)
+        - Metrics (built-in / custom)
+        - Guardrails
+        - Other / not sure
