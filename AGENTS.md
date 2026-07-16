@@ -68,6 +68,8 @@ Every example is a `uv` project: its `pyproject.toml` is the single source of tr
 - **Principles:** DRY, KISS, SOLID, YAGNI. Prefer reusing an existing helper over adding a new one.
 - **Type hints** on function signatures. Match the surrounding file's style, naming, and comment density.
 - **Git / PR safety:**
+  - **Claim the tracking issue before starting.** Work is tracked in [GitHub Issues](https://github.com/comet-ml/opik-examples/issues) — comment on the relevant issue to claim it before writing code. If none exists, ask the user whether to open one (via the *Example proposal* form).
+  - **Open a draft PR that links the issue early.** Right after cutting the branch, open a **draft** PR with `Closes #<issue>` in the body so in-flight work is visible; mark it ready for review only when complete.
   - Never `git commit` or `git push` on `main`/`master`. Cut a feature branch (`<user>/<topic>`, e.g. `fschlz/feature/...`), push there, open a PR, and let a human merge.
   - Commits follow **Conventional Commits**: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`.
   - Never `gh pr merge`, `gh pr close`, or `gh pr review --approve` — author/reviewer actions only. Blocked in [`.claude/settings.json`](.claude/settings.json).
