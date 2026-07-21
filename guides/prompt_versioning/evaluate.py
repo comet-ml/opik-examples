@@ -4,8 +4,8 @@ import opik
 from opik.evaluation import evaluate_prompt
 from opik.evaluation.metrics import Hallucination
 
+from config import DRY_RUN, JUDGE_MODEL, OPIK_PROJECT_NAME
 from prompts import SUMMARIZER_V1, SUMMARIZER_V2
-from config import DRY_RUN, OPIK_PROJECT_NAME, JUDGE_MODEL
 
 SUMMARIZER_PROMPT_NAME = "summarizerfintechv1"
 DATASET_NAME = "prompt-versioning-summary-eg"
@@ -15,7 +15,10 @@ TRANSCRIPT = (
     "10% to $43.8 billion. CEO Tim Cook said 'We're thrilled with the strong demand for "
     "iPhone 15 Pro.'"
 )
-CONTEXT = "Q4 revenue: $89.5B, +6% YoY. iPhone: $43.8B, +10%. Tim Cook commented on iPhone 15 Pro demand."
+CONTEXT = (
+    "Q4 revenue: $89.5B, +6% YoY. iPhone: $43.8B, +10%. "
+    "Tim Cook commented on iPhone 15 Pro demand."
+)
 QUERY = f"Summarize this earnings call:\n{TRANSCRIPT}"
 
 def build_dataset(client: opik.Opik) -> opik.Dataset:

@@ -2,8 +2,9 @@
 
 import litellm
 import opik
+
+from config import DRY_RUN, LLM_MODEL, OPIK_PROJECT_NAME
 from version import PROMPT_NAME, get_latest
-from config import DRY_RUN, OPIK_PROJECT_NAME, LLM_MODEL
 
 USER_QUERY = "Should I put my savings in Bitcoin or index funds?"
 

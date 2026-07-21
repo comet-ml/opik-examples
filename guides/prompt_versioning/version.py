@@ -3,8 +3,9 @@ Every call to `client.create_prompt` with the same `name` creates a new, immutab
 version ("commit") of that prompt nothing is overwritten. `client.get_prompt` fetches a specific commit"""
 
 import opik
-from prompts import FINTECH_ASSISTANT_V1, FINTECH_ASSISTANT_V2
+
 from config import DRY_RUN
+from prompts import FINTECH_ASSISTANT_V1, FINTECH_ASSISTANT_V2
 
 PROMPT_NAME = "fintechassistv1"
 
