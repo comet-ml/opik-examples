@@ -9,17 +9,21 @@ from prompts import FINTECH_ASSISTANT_V1, FINTECH_ASSISTANT_V2
 
 PROMPT_NAME = "fintechassistv1"
 
+
 def create_version(client: opik.Opik, prompt_text: str, tag: str) -> opik.Prompt:
     """Save a new version of PROMPT_NAME to the Prompt Library."""
     return client.create_prompt(name=PROMPT_NAME, prompt=prompt_text, metadata={"tag": tag})
+
 
 def get_latest(client: opik.Opik) -> opik.Prompt:
     """Fetch the most recently committed version of PROMPT_NAME."""
     return client.get_prompt(name=PROMPT_NAME)
 
+
 def get_version(client: opik.Opik, commit: str) -> opik.Prompt:
     """Fetch a specific commit of PROMPT_NAME."""
     return client.get_prompt(name=PROMPT_NAME, commit=commit)
+
 
 def main() -> None:
     if DRY_RUN:
@@ -39,6 +43,7 @@ def main() -> None:
 
     latest = get_latest(client)
     print(f"Latest version of '{PROMPT_NAME}' is commit {latest.commit}")
+
 
 if __name__ == "__main__":
     main()

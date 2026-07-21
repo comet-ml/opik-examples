@@ -8,6 +8,7 @@ from version import PROMPT_NAME, get_latest
 
 USER_QUERY = "Should I put my savings in Bitcoin or index funds?"
 
+
 @opik.track(project_name=OPIK_PROJECT_NAME)
 def run_inference(system_prompt: str, user_query: str) -> str:
     response = litellm.completion(
@@ -18,6 +19,7 @@ def run_inference(system_prompt: str, user_query: str) -> str:
         ],
     )
     return response.choices[0].message.content
+
 
 def main() -> None:
     if DRY_RUN:
@@ -34,6 +36,7 @@ def main() -> None:
 
     answer = run_inference(prompt.prompt, USER_QUERY)
     print(f"\n{answer}")
+
 
 if __name__ == "__main__":
     main()

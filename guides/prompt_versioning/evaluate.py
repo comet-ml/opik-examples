@@ -15,16 +15,15 @@ TRANSCRIPT = (
     "10% to $43.8 billion. CEO Tim Cook said 'We're thrilled with the strong demand for "
     "iPhone 15 Pro.'"
 )
-CONTEXT = (
-    "Q4 revenue: $89.5B, +6% YoY. iPhone: $43.8B, +10%. "
-    "Tim Cook commented on iPhone 15 Pro demand."
-)
+CONTEXT = "Q4 revenue: $89.5B, +6% YoY. iPhone: $43.8B, +10%. Tim Cook commented on iPhone 15 Pro demand."
 QUERY = f"Summarize this earnings call:\n{TRANSCRIPT}"
+
 
 def build_dataset(client: opik.Opik) -> opik.Dataset:
     dataset = client.get_or_create_dataset(name=DATASET_NAME, project_name=OPIK_PROJECT_NAME)
     dataset.insert([{"input": QUERY, "context": CONTEXT}])
     return dataset
+
 
 def score_version(dataset: opik.Dataset, prompt: opik.Prompt, experiment_name: str):
     return evaluate_prompt(
@@ -38,6 +37,7 @@ def score_version(dataset: opik.Dataset, prompt: opik.Prompt, experiment_name: s
         experiment_name=experiment_name,
         prompt=prompt,
     )
+
 
 def main() -> None:
     if DRY_RUN:
@@ -60,6 +60,7 @@ def main() -> None:
     score_version(dataset, v2, "summarizer-v2-strict")
 
     print("Experiments logged to Opik — compare the Hallucination scores for v1 vs v2 in the UI.")
+
 
 if __name__ == "__main__":
     main()
