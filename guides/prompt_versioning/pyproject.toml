@@ -1,0 +1,24 @@
+[project]
+name = "prompt-versioning"
+version = "0.1.0"
+description = "Version prompts in the Opik Prompt Library, evaluate versions for hallucination, and run inference against the latest committed version via the OpenAI SDK."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "opik>=2.0.74",
+    "openai>=1.0",
+]
+
+[dependency-groups]
+dev = ["ruff"]
+
+# WHY: loose runnable scripts, not an installable package — uv manages the env only.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
