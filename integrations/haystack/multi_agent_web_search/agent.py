@@ -70,5 +70,6 @@ def main() -> None:
         return
     print(run_agent(QUERY))
 
+
 if __name__ == "__main__":
     main()
