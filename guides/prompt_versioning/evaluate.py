@@ -1,19 +1,14 @@
 """Score two prompt versions for hallucination using an Opik dataset + evaluate_prompt"""
 
-import os
 import opik
 from opik.evaluation import evaluate_prompt
 from opik.evaluation.metrics import Hallucination
 
 from prompts import SUMMARIZER_V1, SUMMARIZER_V2
-from version import DRY_RUN, OPIK_PROJECT_NAME
+from config import DRY_RUN, OPIK_PROJECT_NAME, JUDGE_MODEL
 
-from dotenv import load_dotenv
-load_dotenv()
-
-SUMMARIZER_PROMPT_NAME = "summaryfintechv1"
-DATASET_NAME = "prompt-versioning-scores"
-JUDGE_MODEL = os.environ.get("OPIK_EXAMPLES_MODEL", "openai/gpt-5-mini")
+SUMMARIZER_PROMPT_NAME = "summarizerfintechv1"
+DATASET_NAME = "prompt-versioning-summary-eg"
 
 TRANSCRIPT = (
     "Apple reported Q4 revenue of $89.5 billion, up 6% year-over-year. iPhone revenue grew "
