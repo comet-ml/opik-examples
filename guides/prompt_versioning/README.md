@@ -1,7 +1,7 @@
 # Prompt Versioning
 
 Version prompts in the Opik Prompt Library, compare versions for hallucination before you
-ship one, then run inference against whichever version is currently the latest commit —
+ship one, then run inference against whichever version is currently the latest commit
 without hardcoding the prompt text into your application.
 
 ## What this does
@@ -27,7 +27,7 @@ a real OpenAI call.
 ## Prerequisites
 
 ```bash
-uv sync    # or: pip install "opik>=2.0.74" "openai>=1.0"
+uv sync    # or: uv pip install "opik>=2.0.74" "openai>=1.0"
 ```
 
 | Variable | Required for | Description |
@@ -54,6 +54,8 @@ uv run python version.py     # commits 2 versions of 'fintech-assistant', prints
 uv run python evaluate.py    # commits 2 versions of 'summarizer-fintech', logs 2 experiments
 uv run python inference.py   # fetches the latest 'fintech-assistant' commit, runs it via OpenAI
 ```
+
+Or just run `./run.sh` to do all three in sequence
 
 ## How it works
 
