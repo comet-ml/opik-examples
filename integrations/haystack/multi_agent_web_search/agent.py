@@ -9,7 +9,7 @@ tool chain via `OpikConnector`.
 import os
 from typing import Annotated
 
-os.environ["HAYSTACK_CONTENT_TRACING_ENABLED"] = "true" # at top before importing Haystack modules
+os.environ["HAYSTACK_CONTENT_TRACING_ENABLED"] = "true"
 
 from haystack.components.agents import Agent
 from haystack.components.generators.chat import OpenAIChatGenerator
@@ -21,6 +21,7 @@ import config
 from tool import build_web_search_tool
 
 QUERY = "What was the final score and who won the FIFA World Cup 2026 championship?"
+
 
 def build_coordinator() -> Agent:
     OpikConnector(name="haystack-multi-agent-scout", project_name=config.OPIK_PROJECT_NAME)
@@ -48,14 +49,17 @@ def build_coordinator() -> Agent:
         tools=[scout],
         system_prompt=(
             "You are a World Cup 2026 coverage coordinator. Delegate research questions "
-            "about teams, matches, venues, and players to the scout tool, then summarize the findings for a fan who wants the latest updates."
+            "about teams, matches, venues, and players to the scout tool, then summarize "
+            "the findings for a fan who wants the latest updates."
         ),
     )
+
 
 def run_agent(query: str) -> str:
     coordinator = build_coordinator()
     result = coordinator.run(messages=[ChatMessage.from_user(query)])
     return result["last_message"].text
+
 
 def main() -> None:
     if config.DRY_RUN:

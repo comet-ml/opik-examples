@@ -2,6 +2,7 @@ from haystack.tools import ComponentTool
 from haystack.utils import Secret
 from haystack_integrations.components.websearch.serperdev import SerperDevWebSearch
 
+
 def build_web_search_tool(top_k: int = 4) -> ComponentTool:
     return ComponentTool(
         component=SerperDevWebSearch(

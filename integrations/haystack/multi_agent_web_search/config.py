@@ -1,8 +1,5 @@
 import os
 
-from dotenv import load_dotenv
-load_dotenv()
-
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 SERPERDEV_API_KEY = os.environ.get("SERPERDEV_API_KEY")
 OPIK_API_KEY = os.environ.get("OPIK_API_KEY")
