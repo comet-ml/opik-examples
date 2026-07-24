@@ -1,0 +1,14 @@
+[
+  {"id": "timeouts", "title": "Job timeouts", "text": "Every Ledgerline job has a default timeout of 30 seconds. Jobs exceeding the timeout are marked failed and eligible for retry. The maximum configurable timeout is 15 minutes."},
+  {"id": "retries", "title": "Retries", "text": "Failed jobs are retried automatically. The default maximum number of retries is 3, using exponential backoff starting at 2 seconds. Set max_retries to 0 to disable retries."},
+  {"id": "rate-limits", "title": "Rate limits", "text": "The API allows 1000 requests per minute per API key. Exceeding the limit returns HTTP 429. Rate limit headers are included on every response."},
+  {"id": "auth", "title": "Authentication", "text": "Authenticate by sending your API key in the Authorization header as a Bearer token: 'Authorization: Bearer <API_KEY>'. Keys are created in the dashboard."},
+  {"id": "priorities", "title": "Queue priorities", "text": "Ledgerline supports three queue priorities: low, default, and high. High-priority jobs are dequeued before default and low. Priority is set per job at enqueue time."},
+  {"id": "dead-letter", "title": "Dead-letter queue", "text": "After a job exhausts all retries it is moved to the dead-letter queue, where it is retained for 7 days before permanent deletion. Dead-letter jobs can be replayed from the dashboard."},
+  {"id": "webhooks", "title": "Webhooks", "text": "When a job completes, Ledgerline POSTs a webhook to your configured URL. The payload includes job_id, status, and result fields. Webhook deliveries are signed with the X-Ledgerline-Signature header."},
+  {"id": "install", "title": "SDK installation", "text": "Install the Python SDK with 'pip install ledgerline'. The SDK requires Python 3.9 or newer. Import it as 'import ledgerline'."},
+  {"id": "concurrency", "title": "Concurrency", "text": "Each project runs up to 50 concurrent jobs by default. Contact support to raise the concurrency limit for your plan."},
+  {"id": "regions", "title": "Regions", "text": "Ledgerline is available in three regions: us-east, eu-west, and ap-south. The default region is us-east. Set the region when initializing the client."},
+  {"id": "batch", "title": "Batch enqueue", "text": "You can enqueue up to 500 jobs in a single batch request. Larger batches must be split. Each job in a batch is billed individually."},
+  {"id": "idempotency", "title": "Idempotency", "text": "Pass an Idempotency-Key header to safely retry enqueue requests. Ledgerline deduplicates requests with the same key for 24 hours."}
+]
