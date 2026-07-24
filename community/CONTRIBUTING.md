@@ -8,7 +8,10 @@ are not executed by CI; a maintainer reviews (and, for hosted entries, runs)
 them by hand.
 
 There is one thing we always require: **proof you actually logged with Opik** —
-either Comet cloud or the self-hosted open-source platform.
+either Comet cloud or the self-hosted open-source platform. Provide it one of
+two ways: commit an `opik-proof.png` screenshot referenced from your `README.md`
+(the default for authors), or set an http(s) `proof_url` in `meta.yaml` pointing
+at your screenshot (used mainly when a maintainer showcases an external project).
 
 ## Two kinds of entry
 
@@ -42,7 +45,8 @@ run your code. It checks:
 - `meta.yaml` has all required fields, at least one link, and a valid
   `opik_platform`.
 - `README.md` has all four sections filled in (no leftover `TODO`).
-- `opik-proof.png` exists and is referenced from your README.
+- Proof of Opik usage exists: either `opik-proof.png` (referenced from your
+  README) or an http(s) `proof_url` in `meta.yaml`.
 - No `.env` file or hardcoded API keys are committed.
 - Hosted entries contain code that uses Opik.
 - The folder name is `lowercase_with_underscores`.

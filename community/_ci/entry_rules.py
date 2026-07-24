@@ -107,15 +107,27 @@ def validate_readme(entry: Path) -> list[str]:
 
 
 def validate_proof(entry: Path) -> list[str]:
-    errors: list[str] = []
-    if not (entry / "opik-proof.png").is_file():
-        errors.append(f"{entry.name}: missing opik-proof.png (screenshot of your Opik traces)")
-        return errors
     readme_path = entry / "README.md"
-    text = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
-    if "opik-proof.png" not in text:
-        errors.append(f"{entry.name}: opik-proof.png must be referenced from README.md")
-    return errors
+    readme_text = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
+
+    png_path = entry / "opik-proof.png"
+    if png_path.is_file():
+        if "opik-proof.png" not in readme_text:
+            return [f"{entry.name}: opik-proof.png must be referenced from README.md"]
+        return []
+
+    # meta errors are reported by validate_meta; {} here falls through to the no-proof error
+    data, _ = load_meta(entry)
+    proof_url = data.get("proof_url")
+    if _nonempty_str(proof_url) and str(proof_url).startswith(("http://", "https://")):
+        return []
+
+    return [
+        (
+            f"{entry.name}: no proof of Opik usage — commit an opik-proof.png referenced "
+            f"from README.md, or set an http(s) 'proof_url' in meta.yaml"
+        )
+    ]
 
 
 _FOLDER_NAME_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)+$")
@@ -132,8 +144,10 @@ _OPIK_MARKERS = ["import opik", "from opik", "@opik.track", "opik.Opik(", "OPIK_
 def validate_folder_name(entry: Path) -> list[str]:
     if not _FOLDER_NAME_RE.match(entry.name):
         return [
-            f"{entry.name}: folder name must be lowercase '<author>_<project>' "
-            f"(letters/digits/underscores, at least one underscore)"
+            (
+                f"{entry.name}: folder name must be lowercase '<author>_<project>' "
+                f"(letters/digits/underscores, at least one underscore)"
+            )
         ]
     return []
 
@@ -180,6 +194,8 @@ def validate_code_uses_opik(entry: Path) -> list[str]:
             if any(marker in text for marker in _OPIK_MARKERS):
                 return []
     return [
-        f"{entry.name}: hosted entry has no code that uses Opik "
-        f"(expected one of: import opik, @opik.track, opik.Opik(, OPIK_)"
+        (
+            f"{entry.name}: hosted entry has no code that uses Opik "
+            f"(expected one of: import opik, @opik.track, opik.Opik(, OPIK_)"
+        )
     ]

@@ -5,6 +5,11 @@ author: your-github-handle
 links:
   repo: https://github.com/your-handle/your-project   # at least one http(s) link required
   # blog: https://...                                 # optional extra links
+# proof_url: https://github.com/your-handle/your-project/blob/main/assets/opik.png
+#                                             # optional: link to a screenshot of your
+#                                             # Opik traces INSTEAD of committing
+#                                             # opik-proof.png (used mainly when a
+#                                             # maintainer showcases an external project)
 opik_platform: cloud        # cloud | self-hosted
 tags: [agent, rag]          # free-form; may be empty []
 hosted: false               # leave false; a maintainer sets this true when promoting

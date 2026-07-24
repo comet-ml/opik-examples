@@ -1,0 +1,9 @@
+title: Observable Job Agent
+description: An observability-first CV-to-job-matching agent, instrumented with Opik from run one.
+author: jamwithai
+links:
+  repo: https://github.com/jamwithai/observable-job-agent
+opik_platform: cloud
+proof_url: https://github.com/jamwithai/observable-job-agent/blob/main/docs/opik_setup.md
+tags: [agent, langgraph, observability, rag]
+hosted: false
