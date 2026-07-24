@@ -238,6 +238,15 @@ def test_non_http_proof_url_without_png_is_error(tmp_path: Path):
     assert any("proof" in e.lower() for e in validate_proof(entry))
 
 
+def test_schemeless_http_proof_url_without_png_is_error(tmp_path: Path):
+    entry = write_entry(
+        tmp_path,
+        include_png=False,
+        meta={"proof_url": "httpfoo-not-a-url"},
+    )
+    assert any("proof" in e.lower() for e in validate_proof(entry))
+
+
 def test_no_png_and_no_proof_url_is_error(tmp_path: Path):
     entry = write_entry(tmp_path, include_png=False)
     errors = validate_proof(entry)

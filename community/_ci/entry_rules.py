@@ -116,9 +116,10 @@ def validate_proof(entry: Path) -> list[str]:
             return [f"{entry.name}: opik-proof.png must be referenced from README.md"]
         return []
 
+    # meta errors are reported by validate_meta; {} here falls through to the no-proof error
     data, _ = load_meta(entry)
     proof_url = data.get("proof_url")
-    if _nonempty_str(proof_url) and str(proof_url).startswith("http"):
+    if _nonempty_str(proof_url) and str(proof_url).startswith(("http://", "https://")):
         return []
 
     return [
