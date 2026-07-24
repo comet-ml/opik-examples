@@ -107,15 +107,24 @@ def validate_readme(entry: Path) -> list[str]:
 
 
 def validate_proof(entry: Path) -> list[str]:
-    errors: list[str] = []
-    if not (entry / "opik-proof.png").is_file():
-        errors.append(f"{entry.name}: missing opik-proof.png (screenshot of your Opik traces)")
-        return errors
     readme_path = entry / "README.md"
-    text = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
-    if "opik-proof.png" not in text:
-        errors.append(f"{entry.name}: opik-proof.png must be referenced from README.md")
-    return errors
+    readme_text = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
+
+    png_path = entry / "opik-proof.png"
+    if png_path.is_file():
+        if "opik-proof.png" not in readme_text:
+            return [f"{entry.name}: opik-proof.png must be referenced from README.md"]
+        return []
+
+    data, _ = load_meta(entry)
+    proof_url = data.get("proof_url")
+    if _nonempty_str(proof_url) and str(proof_url).startswith("http"):
+        return []
+
+    return [
+        f"{entry.name}: no proof of Opik usage — commit an opik-proof.png referenced "
+        f"from README.md, or set an http(s) 'proof_url' in meta.yaml"
+    ]
 
 
 _FOLDER_NAME_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)+$")

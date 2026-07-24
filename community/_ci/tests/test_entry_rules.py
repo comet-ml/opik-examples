@@ -212,3 +212,33 @@ def test_non_ascii_readme_and_meta_are_read_as_utf8(tmp_path: Path):
     )
     assert validate_readme(entry) == []
     assert validate_meta(entry) == []
+
+
+def test_proof_url_without_png_passes(tmp_path: Path):
+    readme = (
+        "# T\n\n## What I built\nA.\n\n## Problem it solves\nB.\n\n"
+        "## What I learned\nC.\n\n## How I used Opik\n"
+        "See the author's traces: https://example.com/opik.png\n"
+    )
+    entry = write_entry(
+        tmp_path,
+        readme=readme,
+        include_png=False,
+        meta={"proof_url": "https://example.com/opik.png"},
+    )
+    assert validate_proof(entry) == []
+
+
+def test_non_http_proof_url_without_png_is_error(tmp_path: Path):
+    entry = write_entry(
+        tmp_path,
+        include_png=False,
+        meta={"proof_url": "see my repo"},
+    )
+    assert any("proof" in e.lower() for e in validate_proof(entry))
+
+
+def test_no_png_and_no_proof_url_is_error(tmp_path: Path):
+    entry = write_entry(tmp_path, include_png=False)
+    errors = validate_proof(entry)
+    assert any("opik-proof.png" in e or "proof_url" in e for e in errors)
