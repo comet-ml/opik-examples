@@ -9,6 +9,13 @@ dependencies = [
     "opik-optimizer",
     "chromadb",
     "litellm",
+    # WHY: this guide's deliverable is a notebook — Jupyter + nbconvert/nbformat
+    # are runtime deps so `uv sync` gives users a working kernel and lets the
+    # notebook be validated and executed headlessly.
+    "jupyterlab",
+    "nbconvert",
+    "nbformat",
+    "ipykernel",
 ]
 
 [dependency-groups]
