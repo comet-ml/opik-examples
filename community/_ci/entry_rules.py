@@ -123,8 +123,10 @@ def validate_proof(entry: Path) -> list[str]:
         return []
 
     return [
-        f"{entry.name}: no proof of Opik usage — commit an opik-proof.png referenced "
-        f"from README.md, or set an http(s) 'proof_url' in meta.yaml"
+        (
+            f"{entry.name}: no proof of Opik usage — commit an opik-proof.png referenced "
+            f"from README.md, or set an http(s) 'proof_url' in meta.yaml"
+        )
     ]
 
 
@@ -142,8 +144,10 @@ _OPIK_MARKERS = ["import opik", "from opik", "@opik.track", "opik.Opik(", "OPIK_
 def validate_folder_name(entry: Path) -> list[str]:
     if not _FOLDER_NAME_RE.match(entry.name):
         return [
-            f"{entry.name}: folder name must be lowercase '<author>_<project>' "
-            f"(letters/digits/underscores, at least one underscore)"
+            (
+                f"{entry.name}: folder name must be lowercase '<author>_<project>' "
+                f"(letters/digits/underscores, at least one underscore)"
+            )
         ]
     return []
 
@@ -190,6 +194,8 @@ def validate_code_uses_opik(entry: Path) -> list[str]:
             if any(marker in text for marker in _OPIK_MARKERS):
                 return []
     return [
-        f"{entry.name}: hosted entry has no code that uses Opik "
-        f"(expected one of: import opik, @opik.track, opik.Opik(, OPIK_)"
+        (
+            f"{entry.name}: hosted entry has no code that uses Opik "
+            f"(expected one of: import opik, @opik.track, opik.Opik(, OPIK_)"
+        )
     ]
