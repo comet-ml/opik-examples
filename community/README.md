@@ -9,4 +9,7 @@ are hosted in-repo (see the Hosted column).
 
 To add your own, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-_No community contributions yet — be the first!_
+| Project | Author | Description | Platform | Links | Hosted | Tags |
+|---|---|---|---|---|---|---|
+| [Building a Coding Agent from Scratch (course)](paul_iusztin_coding_agent_course/) | [@decodingai-magazine](https://github.com/decodingai-magazine) | An open-source course that builds a terminal coding agent from scratch, using Opik for tracing and evals. | cloud | [repo](https://github.com/decodingai-magazine/building-a-coding-agent-from-scratch-course) |  | agent, course, coding-agent, evaluation, observability |
+| [Observable Job Agent](jamwithai_observable_job_agent/) | [@jamwithai](https://github.com/jamwithai) | An observability-first CV-to-job-matching agent, instrumented with Opik from run one. | cloud | [repo](https://github.com/jamwithai/observable-job-agent) |  | agent, langgraph, observability, rag |
