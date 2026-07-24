@@ -1,0 +1,28 @@
+[project]
+name = "prompt-agent-optimization"
+version = "0.1.0"
+description = "Prompt & agent optimization with Opik, end-to-end over an escalating RAG-over-docs example."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "opik>=2.0",
+    "opik-optimizer",
+    "chromadb",
+    "litellm",
+]
+
+[dependency-groups]
+dev = ["ruff", "pytest"]
+
+# WHY: notebook-only example — uv manages the env, no installable package.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+# WHY: ruff can't parse the notebook's cell schema; lint .py files only.
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
