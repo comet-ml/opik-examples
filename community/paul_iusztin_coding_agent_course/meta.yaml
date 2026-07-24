@@ -1,0 +1,9 @@
+title: Building a Coding Agent from Scratch (course)
+description: An open-source course that builds a terminal coding agent from scratch, using Opik for tracing and evals.
+author: decodingai-magazine
+links:
+  repo: https://github.com/decodingai-magazine/building-a-coding-agent-from-scratch-course
+opik_platform: cloud
+proof_url: https://github.com/decodingai-magazine/building-a-coding-agent-from-scratch-course/blob/main/assets/opik-threads.png
+tags: [agent, course, coding-agent, evaluation, observability]
+hosted: false
