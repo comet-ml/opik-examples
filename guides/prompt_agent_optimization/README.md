@@ -19,8 +19,9 @@ step is a comparable run.
 - **Part 1** ⭐ — your first optimization: exact-match metric + `MetaPromptOptimizer`.
 - **Part 2** — LLM-judge metrics, *how to trust a judge*, and multi-objective
   optimization with `MultiMetricObjective`.
-- **Part 3** — from prompt to agent: a retrieval gate, `FewShotBayesianOptimizer`,
-  and `ParameterOptimizer`.
+- **Part 3** — from prompt to agent: a tool-calling `search_docs` agent optimized
+  end-to-end, then `FewShotBayesianOptimizer` on the same agent (with a pointer to
+  `ParameterOptimizer`).
 - **Part 4** — choosing an optimizer (selection table + how to choose + chaining).
 - **Part 5** — promote the winner to the Prompt Library; pointers to Optimization
   Studio and the docs.
