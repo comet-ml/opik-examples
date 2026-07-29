@@ -7,6 +7,8 @@ Closes #<!-- the tracking issue this PR implements; comment on it to claim it be
 ## Checklist
 
 <!-- See CONTRIBUTING.md for details. Tick what applies; delete rows that don't. -->
+<!-- Adding a community index entry (community/projects.yaml)? Only the rules in
+     community/CONTRIBUTING.md apply — delete this checklist. -->
 
 - [ ] Linked to its tracking issue (commented to claim it before starting)
 - [ ] Example is in the right bucket (`integrations` / `guides` / `use-cases` / `scripts`)

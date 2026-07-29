@@ -1,10 +1,11 @@
-name: Community Entry Check
+name: Community Projects Check
 
-# Lightweight, non-executing gate for community showcase entries.
-# It does NOT run contributor code. It validates entry structure, scans for
-# committed secrets, and confirms hosted entries use Opik. Secrets-free, so it
-# runs on forks. The showcase index (community/README.md) is regenerated
-# separately on merge by community-index.yml — contributors run nothing.
+# Lightweight, non-executing gate for the community index. Community projects
+# are links-only — code lives in the authors' repos — so this only validates
+# community/projects.yaml (required fields, valid repo URLs/handles, no
+# duplicates). Secrets-free, so it runs on forks. The index
+# (community/README.md) is regenerated separately on merge by
+# community-index.yml — contributors run nothing.
 #
 # Community entries are intentionally exempt from the verified-bucket workflows
 # (compliance / pr-test / test-notebooks / scheduled), which are path-scoped to
@@ -47,7 +48,7 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
 
-      - name: Validate all community entries
+      - name: Validate community projects
         run: |
           cd community/_ci
-          uv run python check_entry.py
+          uv run python check_projects.py

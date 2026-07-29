@@ -1,0 +1,14 @@
+# Community projects built with Opik — one block per project.
+# The showcase table (README.md) is generated from this file on merge.
+# To add yours, see CONTRIBUTING.md. Required fields: title, description,
+# author (GitHub handle), repo (http(s) link to your project).
+
+- title: Building a Coding Agent from Scratch (course)
+  description: An open-source course that builds a terminal coding agent from scratch, using Opik for tracing and evals.
+  author: decodingai-magazine
+  repo: https://github.com/decodingai-magazine/building-a-coding-agent-from-scratch-course
+
+- title: Observable Job Agent
+  description: An observability-first CV-to-job-matching agent, instrumented with Opik from run one.
+  author: jamwithai
+  repo: https://github.com/jamwithai/observable-job-agent
