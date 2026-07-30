@@ -32,7 +32,7 @@ def test_repo_must_be_http_url():
 
 
 def test_author_must_be_bare_github_handle():
-    for bad in ("@jane-doe", "https://github.com/jane-doe", "jane doe"):
+    for bad in ("@jane-doe", "https://github.com/jane-doe", "jane doe", "jane-", "-jane"):
         errors = validate_project(make_project(author=bad), 0)
         assert any("'author'" in e for e in errors), bad
 

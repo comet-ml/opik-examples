@@ -9,8 +9,8 @@ REQUIRED_FIELDS = ["title", "description", "author", "repo"]
 ALLOWED_FIELDS = set(REQUIRED_FIELDS)
 MAX_DESCRIPTION_LENGTH = 250
 
-# GitHub usernames/orgs: alphanumeric and hyphens, no leading hyphen, max 39 chars.
-_GITHUB_HANDLE_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
+# GitHub usernames/orgs: alphanumeric and hyphens, no leading/trailing hyphen, max 39 chars.
+_GITHUB_HANDLE_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
 
 
 def load_projects(path: Path) -> tuple[list, list[str]]:
