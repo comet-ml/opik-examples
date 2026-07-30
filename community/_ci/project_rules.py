@@ -38,16 +38,22 @@ def validate_project(item: object, index: int) -> list[str]:
 
     errors: list[str] = []
     for field in REQUIRED_FIELDS:
-        if not _nonempty_str(item.get(field)):
+        value = item.get(field)
+        if not _nonempty_str(value):
             errors.append(f"{label}: field '{field}' is required and must be a non-empty string")
+        elif "\n" in str(value) or "\r" in str(value):
+            # WHY: a newline inside any field splits the generated markdown table row.
+            errors.append(f"{label}: field '{field}' must be a single line")
 
     unknown = sorted(set(item) - ALLOWED_FIELDS)
     if unknown:
         errors.append(f"{label}: unknown field(s) {unknown} — allowed fields are {REQUIRED_FIELDS}")
 
     repo = item.get("repo")
-    if _nonempty_str(repo) and not str(repo).startswith(("http://", "https://")):
-        errors.append(f"{label}: 'repo' must be an http(s) URL")
+    if _nonempty_str(repo):
+        repo_str = str(repo).strip()
+        if not repo_str.startswith(("http://", "https://")) or any(c.isspace() for c in repo_str):
+            errors.append(f"{label}: 'repo' must be an http(s) URL without whitespace")
 
     author = item.get("author")
     if _nonempty_str(author) and not _GITHUB_HANDLE_RE.match(str(author).strip()):

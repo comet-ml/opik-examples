@@ -31,6 +31,17 @@ def test_repo_must_be_http_url():
     assert any("'repo' must be an http(s) URL" in e for e in errors)
 
 
+def test_repo_with_whitespace_is_rejected():
+    errors = validate_project(make_project(repo="https://github.com/jane/my repo"), 0)
+    assert any("'repo'" in e for e in errors)
+
+
+def test_multiline_fields_are_rejected():
+    for field in ("title", "description", "repo"):
+        errors = validate_project(make_project(**{field: "line one\nline two"}), 0)
+        assert any("must be a single line" in e for e in errors), field
+
+
 def test_author_must_be_bare_github_handle():
     for bad in ("@jane-doe", "https://github.com/jane-doe", "jane doe", "jane-", "-jane"):
         errors = validate_project(make_project(author=bad), 0)
