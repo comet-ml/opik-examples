@@ -74,43 +74,54 @@ def score_trace(trace: Any, defs: list[Eval]) -> list[dict[str, Any]]:
         if getattr(result, "scoring_failed", False):
             LOGGER.warning("trace %s: eval '%s' reported scoring_failed", trace.id, ev.name)
             continue
-        scores.append({
-            "id": trace.id,
-            "name": ev.name,
-            "value": result.value,
-            "reason": result.reason,   # preserve the judge's explanation
-        })
+        scores.append(
+            {
+                "id": trace.id,
+                "name": ev.name,
+                "value": result.value,
+                "reason": result.reason,  # preserve the judge's explanation
+            }
+        )
     return scores
 
 
 def main() -> None:
     dry_run = not (os.environ.get("OPIK_API_KEY") and os.environ.get("OPIK_WORKSPACE"))
     if dry_run:
-        print("DRY_RUN: set OPIK_API_KEY + OPIK_WORKSPACE to score a project. "
-              f"Would score project '{PROJECT_NAME}' over the last {WINDOW_HOURS}h "
-              f"with evals: {[e.name for e in EVALS]}.")
+        print(
+            "DRY_RUN: set OPIK_API_KEY + OPIK_WORKSPACE to score a project. "
+            f"Would score project '{PROJECT_NAME}' over the last {WINDOW_HOURS}h "
+            f"with evals: {[e.name for e in EVALS]}."
+        )
         return
 
     client = opik.Opik(project_name=PROJECT_NAME)
-    traces = list(client.search_traces(
-        project_name=PROJECT_NAME,
-        filter_string=window_filter(WINDOW_HOURS),
-        max_results=MAX_RESULTS,
-    ))
+    traces = list(
+        client.search_traces(
+            project_name=PROJECT_NAME,
+            filter_string=window_filter(WINDOW_HOURS),
+            max_results=MAX_RESULTS,
+        )
+    )
 
     all_scores: list[dict[str, Any]] = []
     for trace in traces:
         all_scores.extend(score_trace(trace, EVALS))
 
     if all_scores:
-        client.log_traces_feedback_scores(all_scores)   # SDK batches internally
+        client.log_traces_feedback_scores(all_scores)  # SDK batches internally
     client.flush()
 
-    print(f"Scored {len(traces)} traces x {len(EVALS)} evals -> "
-          f"{len(all_scores)} scores logged to '{PROJECT_NAME}'.")
+    print(
+        f"Scored {len(traces)} traces x {len(EVALS)} evals -> "
+        f"{len(all_scores)} scores logged to '{PROJECT_NAME}'."
+    )
     if len(traces) >= MAX_RESULTS:
-        LOGGER.warning("Hit EVAL_MAX_RESULTS=%s — results may be truncated. "
-                       "Shorten EVAL_WINDOW_HOURS or raise EVAL_MAX_RESULTS.", MAX_RESULTS)
+        LOGGER.warning(
+            "Hit EVAL_MAX_RESULTS=%s — results may be truncated. "
+            "Shorten EVAL_WINDOW_HOURS or raise EVAL_MAX_RESULTS.",
+            MAX_RESULTS,
+        )
 
 
 if __name__ == "__main__":

@@ -68,9 +68,7 @@ EVALS: list[Eval] = [
         metric=GEval(
             model=judge_model,
             name="relevance",
-            task_introduction=(
-                "You judge whether an answer (OUTPUT) is relevant to the question (INPUT)."
-            ),
+            task_introduction=("You judge whether an answer (OUTPUT) is relevant to the question (INPUT)."),
             evaluation_criteria=(
                 "Return 1 if the OUTPUT directly addresses the INPUT question, 0 if it is "
                 "off-topic or evasive."

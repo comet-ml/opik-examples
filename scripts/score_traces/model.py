@@ -28,10 +28,12 @@ def build_judge_model() -> JudgeModel:
     model is routed as ``openai/<GATEWAY_MODEL>``, LiteLLM also reads OPENAI_API_KEY as
     the provider key — set it (to your gateway/OpenAI key) if the judge errors on auth.
 
-    If GATEWAY_BASE_URL is unset, falls back to a bare model name (GATEWAY_MODEL),
-    which lets the module import and unit-test without a gateway configured.
+    If GATEWAY_BASE_URL is unset, falls back to a bare model name (GATEWAY_MODEL, or
+    OPIK_EXAMPLES_MODEL), which lets the module import and unit-test without a gateway.
     """
-    model_name = os.environ.get("GATEWAY_MODEL", "gpt-4o")
+    # GATEWAY_MODEL is the local knob; OPIK_EXAMPLES_MODEL lets CI route judges to a
+    # cheap model (used when GATEWAY_MODEL is unset).
+    model_name = os.environ.get("GATEWAY_MODEL") or os.environ.get("OPIK_EXAMPLES_MODEL", "gpt-4o")
     base_url = os.environ.get("GATEWAY_BASE_URL")
     if not base_url:
         return model_name  # importable / testable without a gateway
