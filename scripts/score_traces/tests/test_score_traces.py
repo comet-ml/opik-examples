@@ -89,7 +89,7 @@ def test_seed_dataset_has_good_and_bad():
     answers = {t["output"]["answer"] for t in seed_traces.SEED_TRACES}
     expected = {t["input"]["expected"] for t in seed_traces.SEED_TRACES}
     # At least one exact-match hit and one miss, so scores show a spread.
-    assert answers & expected            # some hits
+    assert answers & expected  # some hits
     assert any(t["output"]["answer"] != t["input"]["expected"] for t in seed_traces.SEED_TRACES)
 
 
@@ -105,8 +105,7 @@ def _good_metric(value, reason="ok"):
 
 
 def test_score_trace_maps_and_preserves_reason():
-    ev = Eval(name="m", metric=_good_metric(1.0, "grounded"),
-              variables={"output": "output.answer"})
+    ev = Eval(name="m", metric=_good_metric(1.0, "grounded"), variables={"output": "output.answer"})
     trace = _StubTrace("t1", {"question": "q"}, {"answer": "a"})
     scores = runner.score_trace(trace, [ev])
     assert scores == [{"id": "t1", "name": "m", "value": 1.0, "reason": "grounded"}]
@@ -116,7 +115,7 @@ def test_score_trace_maps_and_preserves_reason():
 def test_score_trace_skips_missing_field():
     ev = Eval(name="m", metric=_good_metric(1.0), variables={"output": "output.MISSING"})
     trace = _StubTrace("t1", {}, {"answer": "a"})
-    assert runner.score_trace(trace, [ev]) == []          # skipped, no raise
+    assert runner.score_trace(trace, [ev]) == []  # skipped, no raise
 
 
 def test_score_trace_isolates_failing_eval():
@@ -126,7 +125,7 @@ def test_score_trace_isolates_failing_eval():
     ev_ok = Eval(name="ok", metric=_good_metric(0.5), variables={"output": "output.answer"})
     trace = _StubTrace("t1", {}, {"answer": "a"})
     scores = runner.score_trace(trace, [ev_bad, ev_ok])
-    assert [s["name"] for s in scores] == ["ok"]           # bad skipped, ok survives
+    assert [s["name"] for s in scores] == ["ok"]  # bad skipped, ok survives
 
 
 def test_window_filter_is_oql_start_time():
@@ -141,11 +140,9 @@ def test_geval_payload_labels_all_fields():
 
 
 def test_score_trace_routes_geval_through_payload():
-    g = GEval(model="gpt-4o", name="relevance",
-              task_introduction="t", evaluation_criteria="c")
+    g = GEval(model="gpt-4o", name="relevance", task_introduction="t", evaluation_criteria="c")
     g.score = MagicMock(return_value=score_result.ScoreResult(value=1.0, name="relevance", reason="ok"))
-    ev = Eval(name="relevance", metric=g,
-              variables={"input": "input.question", "output": "output.answer"})
+    ev = Eval(name="relevance", metric=g, variables={"input": "input.question", "output": "output.answer"})
     trace = _StubTrace("t1", {"question": "q?"}, {"answer": "a"})
     scores = runner.score_trace(trace, [ev])
     assert scores == [{"id": "t1", "name": "relevance", "value": 1.0, "reason": "ok"}]

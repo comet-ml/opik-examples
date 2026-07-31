@@ -31,7 +31,8 @@ names, same variable mapping).
 | `EVAL_MAX_RESULTS` | no | `1000` | Max traces per run; warns on truncation |
 | `GATEWAY_BASE_URL` | for LLM judges | — | OpenAI-compatible gateway URL (Path A) |
 | `GATEWAY_API_KEY` | for LLM judges | — | Gateway API key |
-| `GATEWAY_MODEL` | no | `gpt-4o` | Judge model name |
+| `GATEWAY_MODEL` | no | `gpt-4o` | Judge model name (local knob) |
+| `OPIK_EXAMPLES_MODEL` | no | — | CI routes judges to a cheap model via this (used when `GATEWAY_MODEL` is unset) |
 | `OPENAI_API_KEY` | often | — | OpenAI provider key LiteLLM uses for the `openai/` judge route — set alongside `GATEWAY_*` if the judge errors on auth (see note below) |
 
 > **Judge auth (LiteLLM).** The judges run through LiteLLM, which routes the model as
@@ -104,6 +105,7 @@ The runner is nothing more than three public SDK primitives composed in a loop:
 
 ```python
 import opik
+
 client = opik.Opik(project_name="score-traces-example")
 traces = client.search_traces(
     project_name="score-traces-example",
@@ -111,20 +113,23 @@ traces = client.search_traces(
     max_results=1000,
 )
 trace = traces[0]
-print(trace.id, trace.input, trace.output)   # input/output are dicts
+print(trace.id, trace.input, trace.output)  # input/output are dicts
 ```
 
 **2. Score one trace with a metric + variable mapping**
 
 ```python
 from opik.evaluation.metrics import Hallucination
+
 judge = Hallucination(model="gpt-4o", name="hallucination")
 
 # variable mapping: metric score() param -> trace field path
 variables = {"input": "input.question", "output": "output.answer", "context": "output.context"}
-kwargs = {"input": trace.input["question"],
-          "output": trace.output["answer"],
-          "context": trace.output["context"]}
+kwargs = {
+    "input": trace.input["question"],
+    "output": trace.output["answer"],
+    "context": trace.output["context"],
+}
 result = judge.score(**kwargs)
 print(result.value, result.reason)
 ```
@@ -132,9 +137,11 @@ print(result.value, result.reason)
 **3. Write the score back onto the trace**
 
 ```python
-client.log_traces_feedback_scores([
-    {"id": trace.id, "name": "hallucination", "value": result.value, "reason": result.reason},
-])
+client.log_traces_feedback_scores(
+    [
+        {"id": trace.id, "name": "hallucination", "value": result.value, "reason": result.reason},
+    ]
+)
 ```
 
 **Put it together:** `score_traces.py` is exactly these three steps — for every eval in
