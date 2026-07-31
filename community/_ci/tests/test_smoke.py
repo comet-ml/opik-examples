@@ -1,18 +1,19 @@
-from pathlib import Path
+from conftest import make_project
 
-from conftest import write_entry
-
-
-def test_write_entry_creates_valid_layout(tmp_path: Path):
-    entry = write_entry(tmp_path)
-    assert (entry / "meta.yaml").is_file()
-    assert (entry / "README.md").is_file()
-    assert (entry / "opik-proof.png").is_file()
+from check_projects import PROJECTS_FILE
+from project_rules import load_projects, validate_projects
 
 
-def test_write_entry_can_delete_a_meta_key(tmp_path: Path):
-    import yaml
+def test_make_project_default_is_valid():
+    assert validate_projects([make_project()]) == []
 
-    entry = write_entry(tmp_path, meta={"title": None})
-    data = yaml.safe_load((entry / "meta.yaml").read_text())
-    assert "title" not in data
+
+def test_make_project_can_delete_a_field():
+    assert "title" not in make_project(title=None)
+
+
+def test_repo_projects_file_is_valid():
+    projects, errors = load_projects(PROJECTS_FILE)
+    assert errors == []
+    assert validate_projects(projects) == []
+    assert len(projects) >= 1

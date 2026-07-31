@@ -13,7 +13,8 @@ opik-examples/
 ├── guides/         # How-to examples for Opik workflows and patterns
 ├── use-cases/      # End-to-end applications and domain workflows
 ├── scripts/        # Utility automations and API helpers
-└── templates/      # Starter templates (use-case-template, script-template)
+├── templates/      # Starter templates (use-case-template, script-template)
+└── community/      # Curated index of community-built projects (links only)
 ```
 
 ## Integrations
@@ -56,15 +57,17 @@ Standalone scripts for automating and managing Opik resources.
 | [scripts/automate_annotation_queue](scripts/automate_annotation_queue/) | Route traces into annotation queues via batch or real-time assignment |
 | [scripts/usage_stats](scripts/usage_stats/) | Fetch trace and span counts per project and visualise trends |
 | [scripts/leaderboard_dashboard](scripts/leaderboard_dashboard/) | Create an Experiment Leaderboard dashboard via the REST API |
+| [scripts/score_traces](scripts/score_traces/) | Score existing production traces offline with stock SDK judges/metrics, logging feedback back under the same names an online rule would use |
 
 ## Community
 
-Work built with Opik by the open-source community. Unlike the buckets above,
-these entries are **community-contributed and not maintainer-verified** — they
-showcase what people are building. Standout real-world projects get hosted
-in-repo and spotlighted in our community forums.
+A curated index of projects the open-source community has built with Opik.
+It is links-only — each project lives in its author's repository. Unlike the
+buckets above, these entries are **community-contributed and not
+maintainer-verified**.
 
-Browse them in [community/](community/), or add your own via
+Browse the table in [community/](community/), or add your own project with a
+single block in `projects.yaml` — see
 [community/CONTRIBUTING.md](community/CONTRIBUTING.md).
 
 ## Contributing
