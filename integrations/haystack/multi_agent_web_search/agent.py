@@ -24,6 +24,8 @@ QUERY = "What was the final score and who won the FIFA World Cup 2026 championsh
 
 
 def build_coordinator() -> Agent:
+    # WHY: constructing OpikConnector registers Opik as Haystack's global tracer for the whole
+    # process; the instance is intentionally unused because we run Agents directly, not via a Pipeline.
     OpikConnector(name="haystack-multi-agent-scout", project_name=config.OPIK_PROJECT_NAME)
 
     scout_agent = Agent(
