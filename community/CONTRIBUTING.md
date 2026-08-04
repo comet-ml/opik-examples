@@ -1,48 +1,54 @@
-# Contributing to the Community folder
+# Contributing to the Community index
 
-This folder showcases work the open-source community has built with Opik. It is
-deliberately **lighter-weight than the main repo contract** — the strict
-`run.sh` / dry-run / litellm / CI rules in the root
+This folder is a **curated, links-only index** of projects the open-source
+community has built with [Opik](https://www.comet.com/site/products/opik/).
+Your code stays in your own repository — the index just points to it. That
+means no sync issues when you update your project, and contributing takes a
+couple of minutes.
+
+The strict `run.sh` / dry-run / litellm / CI rules in the root
 [CONTRIBUTING.md](../CONTRIBUTING.md) do **not** apply here. Community entries
-are not executed by CI; a maintainer reviews (and, for hosted entries, runs)
-them by hand.
+are not executed by CI; a maintainer reviews each submission by hand.
 
-There is one thing we always require: **proof you actually logged with Opik** —
-either Comet cloud or the self-hosted open-source platform.
+## Add your project
 
-## Two kinds of entry
+1. Add one block to [`projects.yaml`](projects.yaml):
 
-- **Listed** (default): a folder describing your work with links out to your own
-  repo/blog/notebook. No code needs to live here.
-- **Hosted**: standout, real-world projects we promote into this repo with their
-  code included. You submit as *listed*; a maintainer sets `hosted: true` and
-  moves your code in when promoting. We also spotlight promoted work in our
-  community forums.
+   ```yaml
+   - title: Your project title
+     description: One or two sentences on what you built and how it uses Opik.
+     author: your-github-handle
+     repo: https://github.com/your-handle/your-project
+   ```
 
-## Add your entry
+2. Open a PR. That's it — you don't need to run anything.
 
-1. Copy `templates/entry-template/` to `community/<your-handle>_<project>/`
-   (lowercase, underscores, e.g. `jane_support_agent`).
-2. Fill in `meta.yaml` (all fields) and `README.md` (all four sections).
-3. Replace `opik-proof.png` with a real screenshot of your Opik traces or
-   dashboard.
-4. If you want it considered for hosting, include your code in the folder — it
-   must genuinely use Opik (`import opik`, `@opik.track`, ...).
-5. Open a PR. A maintainer reviews it.
+All four fields are required. Keep `description` under 250 characters,
+`author` a bare GitHub handle (no `@`, no URL), and `repo` an http(s) link.
+Don't edit `README.md` — it is generated from `projects.yaml` automatically
+after your PR merges.
 
-That's it — you don't need to run anything. The showcase index
-(`community/README.md`) is regenerated automatically when your entry merges, so
-your project appears there without any manual step on your part.
+## Review bar
+
+A maintainer checks that the linked project genuinely uses Opik (e.g.
+`import opik`, `@opik.track`, or Opik dashboards in the docs) and that the
+description is accurate. Entries are **community-contributed and not
+maintainer-verified** — we curate the list, we don't maintain the projects.
 
 ## What the automated check enforces
 
-`community/_ci/check_entry.py` runs on your PR (a hard gate). It does **not**
-run your code. It checks:
+`community/_ci/check_projects.py` runs on your PR (a hard gate). It only
+validates `projects.yaml`:
 
-- `meta.yaml` has all required fields, at least one link, and a valid
-  `opik_platform`.
-- `README.md` has all four sections filled in (no leftover `TODO`).
-- `opik-proof.png` exists and is referenced from your README.
-- No `.env` file or hardcoded API keys are committed.
-- Hosted entries contain code that uses Opik.
-- The folder name is `lowercase_with_underscores`.
+- Every entry has `title`, `description`, `author`, and `repo` (and no other
+  fields).
+- `repo` is an http(s) URL and `author` is a valid GitHub handle.
+- `description` is at most 250 characters.
+- No duplicate titles or repos.
+
+## Promotion
+
+Standout projects that meet the standards of the verified buckets
+(`integrations/`, `guides/`, `use-cases/`, `scripts/`) may be invited into the
+main repo — the root [CONTRIBUTING.md](../CONTRIBUTING.md) contract applies
+there.

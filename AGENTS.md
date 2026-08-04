@@ -10,8 +10,14 @@ opik-examples/
 ├── guides/         # How-to patterns for Opik workflows
 ├── use-cases/      # End-to-end applications and domain workflows
 ├── scripts/        # Utility automations and API helpers
-└── templates/      # Starter templates (use-case-template, script-template)
+├── templates/      # Starter templates (use-case-template, script-template)
+└── community/      # Curated links-only index of community-built projects
 ```
+
+The `community/` folder is not a code bucket: it is a curated index
+(`community/projects.yaml` → generated `community/README.md`) of projects that
+live in their authors' repos. It is exempt from the `run.sh` / dry-run / litellm
+contract — see [community/CONTRIBUTING.md](community/CONTRIBUTING.md).
 
 **Which bucket does new code belong in?**
 

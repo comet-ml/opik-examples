@@ -1,0 +1,35 @@
+[project]
+name = "score-traces"
+version = "0.1.0"
+description = "Score existing production traces offline with the Opik SDK, then migrate to online rules unchanged."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "opik>=2.0",
+    "litellm>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+# This example is a set of scripts, not an installable package: uv only manages the
+# virtualenv + dependencies, and never builds/installs the project. Run the scripts
+# directly (see README):
+#   uv run python score_traces.py         # the runner
+#   uv run python utils/seed_traces.py    # the seeder (dev utility)
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
