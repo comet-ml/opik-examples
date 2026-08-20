@@ -1,8 +1,8 @@
 # Prompt & Agent Optimization with Opik — an A-to-Z guide
 
-A single notebook that teaches prompt and agent optimization end-to-end, over one
-escalating RAG-over-docs example (a documentation assistant for a fictional
-product, **Ledgerline**). It doubles as:
+A single, **self-contained** notebook that teaches prompt and agent optimization
+end-to-end, over one escalating RAG-over-docs example (a documentation assistant
+for a fictional product, **Ledgerline**). It doubles as:
 
 - a **live workshop** — run **Part 1** (~20 min) to optimize a prompt against an
   exact-match metric and see it in Opik; and
@@ -26,32 +26,40 @@ step is a comparable run.
 - **Part 5** — promote the winner to the Prompt Library; pointers to Optimization
   Studio and the docs.
 
-## Prerequisites
-
-```bash
-uv sync
-```
-
-| Environment variable | Required | Description |
-|---|---|---|
-| `OPIK_API_KEY` | yes | Your Opik API key. |
-| `OPIK_WORKSPACE` | yes | Your Opik workspace name. |
-| `ANTHROPIC_API_KEY` (or the key for your `OPIK_EXAMPLES_MODEL` provider) | yes | Model-provider key used via litellm for generation, judging, and optimizing. |
-| `OPIK_PROJECT_NAME` | no | Opik project for traces/runs (default `prompt-agent-optimization`). |
-| `OPIK_EXAMPLES_MODEL` | no | litellm model (default `anthropic/claude-sonnet-4-6`). Use a cheap model to run fast. |
-| `OPIK_URL_OVERRIDE` | no | Base URL for self-hosted Opik. |
-
-There is **no dry-run** — optimization requires running real evaluations. The
-notebook's first cell fails fast if a required variable is missing.
-
 ## Running it
 
-Open `prompt_agent_optimization.ipynb` in Jupyter and run cells top to bottom.
-For the workshop, stop at the end of Part 1. You can launch JupyterLab directly
-with `uv run jupyter lab` (it's included as a project dependency).
+The notebook is self-contained — it installs its dependencies and configures its
+credentials in the first few cells, and defines its corpus + RAG app inline. Run
+the cells top to bottom; for the workshop, stop at the end of Part 1.
+
+- **Google Colab** — upload/open the notebook and run it; the first cell
+  `%pip install`s everything.
+- **Locally** — `uv sync` then `uv run jupyter lab` (or open the notebook in your
+  editor's Jupyter). `uv` and the `pyproject.toml` are here for convenience; the
+  notebook's own `%pip install` cell means it also runs in a bare environment.
+
+## Credentials
+
+The **Credentials** cell walks you through setup — no external environment dance
+required:
+
+- **Opik** — it calls `opik.configure()`, which prompts for your API key and
+  workspace (get them free at [comet.com/opik](https://www.comet.com/opik)).
+- **A model provider key** — the guide calls models through litellm. It defaults
+  to a small Anthropic Claude model and prompts for your `ANTHROPIC_API_KEY`. To
+  use another provider, set `OPIK_EXAMPLES_MODEL` (e.g. `openai/gpt-4o-mini`) and
+  you'll be prompted for that provider's key instead.
+
+If the relevant variables are already set in your environment (`OPIK_API_KEY`,
+`OPIK_WORKSPACE`, `OPIK_EXAMPLES_MODEL`, the provider key, and optional
+`OPIK_PROJECT_NAME`), the cell skips the prompts — which is how it runs
+non-interactively in CI. There is **no dry-run**: optimization runs real
+evaluations against your Opik workspace.
 
 ## How the code is organized
 
-Optimization code (`ChatPrompt`, metrics, optimizer calls) lives **inline in the
-notebook** — it's the lesson. Repeated plumbing (retriever, data loading) lives in
-`optimization_guide/` so it stays out of the way and could back a future CLI.
+Everything lives **in the notebook** — the corpus, the tiny RAG app (a ChromaDB
+retriever + an `answer()` function), the metrics, and every optimizer call. That's
+deliberate: you can read it top to bottom, run it anywhere, and share it as a
+single file with no external dependencies. Lifting the inline retriever/answer
+helpers into a module to back a repeatable CLI is a natural next step.

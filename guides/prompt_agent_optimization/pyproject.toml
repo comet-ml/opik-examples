@@ -9,27 +9,16 @@ dependencies = [
     "opik-optimizer",
     "chromadb",
     "litellm",
-    # WHY: this guide's deliverable is a notebook — Jupyter + nbconvert/nbformat
-    # are runtime deps so `uv sync` gives users a working kernel and lets the
-    # notebook be validated and executed headlessly.
+    # WHY: this guide's deliverable is a notebook. Jupyter lets `uv run jupyter lab`
+    # open it locally, and nbconvert/nbformat let it be validated and executed
+    # headlessly (CI). In Colab (or any bare env) the notebook's own %pip cell
+    # installs the runtime deps instead.
     "jupyterlab",
     "nbconvert",
     "nbformat",
     "ipykernel",
 ]
 
-[dependency-groups]
-dev = ["ruff", "pytest"]
-
 # WHY: notebook-only example — uv manages the env, no installable package.
 [tool.uv]
 package = false
-
-[tool.ruff]
-line-length = 110
-target-version = "py312"
-# WHY: ruff can't parse the notebook's cell schema; lint .py files only.
-extend-exclude = ["*.ipynb"]
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
