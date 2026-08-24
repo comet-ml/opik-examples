@@ -17,6 +17,9 @@ dependencies = [
     "nbconvert",
     "nbformat",
     "ipykernel",
+    # WHY: opik-optimizer's progress bars use tqdm's notebook widget, which needs
+    # ipywidgets in an interactive kernel (headless nbconvert falls back to text).
+    "ipywidgets",
 ]
 
 # WHY: notebook-only example — uv manages the env, no installable package.
