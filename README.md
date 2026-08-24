@@ -35,6 +35,7 @@ Task-oriented examples for specific Opik workflows and patterns.
 |---|---|
 | [guides/annotation_queues_with_context](guides/annotation_queues_with_context/) | Structure RAG traces for Opik annotation queues — clean answer in output, context in metadata, full detail in child spans |
 | [guides/multimodal_online_evaluation](guides/multimodal_online_evaluation/) | Online LLM-as-judge evaluation over multimodal (text + image) traces, created both in the UI and via the SDK |
+| [guides/prompt_versioning](guides/prompt_versioning/) | Version prompts in the Opik Prompt Library, compare versions for hallucination with side-by-side experiments, and run traced inference via LiteLLM |
 | [guides/tracing_finetuned_models](guides/tracing_finetuned_models/) | Fine-tune a model, register it to the CometML Model Registry, then fetch and trace inference in Opik |
 
 ## Use Cases
