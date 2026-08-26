@@ -115,11 +115,11 @@ def load_config(path: str) -> dict:
             _die(f'ttl_rules[{i}] is missing required field "older_than_days".')
         days = rule["older_than_days"]
         if not isinstance(days, int) or days <= 0:
-            _die(f'ttl_rules[{i}].older_than_days must be a positive integer, got: {days!r}')
+            _die(f"ttl_rules[{i}].older_than_days must be a positive integer, got: {days!r}")
         if not isinstance(rule.get("tags", []), list):
-            _die(f'ttl_rules[{i}].tags must be a list of strings.')
+            _die(f"ttl_rules[{i}].tags must be a list of strings.")
         if not isinstance(rule.get("exclude_tags", []), list):
-            _die(f'ttl_rules[{i}].exclude_tags must be a list of strings.')
+            _die(f"ttl_rules[{i}].exclude_tags must be a list of strings.")
 
     for where, block in [("", cfg), ("filters.", cfg.get("filters") or {})]:
         tfield = block.get("time_field")
@@ -215,24 +215,17 @@ class TraceFilter:
 
     def to_sdk_filters(self) -> list[TraceFilterPublic]:
         """Tag predicates, plus date bounds when on the start_time clock. AND-combined."""
-        filters = [
-            TraceFilterPublic(field="tags", operator="contains", value=tag) for tag in self.tags
-        ]
+        filters = [TraceFilterPublic(field="tags", operator="contains", value=tag) for tag in self.tags]
         filters += [
-            TraceFilterPublic(field="tags", operator="not_contains", value=tag)
-            for tag in self.exclude_tags
+            TraceFilterPublic(field="tags", operator="not_contains", value=tag) for tag in self.exclude_tags
         ]
         if self.time_field == "start_time":
             if self.before is not None:
                 filters.append(
-                    TraceFilterPublic(
-                        field="start_time", operator="<", value=_fmt_dt(self.before)
-                    )
+                    TraceFilterPublic(field="start_time", operator="<", value=_fmt_dt(self.before))
                 )
             if self.after is not None:
-                filters.append(
-                    TraceFilterPublic(field="start_time", operator=">", value=_fmt_dt(self.after))
-                )
+                filters.append(TraceFilterPublic(field="start_time", operator=">", value=_fmt_dt(self.after)))
         return filters
 
     def sorting(self, direction: str) -> str:
@@ -446,6 +439,7 @@ def _search_page(
     An offset cannot be used safely here: the delete loop mutates the result set
     as it goes, so any offset computed against the pre-delete set is stale.
     """
+
     def read() -> list:
         stream = client.rest_client.traces.search_traces(
             project_name=project_name,
@@ -457,9 +451,7 @@ def _search_page(
             last_retrieved_id=cursor,
             **tf.to_api_kwargs(),
         )
-        return rest_stream_parser.read_and_parse_stream(
-            stream=stream, item_class=trace_public.TracePublic
-        )
+        return rest_stream_parser.read_and_parse_stream(stream=stream, item_class=trace_public.TracePublic)
 
     return _rl(read, "search_traces")
 
@@ -505,9 +497,7 @@ def delete_matching(
         for i in range(0, len(ids), DELETE_BATCH_SIZE):
             batch = ids[i : i + DELETE_BATCH_SIZE]
             _rl(
-                lambda batch=batch: client.rest_client.traces.delete_traces(
-                    ids=batch, project_id=project_id
-                ),
+                lambda batch=batch: client.rest_client.traces.delete_traces(ids=batch, project_id=project_id),
                 "delete_traces",
             )
             total_deleted += len(batch)
@@ -563,9 +553,7 @@ def cmd_list(client: opik.Opik, projects: list[dict], filters: list[tuple[TraceF
     print()
 
 
-def _preview(
-    client: opik.Opik, projects: list[dict], filters: list[tuple[TraceFilter, str]]
-) -> int:
+def _preview(client: opik.Opik, projects: list[dict], filters: list[tuple[TraceFilter, str]]) -> int:
     """Count what would be deleted, and show the newest match per project."""
     grand = 0
     for project in projects:
@@ -657,29 +645,41 @@ def cmd_delete(
 def add_filter_args(parser: argparse.ArgumentParser) -> None:
     """Add shared filter flags to a subparser."""
     g = parser.add_argument_group("filter options")
-    g.add_argument("--projects", nargs="+", metavar="NAME",
-                   help="Project names to target. Omit to target all workspace projects.")
-    g.add_argument("--config", metavar="FILE",
-                   help="JSON config file (projects, filters or ttl_rules). CLI flags override.")
+    g.add_argument(
+        "--projects",
+        nargs="+",
+        metavar="NAME",
+        help="Project names to target. Omit to target all workspace projects.",
+    )
+    g.add_argument(
+        "--config",
+        metavar="FILE",
+        help="JSON config file (projects, filters or ttl_rules). CLI flags override.",
+    )
 
     age = g.add_mutually_exclusive_group()
-    age.add_argument("--older-than-days", type=int, metavar="N",
-                     help="Target traces older than N days.")
-    age.add_argument("--before", metavar="DATE",
-                     help="Target traces before this ISO 8601 date (e.g. 2025-01-31).")
+    age.add_argument("--older-than-days", type=int, metavar="N", help="Target traces older than N days.")
+    age.add_argument(
+        "--before", metavar="DATE", help="Target traces before this ISO 8601 date (e.g. 2025-01-31)."
+    )
 
-    g.add_argument("--after", metavar="DATE",
-                   help="Target traces after this ISO 8601 date.")
-    g.add_argument("--tag", nargs="+", metavar="TAG",
-                   help="Include only traces containing ALL of these tags.")
-    g.add_argument("--exclude-tag", nargs="+", metavar="TAG",
-                   help="Exclude traces containing ANY of these tags.")
-    g.add_argument("--time-field", choices=["start_time", "ingestion"], metavar="FIELD",
-                   help="Which clock the date bounds use. 'ingestion' (default) is when the "
-                        "backend received the trace — server-assigned, so it answers 'how long "
-                        "have we held this'. 'start_time' is the trace's own timestamp as shown "
-                        "in the Opik UI, but is supplied by whatever wrote the trace; prefer it "
-                        "only when the policy is about the age of the activity, not custody.")
+    g.add_argument("--after", metavar="DATE", help="Target traces after this ISO 8601 date.")
+    g.add_argument(
+        "--tag", nargs="+", metavar="TAG", help="Include only traces containing ALL of these tags."
+    )
+    g.add_argument(
+        "--exclude-tag", nargs="+", metavar="TAG", help="Exclude traces containing ANY of these tags."
+    )
+    g.add_argument(
+        "--time-field",
+        choices=["start_time", "ingestion"],
+        metavar="FIELD",
+        help="Which clock the date bounds use. 'ingestion' (default) is when the "
+        "backend received the trace — server-assigned, so it answers 'how long "
+        "have we held this'. 'start_time' is the trace's own timestamp as shown "
+        "in the Opik UI, but is supplied by whatever wrote the trace; prefer it "
+        "only when the policy is about the age of the activity, not custody.",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -701,10 +701,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     dp = sub.add_parser("delete", help="Delete matching traces.")
     add_filter_args(dp)
-    dp.add_argument("--dry-run", action="store_true",
-                    help="Show what would be deleted without making any changes.")
-    dp.add_argument("--yes", action="store_true",
-                    help="Skip the confirmation prompt (for scripted/cron use).")
+    dp.add_argument(
+        "--dry-run", action="store_true", help="Show what would be deleted without making any changes."
+    )
+    dp.add_argument(
+        "--yes", action="store_true", help="Skip the confirmation prompt (for scripted/cron use)."
+    )
 
     return parser
 

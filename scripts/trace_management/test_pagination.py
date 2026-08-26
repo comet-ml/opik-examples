@@ -87,19 +87,27 @@ def check_time_field() -> bool:
 
     ing = mt.TraceFilter(before=before, after=after, time_field="ingestion")
     kwargs = ing.to_api_kwargs()
-    ok &= check("ingestion: sends to_time + from_time",
-                set(kwargs) == {"to_time", "from_time"}, str(set(kwargs)))
-    ok &= check("ingestion: emits no start_time predicate",
-                "start_time" not in [f.field for f in ing.to_sdk_filters()])
+    ok &= check(
+        "ingestion: sends to_time + from_time", set(kwargs) == {"to_time", "from_time"}, str(set(kwargs))
+    )
+    ok &= check(
+        "ingestion: emits no start_time predicate",
+        "start_time" not in [f.field for f in ing.to_sdk_filters()],
+    )
 
     # Tags must survive on either clock, and stay AND-combined.
     tagged = mt.TraceFilter(before=before, tags=["a", "b"], exclude_tags=["c"], time_field="ingestion")
     ops = [(f.field, f.operator) for f in tagged.to_sdk_filters()]
-    ok &= check("tags preserved under ingestion clock",
-                ops == [("tags", "contains"), ("tags", "contains"), ("tags", "not_contains")], str(ops))
+    ok &= check(
+        "tags preserved under ingestion clock",
+        ops == [("tags", "contains"), ("tags", "contains"), ("tags", "not_contains")],
+        str(ops),
+    )
 
-    ok &= check("sorting follows the active clock",
-                "start_time" in st.sorting("DESC") and '"id"' in ing.sorting("DESC"))
+    ok &= check(
+        "sorting follows the active clock",
+        "start_time" in st.sorting("DESC") and '"id"' in ing.sorting("DESC"),
+    )
     return ok
 
 
@@ -112,8 +120,11 @@ def main() -> int:
         print("\n2,500 traces / 1,000 per page (the case that used to hang):")
         store, deleted = _run(2500)
         ok &= check("terminates", True)
-        ok &= check("deletes every trace exactly once", deleted == 2500 and len(set(store.deleted)) == 2500,
-                    f"deleted={deleted}, unique={len(set(store.deleted))}")
+        ok &= check(
+            "deletes every trace exactly once",
+            deleted == 2500 and len(set(store.deleted)) == 2500,
+            f"deleted={deleted}, unique={len(set(store.deleted))}",
+        )
         ok &= check("store is empty afterwards", store.ids == [], f"{len(store.ids)} left")
 
         print("\nBoundary sizes:")

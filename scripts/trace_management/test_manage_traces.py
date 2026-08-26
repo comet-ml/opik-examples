@@ -51,24 +51,24 @@ DEFAULT_BASE_URL = "https://www.comet.com"
 # Each entry: (days_ago, tags)
 TRACE_SEEDS = (
     # Old traces — various tags
-    *[(95, ["sensitive"])        for _ in range(10)],
-    *[(95, ["PII"])              for _ in range(10)],
-    *[(95, ["internal"])         for _ in range(10)],
-    *[(95, [])                   for _ in range(10)],  # untagged, old
+    *[(95, ["sensitive"]) for _ in range(10)],
+    *[(95, ["PII"]) for _ in range(10)],
+    *[(95, ["internal"]) for _ in range(10)],
+    *[(95, []) for _ in range(10)],  # untagged, old
     # Medium-age traces
-    *[(45, ["sensitive"])        for _ in range(5)],
-    *[(45, ["internal"])         for _ in range(5)],
-    *[(45, [])                   for _ in range(5)],
+    *[(45, ["sensitive"]) for _ in range(5)],
+    *[(45, ["internal"]) for _ in range(5)],
+    *[(45, []) for _ in range(5)],
     # Recent traces — should survive most filters
-    *[(5,  ["sensitive"])        for _ in range(5)],
-    *[(5,  [])                   for _ in range(5)],
+    *[(5, ["sensitive"]) for _ in range(5)],
+    *[(5, []) for _ in range(5)],
 )
 
 # Mirrors config_example.json TTL rules
 TTL_RULES = [
     {"tags": ["sensitive", "PII"], "older_than_days": 30},
-    {"tags": ["internal"],         "older_than_days": 60},
-    {"tags": [],                   "older_than_days": 90, "description": "Default catch-all"},
+    {"tags": ["internal"], "older_than_days": 60},
+    {"tags": [], "older_than_days": 90, "description": "Default catch-all"},
 ]
 
 # ---------------------------------------------------------------------------
@@ -108,13 +108,15 @@ def seed_traces(env: dict, project_name: str) -> None:
     for days_ago, tags in TRACE_SEEDS:
         start = now - timedelta(days=days_ago)
         end = start + timedelta(seconds=1)
-        batch.append({
-            "project_name": project_name,
-            "name": f"test-trace-{days_ago}d-{'_'.join(tags) or 'untagged'}",
-            "start_time": start.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-            "end_time":   end.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-            "tags": tags,
-        })
+        batch.append(
+            {
+                "project_name": project_name,
+                "name": f"test-trace-{days_ago}d-{'_'.join(tags) or 'untagged'}",
+                "start_time": start.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                "end_time": end.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                "tags": tags,
+            }
+        )
 
     # API accepts batch creation
     resp = requests.post(url, headers=make_headers(env), json={"traces": batch})
@@ -128,8 +130,9 @@ def seed_traces(env: dict, project_name: str) -> None:
 
 def count_traces(env: dict, project_name: str) -> int:
     url = f"{env['base_url']}/opik/api/v1/private/traces"
-    resp = requests.get(url, headers=make_headers(env),
-                        params={"project_name": project_name, "page": 1, "size": 1})
+    resp = requests.get(
+        url, headers=make_headers(env), params={"project_name": project_name, "page": 1, "size": 1}
+    )
     resp.raise_for_status()
     return resp.json().get("total", 0)
 
@@ -188,10 +191,7 @@ def write_tag_only_config(project_name: str) -> str:
     cfg = {
         "projects": [project_name],
         "time_field": "start_time",
-        "filters": {
-            "tags": ["internal"],
-            "exclude_tags": ["sensitive"]
-        }
+        "filters": {"tags": ["internal"], "exclude_tags": ["sensitive"]},
     }
     with open(path, "w") as f:
         json.dump(cfg, f, indent=2)
@@ -205,12 +205,13 @@ def write_tag_only_config(project_name: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="End-to-end test for manage_traces.py")
-    p.add_argument("--project", default=DEFAULT_PROJECT,
-                   help=f"Project name to use (default: {DEFAULT_PROJECT})")
-    p.add_argument("--skip-seed", action="store_true",
-                   help="Skip trace seeding (project already has test data).")
-    p.add_argument("--skip-pause", action="store_true",
-                   help="Skip interactive pauses (run fully automated).")
+    p.add_argument(
+        "--project", default=DEFAULT_PROJECT, help=f"Project name to use (default: {DEFAULT_PROJECT})"
+    )
+    p.add_argument(
+        "--skip-seed", action="store_true", help="Skip trace seeding (project already has test data)."
+    )
+    p.add_argument("--skip-pause", action="store_true", help="Skip interactive pauses (run fully automated).")
     return p.parse_args()
 
 
@@ -222,10 +223,10 @@ def main() -> None:
 
     # Dates used in filter scenarios
     now = datetime.now(tz=UTC)
-    cutoff_90  = (now - timedelta(days=90)).strftime("%Y-%m-%d")
-    cutoff_60  = (now - timedelta(days=60)).strftime("%Y-%m-%d")
-    cutoff_30  = (now - timedelta(days=30)).strftime("%Y-%m-%d")
-    after_100  = (now - timedelta(days=100)).strftime("%Y-%m-%d")
+    cutoff_90 = (now - timedelta(days=90)).strftime("%Y-%m-%d")
+    cutoff_60 = (now - timedelta(days=60)).strftime("%Y-%m-%d")
+    cutoff_30 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    after_100 = (now - timedelta(days=100)).strftime("%Y-%m-%d")
     (now - timedelta(days=60)).strftime("%Y-%m-%d")
 
     print("=" * 60)
