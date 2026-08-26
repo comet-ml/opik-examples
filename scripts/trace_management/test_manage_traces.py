@@ -22,6 +22,12 @@ Usage:
 
 Requires environment variables:
     OPIK_API_KEY, OPIK_WORKSPACE, OPIK_BASE_URL (optional)
+
+Note: seeded traces are backdated via start_time but ingested now, so every scenario
+runs with --time-field start_time. See run() for why.
+
+This script writes real traces to a real workspace. For the offline tests covering
+pagination and filter construction, see test_pagination.py.
 """
 
 import argparse
@@ -147,18 +153,30 @@ def section(title: str) -> None:
 
 
 def run(args: list[str], label: str) -> None:
-    """Run manage_traces.py with the given args and print the command."""
+    """Run manage_traces.py with the given args and print the command.
+
+    Every scenario is forced onto the start_time clock. The traces seeded below are
+    created *now* but carry a backdated start_time, so on the default ingestion clock
+    they are all seconds old and every date-based scenario would match nothing — while
+    still printing tidy output, since this script asserts nothing. Backdated fixtures
+    are exactly the case `--time-field start_time` exists for.
+    """
     cmd = ["python", "manage_traces.py"] + args
+    if args and args[0] in ("list", "delete"):
+        cmd += ["--time-field", "start_time"]
     print(f"\n  $ {' '.join(cmd)}")
     print()
     result = subprocess.run(cmd, cwd=os.path.dirname(__file__))
-    if result.returncode not in (0, 1):
+    # Exit 1 means a real failure (bad config, or an API error while counting/deleting),
+    # so it is worth surfacing here rather than tolerating.
+    if result.returncode != 0:
         print(f"\n  WARNING: '{label}' exited with code {result.returncode}")
 
 
 def write_temp_config(project_name: str, rules: list[dict]) -> str:
     path = os.path.join(os.path.dirname(__file__), "_test_ttl_config.json")
-    cfg = {"projects": [project_name], "ttl_rules": rules}
+    # start_time clock, for the same reason run() forces it — see that docstring.
+    cfg = {"projects": [project_name], "time_field": "start_time", "ttl_rules": rules}
     with open(path, "w") as f:
         json.dump(cfg, f, indent=2)
     return path
@@ -169,6 +187,7 @@ def write_tag_only_config(project_name: str) -> str:
     path = os.path.join(os.path.dirname(__file__), "_test_tag_only_config.json")
     cfg = {
         "projects": [project_name],
+        "time_field": "start_time",
         "filters": {
             "tags": ["internal"],
             "exclude_tags": ["sensitive"]
