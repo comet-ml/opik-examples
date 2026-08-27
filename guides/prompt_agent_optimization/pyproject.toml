@@ -1,0 +1,27 @@
+[project]
+name = "prompt-agent-optimization"
+version = "0.1.0"
+description = "Prompt & agent optimization with Opik, end-to-end over an escalating RAG-over-docs example."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "opik>=2.0",
+    "opik-optimizer",
+    "chromadb",
+    "litellm",
+    # WHY: this guide's deliverable is a notebook. Jupyter lets `uv run jupyter lab`
+    # open it locally, and nbconvert/nbformat let it be validated and executed
+    # headlessly (CI). In Colab (or any bare env) the notebook's own %pip cell
+    # installs the runtime deps instead.
+    "jupyterlab",
+    "nbconvert",
+    "nbformat",
+    "ipykernel",
+    # WHY: opik-optimizer's progress bars use tqdm's notebook widget, which needs
+    # ipywidgets in an interactive kernel (headless nbconvert falls back to text).
+    "ipywidgets",
+]
+
+# WHY: notebook-only example — uv manages the env, no installable package.
+[tool.uv]
+package = false
