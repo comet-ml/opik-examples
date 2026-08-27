@@ -7,8 +7,8 @@ for a fictional product, **Ledgerline**). It doubles as:
 - a **live workshop** — run **Part 1** (~20 min) to optimize a prompt against an
   exact-match metric and see it in Opik; and
 - a **take-home guide** — Parts 2–5 cover LLM-judge metrics (and how to *trust*
-  them), multi-objective optimization, agent/tool optimization, and choosing an
-  optimizer.
+  them), multi-objective optimization with **real token cost**, comparing
+  optimizers (MetaPrompt vs GEPA vs Few-Shot), agents, and how to choose.
 
 Every optimization logs to Opik under **Evaluation → Optimization runs**, so each
 step is a comparable run.
@@ -16,13 +16,17 @@ step is a comparable run.
 ## What it covers
 
 - **Part 0** — how to think about prompt optimization (prompt + dataset + metric).
-- **Part 1** ⭐ — your first optimization: exact-match metric + `MetaPromptOptimizer`.
-- **Part 2** — LLM-judge metrics, *how to trust a judge*, and multi-objective
-  optimization with `MultiMetricObjective`.
-- **Part 3** — from prompt to agent: a tool-calling `search_docs` agent optimized
-  end-to-end, then `FewShotBayesianOptimizer` on the same agent (with a pointer to
-  `ParameterOptimizer`).
-- **Part 4** — choosing an optimizer (selection table + how to choose + chaining).
+- **Part 1** ⭐ — your first optimization: exact-match metric + `MetaPromptOptimizer`,
+  with a before/after answer and a note on *steering* the optimizer.
+- **Part 2 — Defining the objective** — LLM-judge metrics, *how to trust a judge*,
+  and multi-objective optimization combining quality with **real token cost**
+  (Opik's built-in `SpanCost`).
+- **Part 3 — Choosing an optimizer** — **MetaPrompt vs GEPA vs Few-Shot** run
+  head-to-head on the same task (what each one does differently), plus the
+  selection table and chaining.
+- **Part 4 — Going further** — a tool-calling `search_docs` agent, `ParameterOptimizer`
+  (described), and pointers to more (tool optimization, HRPO, Evolutionary, and
+  `OptimizableAgent` for optimizing your own app code).
 - **Part 5** — promote the winner to the Prompt Library; pointers to Optimization
   Studio and the docs.
 
