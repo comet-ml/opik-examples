@@ -22,6 +22,12 @@ Usage:
 
 Requires environment variables:
     OPIK_API_KEY, OPIK_WORKSPACE, OPIK_BASE_URL (optional)
+
+Note: seeded traces are backdated via start_time but ingested now, so every scenario
+runs with --time-field start_time. See run() for why.
+
+This script writes real traces to a real workspace. For the offline tests covering
+pagination and filter construction, see test_pagination.py.
 """
 
 import argparse
@@ -45,24 +51,24 @@ DEFAULT_BASE_URL = "https://www.comet.com"
 # Each entry: (days_ago, tags)
 TRACE_SEEDS = (
     # Old traces — various tags
-    *[(95, ["sensitive"])        for _ in range(10)],
-    *[(95, ["PII"])              for _ in range(10)],
-    *[(95, ["internal"])         for _ in range(10)],
-    *[(95, [])                   for _ in range(10)],  # untagged, old
+    *[(95, ["sensitive"]) for _ in range(10)],
+    *[(95, ["PII"]) for _ in range(10)],
+    *[(95, ["internal"]) for _ in range(10)],
+    *[(95, []) for _ in range(10)],  # untagged, old
     # Medium-age traces
-    *[(45, ["sensitive"])        for _ in range(5)],
-    *[(45, ["internal"])         for _ in range(5)],
-    *[(45, [])                   for _ in range(5)],
+    *[(45, ["sensitive"]) for _ in range(5)],
+    *[(45, ["internal"]) for _ in range(5)],
+    *[(45, []) for _ in range(5)],
     # Recent traces — should survive most filters
-    *[(5,  ["sensitive"])        for _ in range(5)],
-    *[(5,  [])                   for _ in range(5)],
+    *[(5, ["sensitive"]) for _ in range(5)],
+    *[(5, []) for _ in range(5)],
 )
 
 # Mirrors config_example.json TTL rules
 TTL_RULES = [
     {"tags": ["sensitive", "PII"], "older_than_days": 30},
-    {"tags": ["internal"],         "older_than_days": 60},
-    {"tags": [],                   "older_than_days": 90, "description": "Default catch-all"},
+    {"tags": ["internal"], "older_than_days": 60},
+    {"tags": [], "older_than_days": 90, "description": "Default catch-all"},
 ]
 
 # ---------------------------------------------------------------------------
@@ -102,13 +108,15 @@ def seed_traces(env: dict, project_name: str) -> None:
     for days_ago, tags in TRACE_SEEDS:
         start = now - timedelta(days=days_ago)
         end = start + timedelta(seconds=1)
-        batch.append({
-            "project_name": project_name,
-            "name": f"test-trace-{days_ago}d-{'_'.join(tags) or 'untagged'}",
-            "start_time": start.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-            "end_time":   end.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-            "tags": tags,
-        })
+        batch.append(
+            {
+                "project_name": project_name,
+                "name": f"test-trace-{days_ago}d-{'_'.join(tags) or 'untagged'}",
+                "start_time": start.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                "end_time": end.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                "tags": tags,
+            }
+        )
 
     # API accepts batch creation
     resp = requests.post(url, headers=make_headers(env), json={"traces": batch})
@@ -122,8 +130,9 @@ def seed_traces(env: dict, project_name: str) -> None:
 
 def count_traces(env: dict, project_name: str) -> int:
     url = f"{env['base_url']}/opik/api/v1/private/traces"
-    resp = requests.get(url, headers=make_headers(env),
-                        params={"project_name": project_name, "page": 1, "size": 1})
+    resp = requests.get(
+        url, headers=make_headers(env), params={"project_name": project_name, "page": 1, "size": 1}
+    )
     resp.raise_for_status()
     return resp.json().get("total", 0)
 
@@ -147,18 +156,30 @@ def section(title: str) -> None:
 
 
 def run(args: list[str], label: str) -> None:
-    """Run manage_traces.py with the given args and print the command."""
+    """Run manage_traces.py with the given args and print the command.
+
+    Every scenario is forced onto the start_time clock. The traces seeded below are
+    created *now* but carry a backdated start_time, so on the default ingestion clock
+    they are all seconds old and every date-based scenario would match nothing — while
+    still printing tidy output, since this script asserts nothing. Backdated fixtures
+    are exactly the case `--time-field start_time` exists for.
+    """
     cmd = ["python", "manage_traces.py"] + args
+    if args and args[0] in ("list", "delete"):
+        cmd += ["--time-field", "start_time"]
     print(f"\n  $ {' '.join(cmd)}")
     print()
     result = subprocess.run(cmd, cwd=os.path.dirname(__file__))
-    if result.returncode not in (0, 1):
+    # Exit 1 means a real failure (bad config, or an API error while counting/deleting),
+    # so it is worth surfacing here rather than tolerating.
+    if result.returncode != 0:
         print(f"\n  WARNING: '{label}' exited with code {result.returncode}")
 
 
 def write_temp_config(project_name: str, rules: list[dict]) -> str:
     path = os.path.join(os.path.dirname(__file__), "_test_ttl_config.json")
-    cfg = {"projects": [project_name], "ttl_rules": rules}
+    # start_time clock, for the same reason run() forces it — see that docstring.
+    cfg = {"projects": [project_name], "time_field": "start_time", "ttl_rules": rules}
     with open(path, "w") as f:
         json.dump(cfg, f, indent=2)
     return path
@@ -169,10 +190,8 @@ def write_tag_only_config(project_name: str) -> str:
     path = os.path.join(os.path.dirname(__file__), "_test_tag_only_config.json")
     cfg = {
         "projects": [project_name],
-        "filters": {
-            "tags": ["internal"],
-            "exclude_tags": ["sensitive"]
-        }
+        "time_field": "start_time",
+        "filters": {"tags": ["internal"], "exclude_tags": ["sensitive"]},
     }
     with open(path, "w") as f:
         json.dump(cfg, f, indent=2)
@@ -186,12 +205,13 @@ def write_tag_only_config(project_name: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="End-to-end test for manage_traces.py")
-    p.add_argument("--project", default=DEFAULT_PROJECT,
-                   help=f"Project name to use (default: {DEFAULT_PROJECT})")
-    p.add_argument("--skip-seed", action="store_true",
-                   help="Skip trace seeding (project already has test data).")
-    p.add_argument("--skip-pause", action="store_true",
-                   help="Skip interactive pauses (run fully automated).")
+    p.add_argument(
+        "--project", default=DEFAULT_PROJECT, help=f"Project name to use (default: {DEFAULT_PROJECT})"
+    )
+    p.add_argument(
+        "--skip-seed", action="store_true", help="Skip trace seeding (project already has test data)."
+    )
+    p.add_argument("--skip-pause", action="store_true", help="Skip interactive pauses (run fully automated).")
     return p.parse_args()
 
 
@@ -203,10 +223,10 @@ def main() -> None:
 
     # Dates used in filter scenarios
     now = datetime.now(tz=UTC)
-    cutoff_90  = (now - timedelta(days=90)).strftime("%Y-%m-%d")
-    cutoff_60  = (now - timedelta(days=60)).strftime("%Y-%m-%d")
-    cutoff_30  = (now - timedelta(days=30)).strftime("%Y-%m-%d")
-    after_100  = (now - timedelta(days=100)).strftime("%Y-%m-%d")
+    cutoff_90 = (now - timedelta(days=90)).strftime("%Y-%m-%d")
+    cutoff_60 = (now - timedelta(days=60)).strftime("%Y-%m-%d")
+    cutoff_30 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    after_100 = (now - timedelta(days=100)).strftime("%Y-%m-%d")
     (now - timedelta(days=60)).strftime("%Y-%m-%d")
 
     print("=" * 60)
