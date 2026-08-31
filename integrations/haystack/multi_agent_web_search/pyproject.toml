@@ -1,0 +1,25 @@
+[project]
+name = "haystack-multi-agent-web-search"
+version = "0.1.0"
+description = "Trace a Haystack coordinator -> scout multi-agent web-search chain with Opik."
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "haystack-ai>=3.0.0",
+    "serperdev-haystack>=1.0.0",
+    "opik>=2.2.0",
+]
+
+[dependency-groups]
+dev = ["ruff"]
+
+# WHY: a loose runnable script, not an installable package — uv manages the env but builds nothing.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
