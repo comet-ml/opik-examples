@@ -45,6 +45,8 @@ async def run_audit(
                 "runs_flagged": summary.runs_flagged,
                 "total_gpu_hours": summary.total_gpu_hours,
                 "est_wasted_gpu_hours": summary.est_wasted_gpu_hours,
+                "coverage": summary.coverage,
+                "extrapolated_runs": summary.extrapolated_runs,
                 "thresholds": {"low_util_pct": low_util, "idle_util_pct": idle_util},
                 "source": "synthetic" if synthetic else "live",
                 "model": config.GEN_MODEL,

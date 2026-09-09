@@ -23,8 +23,11 @@ class RunMetrics:
     url: str | None = None
     declared_num_gpus: int | None = None
     declared_gpu_type: str | None = None
+    scale_param: str | None = None
+    declared_nodes: int | None = None
     duration_hours: float | None = None
     detected_gpu_count: int | None = None
+    coverage: str = "none"  # "full" | "rank0_sample" | "none"
     gpu_util_mean: float | None = None
     gpu_util_peak: float | None = None
     gpu_mem_peak_pct: float | None = None
@@ -58,6 +61,41 @@ def flatten_params(raw: Any) -> dict[str, Any]:
             if isinstance(item, dict) and "name" in item:
                 flat[item["name"]] = item.get("value", item.get("valueCurrent"))
     return flat
+
+
+def declared_scale(params: dict[str, Any]) -> tuple[int | None, str | None, int | None]:
+    """(total devices, param key used, node count) from whichever scale params the run logs."""
+    devices, key = None, None
+    for candidate in config.DEVICE_PARAM_KEYS:
+        devices = _to_int(params.get(candidate))
+        if devices:
+            key = candidate
+            break
+    nodes = None
+    for candidate in config.NODE_PARAM_KEYS:
+        nodes = _to_int(params.get(candidate))
+        if nodes:
+            key = key or candidate
+            break
+    return devices, key, nodes
+
+
+def resolve_coverage(run: "RunMetrics") -> str:
+    """How much of the declared fleet the metric series cover.
+
+    Multi-node jobs typically log ONE experiment whose system metrics come from the
+    rank-0 node only, so declared=64 with 8 GPUs reporting usually means an 8-node job,
+    not a misconfiguration. Divisibility is the tell.
+    """
+    detected = run.detected_gpu_count
+    if not detected:
+        return "none"
+    declared = run.declared_num_gpus
+    if run.declared_nodes and run.declared_nodes > 1:
+        return "rank0_sample"
+    if declared and declared > detected and declared % detected == 0:
+        return "rank0_sample"
+    return "full"
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -110,6 +148,7 @@ async def fetch_run(session: ClientSession, workspace: str, project: str, experi
 
     params = flatten_params(params_resp.get("parameters"))
     params.update(flatten_params(details.get("others")))
+    devices, scale_key, nodes = declared_scale(params)
 
     run = RunMetrics(
         workspace=workspace,
@@ -117,8 +156,10 @@ async def fetch_run(session: ClientSession, workspace: str, project: str, experi
         experiment_id=experiment_id,
         name=details.get("name"),
         url=details.get("url"),
-        declared_num_gpus=_to_int(params.get("num_gpus")),
+        declared_num_gpus=devices,
         declared_gpu_type=params.get("gpu_type") or None,
+        scale_param=scale_key,
+        declared_nodes=nodes,
         duration_hours=duration_hours(details),
     )
 
@@ -126,6 +167,10 @@ async def fetch_run(session: ClientSession, workspace: str, project: str, experi
     gpu_util_names = [n for n in names if GPU_UTIL_RE.match(n)]
     gpu_mem_names = [n for n in names if GPU_MEM_RE.match(n)]
     run.detected_gpu_count = len(gpu_util_names) or None
+    if run.declared_num_gpus is None and nodes and run.detected_gpu_count:
+        # Only the node count is declared: total = nodes x GPUs visible on the reporting node.
+        run.declared_num_gpus = nodes * run.detected_gpu_count
+    run.coverage = resolve_coverage(run)
 
     wanted = gpu_util_names + gpu_mem_names + ([CPU_METRIC] if CPU_METRIC in names else [])
     if not wanted:

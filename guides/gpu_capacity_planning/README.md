@@ -23,10 +23,10 @@ Opik trace: capacity_audit ─ tool spans per MCP call ─ analyze span ─ LLM 
 
 ## What this does
 
-Teams routinely over-provision training hardware because *declared* capacity (`num_gpus`,
-`gpu_type` hyperparameters) and *actual* utilization (`sys.gpu.*` system metrics) live in
-different places and nobody joins them — 64 declared GPUs running at 12% mean utilization is
-a real, common finding. This guide closes that loop with the Comet ecosystem: the Comet MCP
+Teams routinely over-provision training hardware because *declared* capacity (scale
+parameters like `num_devices` or `nnodes`) and *actual* utilization (`sys.gpu.*` system
+metrics) live in different places and nobody joins them — a 64-GPU job running at 12% mean
+utilization is a real, common finding. This guide closes that loop with the Comet ecosystem: the Comet MCP
 server exposes EM experiment data as tools, deterministic code sweeps the runs and computes
 utilization-vs-declared findings, an LLM turns the findings into concrete rightsizing
 recommendations, and Opik records every MCP call, the analysis, and the LLM call (with token
@@ -57,6 +57,7 @@ ships with [uv](https://docs.astral.sh/uv/).
 | `COMET_URL_OVERRIDE` / `OPIK_URL_OVERRIDE` | Self-hosted deployments | Optional |
 | `OPIK_PROJECT_NAME` | Trace destination | Default `gpu-capacity-planning` |
 | `CAPACITY_LOW_UTIL_PCT` / `CAPACITY_IDLE_UTIL_PCT` / `CAPACITY_MAX_RUNS` | Threshold tuning | Defaults 30 / 10 / 50 |
+| `CAPACITY_DEVICE_PARAM_KEYS` / `CAPACITY_NODE_PARAM_KEYS` | Which params declare training scale | Defaults `num_gpus,num_devices,world_size` / `nnodes,num_nodes,config/compute/nnodes` |
 
 The two credential pairs gate independently, giving three useful modes:
 
@@ -92,12 +93,15 @@ uv run gpu-capacity-planning ask "Which projects waste the most GPU hours?"
   each call becomes an Opik tool span. `openai_tool_defs()` converts the server's MCP schemas
   into OpenAI-format tool definitions for litellm.
 - **`collector.py`** — deterministic sweep. For each run: details (name, URL, timestamps,
-  available metric names), parameters (declared `num_gpus` / `gpu_type`), then one batched
-  `get_experiment_metric_data` call for the `sys.gpu.N.*` and CPU series. Produces one
-  `RunMetrics` per run with utilization means/peaks.
+  available metric names), parameters (declared scale, resolved from the configurable
+  `CAPACITY_*_PARAM_KEYS` lists), then one batched `get_experiment_metric_data` call for the
+  `sys.gpu.N.*` and CPU series. Produces one `RunMetrics` per run with utilization
+  means/peaks and a **coverage** verdict (`full` / `rank0_sample` / `none` — see
+  [Distributed training runs](#distributed-training-runs)).
 - **`analysis.py`** — pure rules, no LLM: mean GPU utilization under the idle threshold →
-  **high**; under the target threshold → **medium**; declared ≠ detected GPU count → flag;
-  high CPU + idle GPU → likely dataloader-bound; missing metrics → instrumentation advice.
+  **high**; under the target threshold → **medium**; declared ≠ reporting GPU count (and not
+  explained by multi-node logging) → flag; high CPU + idle GPU → likely dataloader-bound;
+  missing metrics → instrumentation advice.
   Also estimates wasted GPU-hours (`duration × GPUs × (1 − util)` over flagged runs).
 - **`recommender.py`** — one `litellm` call turns the findings JSON into the Markdown
   recommendations section. Opik's litellm callback nests the LLM span (model, tokens, cost)
@@ -105,10 +109,11 @@ uv run gpu-capacity-planning ask "Which projects waste the most GPU hours?"
 - **`agent.py`** — the `ask` loop: litellm tool-calling against the same MCP session, bounded
   by `--max-turns`.
 - **`synthetic_server.py`** — a FastMCP server that mimics comet-mcp's five tools from
-  `data/sample_runs.json` (six fictional runs: the 64-GPU/12% offender, a healthy LoRA run, a
-  CPU-bound run, a declared/detected mismatch, an uninstrumented run, and a well-utilized
-  baseline). Because it speaks the same tool contract, the dry run exercises the exact code
-  path used against production.
+  `data/sample_runs.json` (seven fictional runs: the 8-node/64-GPU/12% offender, a
+  256-device JAX run with no system metrics, a healthy LoRA run, a CPU-bound run, a
+  declared/reporting mismatch, an uninstrumented run, and a well-utilized baseline). Because
+  it speaks the same tool contract, the dry run exercises the exact code path used against
+  production.
 
 ## Viewing the results in Opik
 
@@ -120,6 +125,35 @@ Trace tags (`capacity-planning`, `comet-em`, `mcp`, `live`/`synthetic`) and meta
 filter or aggregate on — including for automated review of the audit runs themselves via
 Opik's trace analysis features. `ask` produces a **`capacity_agent`** trace with one LLM span
 per turn plus the tool spans it triggered.
+
+## Distributed training runs
+
+Real workspaces log distributed jobs in three shapes, and the audit handles each:
+
+1. **Single-node multi-GPU** (one experiment, all GPUs report `sys.gpu.N.*`) — full
+   coverage; utilization and GPU-hours are measured directly.
+2. **Multi-node, rank-0 logging** — the common pattern: one experiment per job, system
+   metrics from the node the logging process runs on. The collector marks these
+   `rank0_sample` when the declared device count is a multiple of the GPUs reporting (or a
+   node-count param says so), and the report extrapolates the reporting node's utilization
+   across the declared fleet — labeled as an estimate, with the advice to enable
+   system-metric logging on every node. A declared count that is *not* explained this way
+   (e.g. 12 declared, 8 reporting) is flagged as a real mismatch instead.
+3. **No system metrics at all** — large sharded jobs (JAX/TPU-style, `num_devices` in the
+   hundreds) often run with system-metric logging disabled. These surface as
+   `coverage: none` with an instrumentation recommendation; in real fleets this is
+   frequently the *largest* bucket, which is itself the finding.
+
+Because hardly anyone logs a literal `num_gpus`, the declared scale is resolved from a
+configurable parameter list: `CAPACITY_DEVICE_PARAM_KEYS` (total devices — default
+`num_gpus,num_devices,world_size`) and `CAPACITY_NODE_PARAM_KEYS` (node count, multiplied by
+the GPUs seen per node — default `nnodes,num_nodes,config/compute/nnodes`). Add your
+launcher's key if it differs. If your training stack logs only aggregates like
+`sys.compute.overall` / `sys.compute.utilized`, note those are cluster-level percentages,
+not per-GPU series — the audit needs `sys.gpu.N.gpu_utilization`, which Comet's SDK logs
+automatically when system-metric logging is on. One experiment per *worker* (rather than per
+job) also works: each worker is audited as its own run, which catches stragglers, but log a
+shared scale param to avoid per-worker mismatch flags.
 
 ## Setting up the MCP servers
 
