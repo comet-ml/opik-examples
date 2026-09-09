@@ -81,11 +81,12 @@ def list_runs(
 @app.command()
 def ask(
     question: str,
+    workspace: str = typer.Option(None, help="Comet workspace (default: COMET_WORKSPACE)"),
     synthetic: bool = typer.Option(False, help="Force the bundled synthetic MCP server"),
     max_turns: int = typer.Option(8, help="Tool-use loop bound"),
 ) -> None:
     """Let the LLM drive the comet-mcp tools to answer a free-form capacity question."""
-    _, use_synthetic = _resolve(None, synthetic)
+    ws, use_synthetic = _resolve(workspace, synthetic)
     if config.DRY_RUN:
         typer.echo(
             f"[DRY RUN] Opik/LLM credentials not set — would start a comet-mcp session and let "
@@ -97,7 +98,7 @@ def ask(
 
     async def _ask():
         async with comet_session(use_synthetic) as session:
-            return await agent_ask(session, question, max_turns=max_turns)
+            return await agent_ask(session, question, ws, max_turns=max_turns)
 
     typer.echo(asyncio.run(_ask()))
 

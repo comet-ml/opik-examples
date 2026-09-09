@@ -10,12 +10,17 @@ from .recommender import _opik_metadata, _wire_llm_span_logging
 
 
 @opik.track(name="capacity_agent", project_name=config.OPIK_PROJECT_NAME)
-async def ask(session: ClientSession, question: str, max_turns: int = 8) -> str:
+async def ask(session: ClientSession, question: str, workspace: str, max_turns: int = 8) -> str:
     """Bounded tool-use loop: the LLM drives the comet-mcp tools to answer a free-form question."""
     _wire_llm_span_logging()
     tools = await openai_tool_defs(session)
+    # WHY: without this the model guesses the workspace and audits the API key's default one.
+    scope = (
+        f"\nAudit the Comet workspace '{workspace}': pass it as the workspace argument "
+        "to every tool that accepts one."
+    )
     messages: list[dict] = [
-        {"role": "system", "content": prompts.AGENT_SYSTEM_PROMPT},
+        {"role": "system", "content": prompts.AGENT_SYSTEM_PROMPT + scope},
         {"role": "user", "content": question},
     ]
 
