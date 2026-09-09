@@ -121,8 +121,38 @@ filter or aggregate on — including for automated review of the audit runs them
 Opik's trace analysis features. `ask` produces a **`capacity_agent`** trace with one LLM span
 per turn plus the tool spans it triggered.
 
-## Using the Comet MCP server with your own agent
+## Setting up the MCP servers
 
-The repo ships a [.mcp.json](./.mcp.json) with the same server definition this example spawns
-programmatically. Point Claude Code, Cursor, or any MCP-capable agent at it and explore the
-same workspace interactively — the `ask` command is exactly that loop, minus the IDE.
+### comet-mcp — required for live mode
+
+The example spawns the [Comet MCP server](https://github.com/comet-ml/comet-mcp) itself via
+`uvx comet-mcp` (stdio), so `audit` / `list-runs` / `ask` need no MCP host configuration —
+just have [`uv`](https://docs.astral.sh/uv/) on your `PATH` (it provides `uvx`) and export:
+
+```bash
+export COMET_API_KEY=...        # comet.com → account settings → API key
+export COMET_WORKSPACE=...      # the workspace whose training runs to audit
+# export COMET_URL_OVERRIDE=... # self-hosted Comet EM only
+```
+
+To explore the same workspace **interactively** from Claude Code, Cursor, or any MCP-capable
+host, this folder ships a ready [.mcp.json](./.mcp.json) with the same server definition —
+the `ask` command is exactly that loop, minus the IDE. Alternative installs (pip, Docker) and
+the full tool list are in the [comet-mcp repository](https://github.com/comet-ml/comet-mcp);
+Comet EM platform docs live at [comet.com/docs/v2](https://www.comet.com/docs/v2/).
+
+### opik-mcp — optional, for exploring the resulting traces
+
+To dig into the audit traces from your own agent (list projects, query traces, read spans),
+add the [Opik MCP server](https://github.com/comet-ml/opik-mcp) next to comet-mcp. One
+command registers it with the AI clients on your machine:
+
+```bash
+uvx opik mcp configure
+```
+
+Or run it directly — `uvx opik-mcp@latest` with `OPIK_API_KEY` / `OPIK_WORKSPACE` set (the
+old `npx opik-mcp` distribution is deprecated). Setup guide, troubleshooting, and FAQ:
+[comet.com/docs/opik/mcp-server](https://www.comet.com/docs/opik/mcp-server). Opik SDK
+configuration (API keys, workspaces, self-hosted URLs) is covered in the
+[Opik docs](https://www.comet.com/docs/opik/).
