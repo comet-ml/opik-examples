@@ -6,3 +6,4 @@ __pycache__/
 opik_test_suite_reports/
 *.log
 .ruff_cache/
+traces.jsonl
