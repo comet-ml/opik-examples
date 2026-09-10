@@ -1,0 +1,106 @@
+{
+  "workspace": "demo-workspace",
+  "projects": {
+    "llm-finetune": {
+      "experiments": {
+        "exp-llm-64gpu": {
+          "name": "llama-70b-sft-full-8n",
+          "status": "finished",
+          "created_at": "2026-08-20 06:00:00",
+          "updated_at": "2026-08-21 00:00:00",
+          "description": "Full-parameter SFT on the 70B base model, 8 nodes x 8 GPUs, rank-0 logs system metrics",
+          "parameters": {"num_devices": "64", "nnodes": "8", "gpu_type": "A100-80GB", "batch_size": "2048", "lr": "1e-5"},
+          "gpu_series": {
+            "count": 8,
+            "utilization": [10, 13, 12, 9, 15, 11, 13, 10, 12, 21, 11, 8],
+            "memory": [22, 25, 24, 23, 26, 25, 24, 23, 25, 28, 24, 22]
+          },
+          "cpu_series": [18, 24, 22, 20, 25, 23, 21, 19, 24, 26, 22, 21]
+        },
+        "exp-llm-jax256": {
+          "name": "asr-pretrain-jax-256dev",
+          "status": "finished",
+          "created_at": "2026-08-21 04:00:00",
+          "updated_at": "2026-08-22 12:00:00",
+          "description": "JAX pretraining sharded over 256 devices; system-metric logging not enabled",
+          "parameters": {"num_devices": "256", "sharding.ici_parallelism.fsdp": "-1", "sharding.dcn_parallelism.data": "-1", "batch_size": "4096", "lr": "8e-4"},
+          "cpu_series": [22, 30, 27, 24, 31, 29, 26, 23, 30, 32, 27, 25]
+        },
+        "exp-llm-8gpu": {
+          "name": "llama-8b-lora",
+          "status": "finished",
+          "created_at": "2026-08-22 08:00:00",
+          "updated_at": "2026-08-22 14:00:00",
+          "description": "LoRA fine-tune, packed sequences",
+          "parameters": {"num_gpus": "8", "gpu_type": "A100-80GB", "batch_size": "512", "lr": "2e-4"},
+          "gpu_series": {
+            "count": 8,
+            "utilization": [82, 88, 90, 85, 98, 87, 89, 92, 86, 90, 88, 84],
+            "memory": [61, 66, 68, 64, 72, 67, 69, 70, 66, 69, 67, 63]
+          },
+          "cpu_series": [35, 41, 39, 37, 43, 40, 38, 36, 42, 44, 39, 38]
+        },
+        "exp-llm-cpubound": {
+          "name": "tokenizer-preproc-ablation",
+          "status": "finished",
+          "created_at": "2026-08-23 10:00:00",
+          "updated_at": "2026-08-23 14:00:00",
+          "description": "On-the-fly tokenization ablation",
+          "parameters": {"num_gpus": "4", "gpu_type": "V100", "batch_size": "256", "lr": "3e-4"},
+          "gpu_series": {
+            "count": 4,
+            "utilization": [8, 11, 9, 7, 12, 10, 8, 9, 11, 10, 9, 8],
+            "memory": [18, 20, 19, 18, 21, 20, 19, 18, 20, 21, 19, 18]
+          },
+          "cpu_series": [88, 93, 95, 90, 92, 94, 91, 89, 93, 96, 92, 90]
+        }
+      }
+    },
+    "vision-classifier": {
+      "experiments": {
+        "exp-vis-mismatch": {
+          "name": "resnet50-sweep-a",
+          "status": "finished",
+          "created_at": "2026-08-24 07:00:00",
+          "updated_at": "2026-08-24 16:00:00",
+          "description": "LR sweep, distributed data parallel",
+          "parameters": {"num_gpus": "12", "gpu_type": "T4", "batch_size": "1024", "lr": "1e-3"},
+          "gpu_series": {
+            "count": 8,
+            "utilization": [52, 58, 55, 50, 60, 57, 54, 53, 56, 59, 55, 54],
+            "memory": [48, 52, 50, 47, 54, 51, 49, 48, 52, 53, 50, 49]
+          },
+          "cpu_series": [44, 50, 48, 45, 52, 49, 47, 46, 51, 53, 48, 47]
+        },
+        "exp-vis-missing": {
+          "name": "quick-debug-run",
+          "status": "finished",
+          "created_at": "2026-08-25 12:00:00",
+          "updated_at": "2026-08-25 13:00:00",
+          "description": "Ad-hoc debugging session",
+          "parameters": {"batch_size": "64"},
+          "gpu_series": {
+            "count": 1,
+            "utilization": [30, 36, 33, 29, 37, 34, 32, 31, 35, 36, 33, 32],
+            "memory": [40, 44, 42, 39, 45, 43, 41, 40, 44, 45, 42, 41]
+          },
+          "cpu_series": [28, 33, 31, 29, 34, 32, 30, 29, 33, 35, 31, 30]
+        },
+        "exp-vis-good": {
+          "name": "vit-base-train",
+          "status": "finished",
+          "created_at": "2026-08-26 06:00:00",
+          "updated_at": "2026-08-26 18:00:00",
+          "description": "ViT-Base training, mixed precision",
+          "parameters": {"num_gpus": "4", "gpu_type": "L40S", "batch_size": "768", "lr": "5e-4"},
+          "gpu_series": {
+            "count": 4,
+            "utilization": [72, 78, 76, 70, 80, 77, 74, 73, 79, 92, 75, 74],
+            "memory": [58, 63, 61, 57, 65, 62, 60, 59, 64, 70, 61, 60]
+          },
+          "cpu_series": [38, 44, 42, 40, 45, 43, 41, 39, 44, 46, 42, 41]
+        }
+      }
+    }
+  }
+}
