@@ -43,8 +43,12 @@ def _metric_names(exp: dict[str, Any]) -> dict[str, list[list[float]]]:
     count = gpu.get("count", 0)
     metrics: dict[str, list[list[float]]] = {}
     for i in range(count):
-        metrics[f"sys.gpu.{i}.gpu_utilization"] = _series(gpu.get("utilization", []), i)
-        metrics[f"sys.gpu.{i}.memory_utilization"] = _series(gpu.get("memory", []), i)
+        # WHY: exported snapshots may log utilization without memory (or vice versa);
+        # an empty series must not become an advertised metric.
+        for kind, name in (("utilization", "gpu_utilization"), ("memory", "memory_utilization")):
+            series = _series(gpu.get(kind, []), i)
+            if series:
+                metrics[f"sys.gpu.{i}.{name}"] = series
     if exp.get("cpu_series"):
         metrics["sys.cpu.percent.avg"] = _series(exp["cpu_series"], 0)
     return metrics

@@ -15,9 +15,12 @@ from . import config
 def server_params(synthetic: bool) -> StdioServerParameters:
     """Spawn the bundled synthetic server, or the real Comet EM MCP server via uvx."""
     if synthetic:
+        # WHY: the MCP SDK strips the environment for spawned servers unless env is
+        # passed explicitly; CAPACITY_SAMPLE_DATA must reach the synthetic server.
         return StdioServerParameters(
             command=sys.executable,
             args=["-m", "gpu_capacity_planning.synthetic_server"],
+            env={**os.environ},
         )
     env = {**os.environ, "COMET_API_KEY": config.COMET_API_KEY or ""}
     if config.COMET_WORKSPACE:
