@@ -34,7 +34,7 @@ def flag_run(run: RunMetrics, low_util: float, idle_util: float) -> Finding:
     """Rule-based rightsizing verdict for one run; pure so dry-run output stays meaningful."""
     issues: list[str] = []
     severity = "ok"
-    action = "No action — utilization is healthy."
+    action = "No action - utilization is healthy."
 
     if run.gpu_util_mean is None:
         if run.detected_gpu_count or run.declared_num_gpus:
@@ -79,7 +79,7 @@ def flag_run(run: RunMetrics, low_util: float, idle_util: float) -> Finding:
         )
         issues.append(
             f"Multi-node job: metrics cover 1 of {nodes} nodes "
-            f"({run.detected_gpu_count} of {run.declared_num_gpus} GPUs) — utilization is "
+            f"({run.detected_gpu_count} of {run.declared_num_gpus} GPUs) - utilization is "
             "extrapolated from the reporting node."
         )
 
@@ -95,7 +95,7 @@ def flag_run(run: RunMetrics, low_util: float, idle_util: float) -> Finding:
 
     if run.cpu_util_mean is not None and run.cpu_util_mean > 80 and run.gpu_util_mean < low_util:
         issues.append(
-            f"CPU at {run.cpu_util_mean}% while GPUs sit at {run.gpu_util_mean}% — "
+            f"CPU at {run.cpu_util_mean}% while GPUs sit at {run.gpu_util_mean}% - "
             "likely dataloader/CPU-bound."
         )
 

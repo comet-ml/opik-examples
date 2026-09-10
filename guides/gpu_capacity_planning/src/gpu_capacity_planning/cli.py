@@ -50,7 +50,7 @@ def audit(
     typer.echo(report)
     if config.DRY_RUN:
         typer.echo(
-            f"\n[DRY RUN] Opik credentials not set — would call {config.GEN_MODEL} for the "
+            f"\n[DRY RUN] Opik credentials not set - would call {config.GEN_MODEL} for the "
             f"recommendations section and log the audit trace to Opik project "
             f"'{config.OPIK_PROJECT_NAME}'."
         )
@@ -66,7 +66,7 @@ def list_runs(
     max_runs: int = typer.Option(config.MAX_RUNS, help="Cap on experiments swept"),
     synthetic: bool = typer.Option(False, help="Force the bundled synthetic MCP server"),
 ) -> None:
-    """Collection only — the per-run metrics table, no LLM call."""
+    """Collection only - the per-run metrics table, no LLM call."""
     ws, use_synthetic = _resolve(workspace, synthetic)
     from .collector import collect_runs
     from .mcp_client import comet_session
@@ -89,7 +89,7 @@ def ask(
     ws, use_synthetic = _resolve(workspace, synthetic)
     if config.DRY_RUN:
         typer.echo(
-            f"[DRY RUN] Opik/LLM credentials not set — would start a comet-mcp session and let "
+            f"[DRY RUN] Opik/LLM credentials not set - would start a comet-mcp session and let "
             f"{config.GEN_MODEL} answer via tools: {MCP_TOOLS}."
         )
         return

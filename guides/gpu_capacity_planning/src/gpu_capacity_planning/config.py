@@ -33,7 +33,7 @@ def _key_list(env_var: str, default: str) -> list[str]:
 
 
 # Param keys that declare total training scale. Real workspaces rarely log a literal
-# num_gpus: JAX stacks log num_devices, torchrun logs world_size — extend per workspace.
+# num_gpus: JAX stacks log num_devices, torchrun logs world_size - extend per workspace.
 DEVICE_PARAM_KEYS = _key_list("CAPACITY_DEVICE_PARAM_KEYS", "num_gpus,num_devices,world_size")
 # Param keys that declare the node count (total devices = nodes x GPUs seen per node).
 NODE_PARAM_KEYS = _key_list("CAPACITY_NODE_PARAM_KEYS", "nnodes,num_nodes,config/compute/nnodes")
