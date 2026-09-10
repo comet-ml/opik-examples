@@ -4,12 +4,17 @@ Lets the audit and agent run with zero credentials while exercising the real MCP
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "sample_runs.json"
+# CAPACITY_SAMPLE_DATA lets you point the synthetic server at your own exported
+# snapshot (same JSON shape as data/sample_runs.json) and audit it offline.
+DATA_PATH = Path(
+    os.environ.get("CAPACITY_SAMPLE_DATA", Path(__file__).resolve().parents[2] / "data" / "sample_runs.json")
+)
 DATA = json.loads(DATA_PATH.read_text())
 STEP = 100
 

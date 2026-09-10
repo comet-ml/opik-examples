@@ -100,7 +100,9 @@ uv run gpu-capacity-planning ask "Which projects waste the most GPU hours?"
 | `ask QUESTION` | Let the LLM answer a free-form capacity question by driving the MCP tools | `--workspace TEXT`, `--max-turns N` (tool-loop bound, default: 8), `--synthetic` |
 
 `--synthetic` forces the bundled sample-data server even when Comet credentials are set;
-handy for demos and for testing changes without touching a real workspace.
+handy for demos and for testing changes without touching a real workspace. Set
+`CAPACITY_SAMPLE_DATA=/path/to/your-export.json` (same shape as `data/sample_runs.json`)
+to audit your own exported snapshot offline.
 
 ## How it works
 
