@@ -24,12 +24,11 @@ Opik trace: capacity_audit - tool spans per MCP call - analyze span - LLM span (
 ## What this does
 
 Teams pay for far more GPU capacity than their training jobs actually use. In a September
-2026 Comet analysis of nearly 1,000 recent training runs sampled across our platform, a
-third of GPU-instrumented runs never exceeded 15% GPU utilization at any point, and about 4
-in 10 runs logged no GPU telemetry at all, so nobody can even say what their idle share is.
-The money adds up fast: a 64-GPU job running at 12% utilization on A100-class hardware at
-typical on-demand cloud rates of $3-4 per GPU-hour costs roughly $200 per hour, of which
-about $170 buys idle silicon. That is over $4,000 a day, for one job.
+2026 Comet analysis of more than 8,500 GPU training runs across our enterprise customers,
+one in four runs never exceeded 15% GPU utilization at any point during training. The money
+adds up fast: a 64-GPU job running at 12% utilization on A100-class hardware at typical
+on-demand cloud rates of $3-4 per GPU-hour costs roughly $200 per hour, of which about $170
+buys idle silicon. That is over $4,000 a day, for one job.
 
 The root cause is usually visibility, not negligence: *booked* capacity (scale parameters
 like `num_devices` or `nnodes`) and *actual* utilization (`sys.gpu.*` system metrics) live in
