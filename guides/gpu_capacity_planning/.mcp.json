@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "comet-mcp": {
+      "command": "uvx",
+      "args": ["comet-mcp"],
+      "env": {
+        "COMET_API_KEY": "${COMET_API_KEY}",
+        "COMET_WORKSPACE": "${COMET_WORKSPACE}",
+        "COMET_URL_OVERRIDE": "${COMET_URL_OVERRIDE}"
+      }
+    }
+  }
+}
