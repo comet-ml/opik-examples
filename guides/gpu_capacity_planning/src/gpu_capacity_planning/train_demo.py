@@ -57,9 +57,17 @@ def _distributed() -> tuple[int, int]:
     return rank, world_size
 
 
+def _predict(model: nn.Module, test_loader: "DataLoader", device: torch.device) -> tuple[list, list]:
+    model.eval()
+    predictions, targets = [], []
+    with torch.no_grad():
+        for images, labels in test_loader:
+            predictions.extend(model(images.to(device)).argmax(dim=1).cpu().tolist())
+            targets.extend(labels.tolist())
+    return predictions, targets
+
+
 def _start_experiment(args: argparse.Namespace, world_size: int) -> "comet_ml.CometExperiment":
-    if not os.environ.get("COMET_API_KEY"):
-        sys.exit("COMET_API_KEY is not set - the training demo logs to a real Comet EM workspace.")
     experiment = comet_ml.start(
         project_name=args.project,
         experiment_config=comet_ml.ExperimentConfig(
@@ -93,8 +101,13 @@ def main() -> None:
     parser.add_argument("--project", default=os.environ.get("COMET_PROJECT_NAME", "capacity-demo-training"))
     args = parser.parse_args()
 
+    if not os.environ.get("COMET_API_KEY"):
+        sys.exit("COMET_API_KEY is not set - the training demo logs to a real Comet EM workspace.")
+
     rank, world_size = _distributed()
-    device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
+    # WHY: LOCAL_RANK indexes GPUs on this node; RANK is global and misindexes on multi-node.
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
 
     # Rank 0 downloads; the barrier keeps other ranks from racing the files.
     transform = transforms.ToTensor()
@@ -132,15 +145,12 @@ def main() -> None:
             total_loss += loss.item()
             batches += 1
         if experiment:
-            experiment.log_metrics({"loss": total_loss / max(batches, 1)}, epoch=epoch)
+            predictions, targets = _predict(model, test_loader, device)
+            accuracy = sum(p == t for p, t in zip(predictions, targets, strict=True)) / len(targets)
+            experiment.log_metrics({"loss": total_loss / max(batches, 1), "accuracy": accuracy}, epoch=epoch)
 
     if experiment:
-        model.eval()
-        predictions, targets = [], []
-        with torch.no_grad():
-            for images, labels in test_loader:
-                predictions.extend(model(images.to(device)).argmax(dim=1).cpu().tolist())
-                targets.extend(labels.tolist())
+        predictions, targets = _predict(model, test_loader, device)
         precision, recall, f1, _ = precision_recall_fscore_support(
             targets, predictions, average="macro", zero_division=0
         )

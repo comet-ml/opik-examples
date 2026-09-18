@@ -7,7 +7,7 @@ regression gate: compare it in the Opik UI against the previous run of the same 
 import litellm
 import opik
 from opik.evaluation import evaluate
-from opik.evaluation.metrics.llm_judges.g_eval.metric import GEval
+from opik.evaluation.metrics import GEval
 
 from . import config, prompts
 from .recommender import analyst_prompt
@@ -23,7 +23,10 @@ def _task(item: dict) -> dict:
             {"role": "user", "content": payload},
         ],
     )
-    return {"output": response.choices[0].message.content or ""}
+    # WHY: GEval only sees `output`, so the findings ride along - without them the
+    # judge cannot check the Grounded criterion.
+    generated = response.choices[0].message.content or ""
+    return {"output": f"UTILIZATION FINDINGS:\n{payload}\n\nRECOMMENDATION:\n{generated}"}
 
 
 def run_offline_eval(dataset_name: str, experiment_name: str | None) -> str:

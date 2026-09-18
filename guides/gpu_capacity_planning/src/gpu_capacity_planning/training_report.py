@@ -129,8 +129,10 @@ async def build_report(
 
 def add_report_to_queue(trace_id: str) -> str | None:
     """Add the report trace to the review queue; returns the queue name when it worked."""
+    # WHY: the trace belongs to the SDK's global tracker client, not the client below -
+    # flush that one, or the queue add can race the trace creation.
+    opik.flush_tracker()
     client = opik.Opik(project_name=config.OPIK_PROJECT_NAME)
-    client.flush()  # the trace must be persisted before the queue can reference it
     for queue in client.get_traces_annotation_queues():
         if queue.name == config.QUEUE_NAME:
             # WHY: queue.add_traces wants trace objects; the id-based REST op avoids a re-fetch.

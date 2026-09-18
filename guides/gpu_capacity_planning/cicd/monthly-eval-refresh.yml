@@ -18,9 +18,12 @@ on:
 permissions:
   contents: read
 
+# The run steps assume this guide's pyproject is at the repo root. If you vendored the
+# folder into a subdirectory of your training repo, point working-directory at it:
 defaults:
   run:
     shell: bash
+    # working-directory: path/to/gpu_capacity_planning
 
 jobs:
   curate-and-evaluate:
@@ -46,10 +49,13 @@ jobs:
         run: uv run gpu-capacity-planning evaluate
 
       # --- Optional: post the experiment link to Slack ----------------------
+      # The webhook URL is a secret, so it goes through curl's config stdin,
+      # never through argv (visible to other processes on the runner).
       # - name: Notify Slack
       #   env:
       #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       #   run: |
-      #     printf '{"text":"Monthly capacity-analyst eval refreshed - review the new experiment in Opik."}' \
-      #       | curl -sf -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK_URL"
+      #     printf '{"text":"Monthly capacity-analyst eval refreshed - review the new experiment in Opik."}' > payload.json
+      #     curl -sf -X POST -H 'Content-Type: application/json' \
+      #       -d @payload.json --config - <<< "url = \"$SLACK_WEBHOOK_URL\""
       # ----------------------------------------------------------------------

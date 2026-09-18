@@ -179,10 +179,12 @@ opik.Opik().log_traces_feedback_scores([{"id": "<trace-id>", "name": "recommenda
 ```
 
 `setup-loop` also creates an **online evaluation rule**: an LLM judge that scores every new
-recommendation trace automatically against the actionable/grounded/safe rubric in
-`prompts.py`. The rule runs inside the Opik platform, so it needs an AI provider key
-configured in your Opik workspace (Configuration -> AI providers); the judge model name is
-`CAPACITY_JUDGE_MODEL` (default: the `OPIK_EXAMPLES_MODEL` without its provider prefix).
+`training_report` trace (a name filter keeps it off `ask` and tool-call traces) against the
+actionable/grounded/safe rubric in `prompts.py` - it reads both the utilization findings
+(trace input) and the recommendation (trace output), so the grounding check is real. The
+rule runs inside the Opik platform, so it needs an AI provider key configured in your Opik
+workspace (Configuration -> AI providers); the judge model name is `CAPACITY_JUDGE_MODEL`
+(default: the `OPIK_EXAMPLES_MODEL` without its provider prefix).
 
 ### 4. Improve - golden dataset and offline evaluations
 
@@ -210,7 +212,9 @@ repo's `.github/workflows/`:
   `evaluate`, so the golden dataset grows with fresh ratings and every month produces a
   comparable experiment.
 
-Both keep secrets in `env:` and pin actions by commit SHA. A commented-out Slack block also
+Both keep secrets in `env:` and pin actions by commit SHA, and both assume the guide's
+`pyproject.toml` sits at your repo root - if you vendor this folder into a subdirectory,
+set the commented `working-directory` in each file. A commented-out Slack block also
 sits at the end of `training_report.py` if you'd rather notify from the CLI run itself.
 
 ### Going further - Optimization Studio
@@ -228,7 +232,10 @@ optimizer = MetaPromptOptimizer(model="anthropic/claude-sonnet-5")
 
 The optimized prompt lands back in the Prompt Library as a new version - and because
 `evaluate` pins the prompt version on every experiment, you can prove the optimized version
-beats the old one on the same dataset before promoting it. See the
+beats the old one on the same dataset before promoting it. One thing to know: the source of
+truth for the running system is `ANALYST_SYSTEM_PROMPT` in `prompts.py` - every live run
+re-registers that text, so a library-only edit is superseded on the next run. Promoting a
+winning version means updating the constant in code. See the
 [Opik Agent Optimization docs](https://www.comet.com/docs/opik/agent_optimization/overview).
 
 ## How it works

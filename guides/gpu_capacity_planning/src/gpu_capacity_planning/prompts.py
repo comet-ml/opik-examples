@@ -29,11 +29,15 @@ extrapolated multi-node figures are labeled as estimates.
 without flagging the uncertainty."""
 
 # Template for the online LLM-as-judge rule created by `setup-loop`. Opik fills
-# {{output}} with the trace output (the recommendation markdown) on every new trace.
+# {{input}} with the utilization findings and {{output}} with the recommendation,
+# so the judge can actually check the Grounded criterion against the data.
 ONLINE_JUDGE_TEMPLATE = f"""\
 {JUDGE_TASK_INTRO}
 
 {JUDGE_RUBRIC}
+
+Utilization findings the recommendation is based on:
+{{{{input}}}}
 
 Recommendation to score:
 {{{{output}}}}"""

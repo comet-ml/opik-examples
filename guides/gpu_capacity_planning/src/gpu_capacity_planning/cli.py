@@ -135,10 +135,10 @@ def curate(
         raise typer.Exit(1)
     from .curation import curate as run_curate
 
-    matched, sent = run_curate(min_score, dataset, max_items)
+    sent = run_curate(min_score, dataset, max_items)
     typer.echo(
-        f"{matched} trace(s) with {config.JUDGE_SCORE_NAME} >= {min_score}; "
-        f"{sent} item(s) sent to dataset '{dataset}' (duplicates are dropped server-side)."
+        f"{sent} report trace(s) with {config.JUDGE_SCORE_NAME} >= {min_score} sent to dataset "
+        f"'{dataset}' (re-inserting an unchanged trace is a no-op - items deduplicate)."
     )
 
 
@@ -149,7 +149,10 @@ def evaluate(
 ) -> None:
     """Offline evaluation of the current prompt + model against the golden dataset."""
     if config.DRY_RUN:
-        typer.echo("Opik + LLM credentials are required for evaluate.")
+        typer.echo(
+            "Opik credentials (OPIK_API_KEY + OPIK_WORKSPACE) are required for evaluate, "
+            f"plus an LLM provider key matching {config.GEN_MODEL}."
+        )
         raise typer.Exit(1)
     from .offline_eval import run_offline_eval
 

@@ -4,14 +4,16 @@ import opik
 
 from . import config
 
-REPORT_TRACE_NAMES = {"training_report", "capacity_audit"}
+# Only report traces carry the replayable input/output contract offline evals need;
+# capacity_audit traces store raw function args and would produce broken eval items.
+REPORT_TRACE_NAMES = {"training_report"}
 
 
-def curate(min_score: float, dataset_name: str, max_items: int) -> tuple[int, int]:
-    """Copy traces whose judge/SME score >= min_score into the dataset.
+def curate(min_score: float, dataset_name: str, max_items: int) -> int:
+    """Copy report traces whose judge/SME score >= min_score into the dataset.
 
-    Returns (matching_traces, items_sent). Dataset inserts deduplicate identical items,
-    so re-running after new ratings only adds the new traces.
+    Returns the number of matching traces sent. Dataset inserts deduplicate identical
+    items, so re-running after new ratings only adds the new traces.
     """
     client = opik.Opik(project_name=config.OPIK_PROJECT_NAME)
     traces = client.search_traces(
@@ -36,4 +38,4 @@ def curate(min_score: float, dataset_name: str, max_items: int) -> tuple[int, in
             dataset_name, description="Capacity recommendations rated >= threshold; offline-eval reference"
         )
         dataset.insert(items)
-    return len(traces), len(items)
+    return len(items)

@@ -44,10 +44,11 @@ def _project_id(client: opik.Opik) -> str:
 
 def _ensure_judge_rule(client: opik.Opik) -> str:
     project_id = _project_id(client)
-    existing = client.rest_client.automation_rule_evaluators.find_evaluators(project_id=project_id)
-    for rule in existing.content or []:
-        if rule.name == RULE_NAME:
-            return f"online judge rule '{RULE_NAME}' (exists)"
+    existing = client.rest_client.automation_rule_evaluators.find_evaluators(
+        project_id=project_id, name=RULE_NAME
+    )
+    if any(rule.name == RULE_NAME for rule in existing.content or []):
+        return f"online judge rule '{RULE_NAME}' (exists)"
 
     rule = AutomationRuleEvaluatorWrite_LlmAsJudge.model_validate(
         {
@@ -56,11 +57,19 @@ def _ensure_judge_rule(client: opik.Opik) -> str:
             "sampling_rate": 1.0,
             "enabled": True,
             "action": "evaluator",
+            # WHY: without this filter the rule would score (and pay for) EVERY trace in
+            # the project - ask traces, standalone tool calls - not just the reports.
+            "filters": [{"field": "name", "operator": "=", "value": "training_report"}],
             "code": {
                 # WHY: reasoning models (claude-sonnet-5 family) accept only temperature=1.
                 "model": {"name": config.JUDGE_RULE_MODEL, "temperature": 1.0},
                 "messages": [{"role": "USER", "content": prompts.ONLINE_JUDGE_TEMPLATE}],
-                "variables": {"output": "output"},
+                # Feed the judge both the findings and the recommendation so the
+                # Grounded criterion is checkable against the data.
+                "variables": {
+                    "input": "input.analysis_payload",
+                    "output": "output.recommendations",
+                },
                 # WHY: the generated client validates by field name; "schema" is aliased to schema_.
                 "schema_": [
                     {
@@ -82,4 +91,6 @@ def _ensure_judge_rule(client: opik.Opik) -> str:
 def ensure_loop() -> list[str]:
     """Create anything missing; safe to run repeatedly. Returns one status line per object."""
     client = opik.Opik(project_name=config.OPIK_PROJECT_NAME)
+    # Order matters on a fresh workspace: create_prompt's backend side effect creates the
+    # project that the queue and rule steps then resolve by name.
     return [_ensure_prompt(client), _ensure_queue(client), _ensure_judge_rule(client)]
