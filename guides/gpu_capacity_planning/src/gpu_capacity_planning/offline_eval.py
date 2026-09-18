@@ -38,6 +38,8 @@ def run_offline_eval(dataset_name: str, experiment_name: str | None) -> str:
         model=config.GEN_MODEL,
         name=config.JUDGE_SCORE_NAME,
         project_name=config.OPIK_PROJECT_NAME,
+        # WHY: reasoning models (claude-sonnet-5 family) accept only temperature=1.
+        temperature=1.0,
     )
     result = evaluate(
         dataset=dataset,

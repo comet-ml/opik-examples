@@ -57,10 +57,12 @@ def _ensure_judge_rule(client: opik.Opik) -> str:
             "enabled": True,
             "action": "evaluator",
             "code": {
-                "model": {"name": config.JUDGE_RULE_MODEL, "temperature": 0.0},
+                # WHY: reasoning models (claude-sonnet-5 family) accept only temperature=1.
+                "model": {"name": config.JUDGE_RULE_MODEL, "temperature": 1.0},
                 "messages": [{"role": "USER", "content": prompts.ONLINE_JUDGE_TEMPLATE}],
                 "variables": {"output": "output"},
-                "schema": [
+                # WHY: the generated client validates by field name; "schema" is aliased to schema_.
+                "schema_": [
                     {
                         "name": config.JUDGE_SCORE_NAME,
                         "type": "DOUBLE",

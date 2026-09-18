@@ -25,6 +25,8 @@ def curate(min_score: float, dataset_name: str, max_items: int) -> tuple[int, in
         {
             "input": t.input or {},
             "expected_output": t.output or {},
+            # WHY: source="trace" is required for trace_id linkage; "sdk" items must not carry one.
+            "source": "trace",
             "trace_id": str(t.id),
         }
         for t in traces

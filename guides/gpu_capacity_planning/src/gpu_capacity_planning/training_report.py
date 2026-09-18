@@ -133,6 +133,7 @@ def add_report_to_queue(trace_id: str) -> str | None:
     client.flush()  # the trace must be persisted before the queue can reference it
     for queue in client.get_traces_annotation_queues():
         if queue.name == config.QUEUE_NAME:
-            queue.add_traces([trace_id])
+            # WHY: queue.add_traces wants trace objects; the id-based REST op avoids a re-fetch.
+            client.rest_client.annotation_queues.add_items_to_annotation_queue(id=queue.id, ids=[trace_id])
             return queue.name
     return None
