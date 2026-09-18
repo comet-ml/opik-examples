@@ -59,6 +59,7 @@ Standalone scripts for automating and managing Opik resources.
 | [scripts/usage_stats](scripts/usage_stats/) | Fetch trace and span counts per project and visualise trends |
 | [scripts/leaderboard_dashboard](scripts/leaderboard_dashboard/) | Create an Experiment Leaderboard dashboard via the REST API |
 | [scripts/score_traces](scripts/score_traces/) | Score existing production traces offline with stock SDK judges/metrics, logging feedback back under the same names an online rule would use |
+| [scripts/visualize_thread_feedback_scores](scripts/visualize_thread_feedback_scores/) | Plot turn-by-turn feedback scores across a multi-turn conversation thread |
 
 ## Community
 

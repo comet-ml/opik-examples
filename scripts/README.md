@@ -9,3 +9,4 @@ Standalone utility scripts for automating and managing Opik resources programmat
 | [usage_stats/](./usage_stats/) | Fetch trace, thread, and span counts per project and visualise daily and cumulative trends |
 | [leaderboard_dashboard/](./leaderboard_dashboard/) | Create an Experiment Leaderboard dashboard entirely via the REST API |
 | [online_eval_rules/](./online_eval_rules/) | Create & manage online evaluation rules (automation rule evaluators) via the SDK and REST, all rule types, full CRUD |
+| [visualize_thread_feedback_scores/](./visualize_thread_feedback_scores/) | Plot turn-by-turn feedback scores for a multi-turn conversation thread |
