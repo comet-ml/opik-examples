@@ -16,6 +16,28 @@ three sections: \
 **Next steps** (instrumentation or scheduling improvements). \
 Be specific and quantitative; recommend concrete GPU counts. Do not invent runs or numbers."""
 
+JUDGE_TASK_INTRO = """\
+You evaluate GPU rightsizing recommendations written by a capacity-planning analyst for \
+machine-learning training runs."""
+
+JUDGE_RUBRIC = """\
+Score the recommendation text from 0.0 to 1.0:
+- Actionable (0.4): names concrete GPU counts or instrumentation steps, not vague advice.
+- Grounded (0.4): every number traces back to the utilization findings; nothing is invented; \
+extrapolated multi-node figures are labeled as estimates.
+- Safe (0.2): no recommendation to downsize a run whose metrics only cover one node of many \
+without flagging the uncertainty."""
+
+# Template for the online LLM-as-judge rule created by `setup-loop`. Opik fills
+# {{output}} with the trace output (the recommendation markdown) on every new trace.
+ONLINE_JUDGE_TEMPLATE = f"""\
+{JUDGE_TASK_INTRO}
+
+{JUDGE_RUBRIC}
+
+Recommendation to score:
+{{{{output}}}}"""
+
 AGENT_SYSTEM_PROMPT = """\
 You are a GPU capacity-planning assistant with tool access to a Comet experiment-management \
 workspace. Answer the user's question by calling the tools - list projects and experiments, then \

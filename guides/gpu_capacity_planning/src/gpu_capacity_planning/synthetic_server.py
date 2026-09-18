@@ -117,7 +117,8 @@ def get_experiment_details(experiment_id: str) -> dict[str, Any]:
         "created_at": exp["created_at"],
         "updated_at": exp["updated_at"],
         "description": exp.get("description"),
-        "metrics": [{"name": name, "value": series[-1][1]} for name, series in metrics.items()],
+        "metrics": [{"name": name, "value": series[-1][1]} for name, series in metrics.items()]
+        + [{"name": k, "value": v} for k, v in exp.get("metrics", {}).items()],
         "parameters": [{"name": k, "value": v} for k, v in exp.get("parameters", {}).items()],
         "others": [],
     }

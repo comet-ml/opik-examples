@@ -5,6 +5,12 @@ under-utilized hardware with simple heuristics, have an **LLM write rightsizing
 recommendations**, and trace the whole pipeline in **Opik** so the recommendation runs can be
 reviewed (e.g. by Opik Diagnostics).
 
+Beyond the one-shot audit, this guide ships the **full lifecycle**: demo distributed
+training runs, a post-training report that joins model quality with capacity efficiency, and
+an Opik feedback loop (Prompt Library, annotation queue, online LLM judge, golden dataset,
+offline evaluations) that keeps the recommendations themselves accountable - see
+[End-to-end workflow](#end-to-end-workflow-train---report---review---improve).
+
 ```text
 Comet EM training runs
         |  uvx comet-mcp  (or the bundled synthetic server when no COMET_API_KEY)
@@ -64,6 +70,8 @@ ships with [uv](https://docs.astral.sh/uv/).
 | `OPIK_PROJECT_NAME` | Trace destination | Default `gpu-capacity-planning` |
 | `CAPACITY_LOW_UTIL_PCT` / `CAPACITY_IDLE_UTIL_PCT` / `CAPACITY_MAX_RUNS` | Threshold tuning | Defaults 30 / 10 / 50 |
 | `CAPACITY_DEVICE_PARAM_KEYS` / `CAPACITY_NODE_PARAM_KEYS` | Which params declare training scale | Defaults `num_gpus,num_devices,world_size` / `nnodes,num_nodes,config/compute/nnodes` |
+| `CAPACITY_MODEL_METRIC_KEYS` | Model-quality metrics shown by `report` | Default `precision,recall,f1,accuracy,loss` |
+| `CAPACITY_PROMPT_NAME` / `CAPACITY_QUEUE_NAME` / `CAPACITY_DATASET` / `CAPACITY_JUDGE_SCORE` / `CAPACITY_JUDGE_MODEL` | Names of the feedback-loop objects | Defaults `gpu-capacity-analyst` / `capacity-recommendations` / `capacity-recommendations-golden` / `recommendation_quality` / model without provider prefix |
 
 The two credential pairs gate independently, giving three useful modes:
 
@@ -98,11 +106,130 @@ uv run gpu-capacity-planning ask "Which projects waste the most GPU hours?"
 | `audit` | Sweep runs, flag waste, write the LLM rightsizing report | `--workspace TEXT` (default: `COMET_WORKSPACE`), `-p/--project TEXT` (repeatable; default: all projects), `--max-runs N` (default: 50), `--output PATH` (also write the Markdown report to a file), `--synthetic` |
 | `list-runs` | Collection only: the per-run metrics table, no LLM call | `--workspace TEXT`, `-p/--project TEXT`, `--max-runs N`, `--synthetic` |
 | `ask QUESTION` | Let the LLM answer a free-form capacity question by driving the MCP tools | `--workspace TEXT`, `--max-turns N` (tool-loop bound, default: 8), `--synthetic` |
+| `report` | Post-training report: model quality + capacity + review links, traced and queued | `-p/--project TEXT` (required), `-e/--experiment TEXT` (repeatable; default: all in the project), `--workspace TEXT`, `--output PATH`, `--synthetic` |
+| `setup-loop` | Create the Opik feedback loop (prompt, annotation queue, online judge rule) | none |
+| `curate` | Copy traces rated at or above the threshold into the golden dataset | `--min-score F` (default: 0.8), `--dataset TEXT`, `--max-items N` (default: 50) |
+| `evaluate` | Offline evaluation of the current prompt + model against the golden dataset | `--dataset TEXT`, `--experiment-name TEXT` |
 
 `--synthetic` forces the bundled sample-data server even when Comet credentials are set;
 handy for demos and for testing changes without touching a real workspace. Set
 `CAPACITY_SAMPLE_DATA=/path/to/your-export.json` (same shape as `data/sample_runs.json`)
 to audit your own exported snapshot offline.
+
+## End-to-end workflow: train -> report -> review -> improve
+
+The audit answers "where is the waste?" once. The lifecycle below turns it into a loop your
+team can trust: every recommendation is versioned, reviewed, scored, and regression-tested.
+
+```text
+1 MEASURE    torchrun train_demo (DDP)  ->  Comet EM: world_size param, loss/precision/recall/F1,
+             sys.gpu.* + sys.cpu.* system metrics (logged automatically)
+2 RECOMMEND  report  ->  MCP pull -> heuristics -> LLM recommendation
+             prompt comes from the Opik Prompt Library (version-pinned, visible as a
+             Prompt tab on the trace)  ->  one training_report trace per report
+3 REVIEW     the trace lands in an annotation queue for SME rating (feedback score
+             "recommendation_quality"); an online LLM judge scores every new trace too
+4 IMPROVE    curate: traces rated >= 0.8 -> golden dataset
+             evaluate: current prompt + model vs that dataset -> Opik experiment
+             (the regression gate for any prompt, code, or model change)
+```
+
+### 1. Measure - run the demo training jobs
+
+`train_demo.py` is a small CNN on FashionMNIST, launched with torchrun so the runs look like
+real distributed jobs (DDP; `gloo` on CPU, `nccl` on GPUs). Rank 0 logs one Comet EM
+experiment with the `world_size` parameter the audit reads as declared scale, per-epoch loss,
+final precision/recall/F1, and system metrics - enabled explicitly so the run is auditable
+even where a base config switched them off:
+
+```bash
+uv sync --extra train        # torch/torchvision/comet_ml/scikit-learn stay out of the core install
+export COMET_API_KEY=... COMET_WORKSPACE=...
+uv run torchrun --nproc_per_node=2 -m gpu_capacity_planning.train_demo --epochs 2
+```
+
+A 2-rank CPU run takes a few minutes and downloads ~30 MB into `.data-cache/`. On a GPU box
+the same command (with `--nproc_per_node=<gpus>`) produces real `sys.gpu.N.*` series.
+
+### 2. Recommend - the post-training report
+
+```bash
+uv run gpu-capacity-planning setup-loop     # once per workspace: prompt + queue + judge rule
+uv run gpu-capacity-planning report -p capacity-demo-training --output report.md
+```
+
+`report` joins what the training run achieved (precision/recall/F1/accuracy/loss - names
+configurable via `CAPACITY_MODEL_METRIC_KEYS`) with what it cost (utilization, coverage,
+estimated wasted GPU-hours), adds links to the EM experiments and the report's own Opik
+trace, and has the LLM write the recommendations section. The analyst system prompt is not a
+string buried in code: it lives in the **Opik Prompt Library** (`gpu-capacity-analyst`),
+`create_prompt` versions it on every text change, and the trace's **Prompt tab** shows
+exactly which version produced each recommendation.
+
+### 3. Review - queue, feedback scores, online judge
+
+`setup-loop` creates an annotation queue (`capacity-recommendations`); each `report` adds its
+trace there, so reviewers work a queue instead of hunting traces. Rate the recommendation
+with the `recommendation_quality` feedback score (0-1) - in the queue UI, or via SDK:
+
+```python
+import opik
+
+opik.Opik().log_traces_feedback_scores([{"id": "<trace-id>", "name": "recommendation_quality", "value": 0.9}])
+```
+
+`setup-loop` also creates an **online evaluation rule**: an LLM judge that scores every new
+recommendation trace automatically against the actionable/grounded/safe rubric in
+`prompts.py`. The rule runs inside the Opik platform, so it needs an AI provider key
+configured in your Opik workspace (Configuration -> AI providers); the judge model name is
+`CAPACITY_JUDGE_MODEL` (default: the `OPIK_EXAMPLES_MODEL` without its provider prefix).
+
+### 4. Improve - golden dataset and offline evaluations
+
+```bash
+uv run gpu-capacity-planning curate --min-score 0.8    # rated traces -> golden dataset
+uv run gpu-capacity-planning evaluate                  # current prompt+model vs dataset
+```
+
+`curate` copies the input/output of highly rated traces into the
+`capacity-recommendations-golden` dataset (inserts deduplicate, so re-running is safe).
+`evaluate` re-runs the analyst on each stored payload and scores it with the same rubric
+(G-Eval), logging an **Opik experiment** - before shipping a prompt tweak, a code change, or
+a model swap, run it and compare experiments in the UI. That is the regression gate.
+Because the report trace stores its analysis payload as input and the recommendation as
+output, every curated trace is directly replayable.
+
+### CI/CD
+
+[cicd/](./cicd/) contains two reference GitHub Actions workflows to copy into your training
+repo's `.github/workflows/`:
+
+- [train-and-audit.yml](./cicd/train-and-audit.yml) - manual dispatch: training run ->
+  `report` -> report artifact (plus a commented-out Slack notification step).
+- [monthly-eval-refresh.yml](./cicd/monthly-eval-refresh.yml) - monthly cron: `curate` ->
+  `evaluate`, so the golden dataset grows with fresh ratings and every month produces a
+  comparable experiment.
+
+Both keep secrets in `env:` and pin actions by commit SHA. A commented-out Slack block also
+sits at the end of `training_report.py` if you'd rather notify from the CLI run itself.
+
+### Going further - Optimization Studio
+
+Once the golden dataset has enough items, let Opik optimize the analyst prompt against it
+instead of hand-tuning:
+
+```python
+from opik_optimizer import MetaPromptOptimizer  # uv add opik-optimizer
+
+optimizer = MetaPromptOptimizer(model="anthropic/claude-sonnet-5")
+# dataset: capacity-recommendations-golden; metric: the same G-Eval rubric as `evaluate`;
+# starting prompt: the current gpu-capacity-analyst version from the Prompt Library.
+```
+
+The optimized prompt lands back in the Prompt Library as a new version - and because
+`evaluate` pins the prompt version on every experiment, you can prove the optimized version
+beats the old one on the same dataset before promoting it. See the
+[Opik Agent Optimization docs](https://www.comet.com/docs/opik/agent_optimization/overview).
 
 ## How it works
 
@@ -127,12 +254,22 @@ to audit your own exported snapshot offline.
   under the audit trace.
 - **`agent.py`** - the `ask` loop: litellm tool-calling against the same MCP session, bounded
   by `--max-turns`.
+- **`train_demo.py`** - the demo DDP training job (optional `train` extra); rank 0 logs the
+  experiment the rest of the workflow consumes.
+- **`training_report.py`** - the `report` command: same collector, plus model-quality metrics
+  and review links; stores the analysis payload as trace input so curated traces replay in
+  offline evals; adds its trace to the annotation queue.
+- **`loop_setup.py`** - idempotent creation of the prompt-library entry, the annotation
+  queue, and the online LLM-judge rule.
+- **`curation.py` / `offline_eval.py`** - `curate` (rated traces -> golden dataset) and
+  `evaluate` (G-Eval of the current prompt+model against it).
 - **`synthetic_server.py`** - a FastMCP server that mimics comet-mcp's five tools from
   `data/sample_runs.json` (seven fictional runs: the 8-node/64-GPU/12% offender, a
   256-device JAX run with no system metrics, a healthy LoRA run, a CPU-bound run, a
-  declared/reporting mismatch, an uninstrumented run, and a well-utilized baseline). Because
-  it speaks the same tool contract, the dry run exercises the exact code path used against
-  production.
+  declared/reporting mismatch, an uninstrumented run, and a well-utilized baseline - two of
+  them carry precision/recall/F1 so `report --synthetic` shows the model-quality table).
+  Because it speaks the same tool contract, the dry run exercises the exact code path used
+  against production.
 
 ## Viewing the results in Opik
 

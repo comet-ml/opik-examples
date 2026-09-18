@@ -6,6 +6,24 @@ from . import config, prompts
 from .analysis import CapacitySummary, Finding
 
 _logger_wired = False
+_analyst_prompt_obj: opik.Prompt | None = None
+
+
+def analyst_prompt() -> tuple[str, opik.Prompt | None]:
+    """Analyst system prompt, versioned in the Opik Prompt Library when credentials allow.
+
+    create_prompt is idempotent: it registers a new version only when the template text
+    changes, so every audit run pins the exact prompt version it used.
+    """
+    global _analyst_prompt_obj
+    if config.DRY_RUN:
+        return prompts.ANALYST_SYSTEM_PROMPT, None
+    if _analyst_prompt_obj is None:
+        client = opik.Opik(project_name=config.OPIK_PROJECT_NAME)
+        _analyst_prompt_obj = client.create_prompt(
+            name=config.PROMPT_NAME, prompt=prompts.ANALYST_SYSTEM_PROMPT
+        )
+    return _analyst_prompt_obj.prompt, _analyst_prompt_obj
 
 
 def _wire_llm_span_logging() -> None:
@@ -35,12 +53,16 @@ def _opik_metadata() -> dict:
 async def write_recommendations(summary: CapacitySummary, findings: list[Finding]) -> str:
     """One synthesis call: rule-based findings in, Markdown rightsizing report out."""
     _wire_llm_span_logging()
+    system_prompt, prompt_obj = analyst_prompt()
     response = await litellm.acompletion(
         model=config.GEN_MODEL,
         messages=[
-            {"role": "system", "content": prompts.ANALYST_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompts.analysis_payload(summary, findings)},
         ],
         metadata=_opik_metadata(),
     )
+    if prompt_obj is not None:
+        # Links the prompt version to the trace: the Opik log view shows it as a Prompt tab.
+        opik_context.update_current_trace(prompts=[prompt_obj])
     return response.choices[0].message.content or ""

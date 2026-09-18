@@ -32,6 +32,7 @@ class RunMetrics:
     gpu_util_peak: float | None = None
     gpu_mem_peak_pct: float | None = None
     cpu_util_mean: float | None = None
+    model_metrics: dict[str, float] | None = None  # precision/recall/f1/... (last logged values)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -162,6 +163,13 @@ async def fetch_run(session: ClientSession, workspace: str, project: str, experi
         declared_nodes=nodes,
         duration_hours=duration_hours(details),
     )
+
+    model_metrics = {
+        m["name"]: _to_float(m.get("value"))
+        for m in details.get("metrics", [])
+        if isinstance(m, dict) and m.get("name") in config.MODEL_METRIC_KEYS
+    }
+    run.model_metrics = {k: v for k, v in model_metrics.items() if v is not None} or None
 
     names = _metric_names(details)
     gpu_util_names = [n for n in names if GPU_UTIL_RE.match(n)]
