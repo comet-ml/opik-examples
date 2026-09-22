@@ -8,3 +8,10 @@ opik_test_suite_reports/
 .ruff_cache/
 traces.jsonl
 .data-cache/
+
+# terraform (infra/) - local state only, never committed
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars

@@ -27,6 +27,8 @@ defaults:
 
 jobs:
   train-and-report:
+    # For real GPU training, point this at a self-hosted GPU runner label
+    # (e.g. [self-hosted, gpu]) and raise --nproc_per_node to the GPU count.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

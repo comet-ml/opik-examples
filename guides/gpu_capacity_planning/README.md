@@ -151,6 +151,35 @@ uv run torchrun --nproc_per_node=2 -m gpu_capacity_planning.train_demo --epochs 
 A 2-rank CPU run takes a few minutes and downloads ~30 MB into `.data-cache/`. On a GPU box
 the same command (with `--nproc_per_node=<gpus>`) produces real `sys.gpu.N.*` series.
 
+#### Run it on a real GPU box (optional)
+
+`infra/` holds a minimal terraform config for a throwaway single-node trainer: latest AWS
+Deep Learning Base GPU AMI, SSH open to your address only, IMDSv2, 200 GB gp3 root. Nothing
+account-specific is hardcoded - configuration comes from the `AWS_PROFILE` and `TF_VAR_*`
+entries in `.env` (see `.env.example`; the preset `g4dn.12xlarge` gives 4x T4 for a real
+multi-GPU DDP run).
+
+```bash
+cp .env.example .env          # fill in the AWS + Comet sections
+cd infra
+set -a; source ../.env; set +a
+terraform init && terraform apply
+
+# setup + train on the box (creds travel over stdin, never argv or user-data):
+./run_remote_training.sh "$(terraform output -raw public_ip)" --epochs 2
+
+terraform destroy             # ~$4/hr on-demand - do not leave it running
+```
+
+The runner installs uv, clones this repo on the box, runs `torchrun` across every GPU
+`nvidia-smi` reports, and streams the output; the last lines are the EM experiment URL. Back
+on your machine, continue with the `report` command below - it only talks to the EM API.
+
+Notes: `g4dn.12xlarge` needs 48 vCPUs of the "Running On-Demand G and VT instances" quota
+(new accounts often have 0 - request an increase first). If your training already runs on
+EKS or a self-hosted CI runner, skip the terraform and point the `cicd/` workflows'
+`runs-on` at a GPU runner instead - the training command is identical.
+
 ### 2. Recommend - the post-training report
 
 ```bash
@@ -263,6 +292,8 @@ winning version means updating the constant in code. See the
   by `--max-turns`.
 - **`train_demo.py`** - the demo DDP training job (optional `train` extra); rank 0 logs the
   experiment the rest of the workflow consumes.
+- **`infra/`** - optional terraform for a throwaway GPU box plus `run_remote_training.sh`,
+  which sets the box up over SSH and launches the training demo across all its GPUs.
 - **`training_report.py`** - the `report` command: same collector, plus model-quality metrics
   and review links; stores the analysis payload as trace input so curated traces replay in
   offline evals; adds its trace to the annotation queue.
