@@ -8,11 +8,18 @@ Launch (CPU works; on a GPU box the sys.gpu.* metrics appear automatically):
 Rank 0 logs one Comet EM experiment: hyperparameters (including world_size, which the
 audit reads as declared scale), per-epoch loss/accuracy, final precision/recall/F1, and
 system metrics (enabled explicitly below). The `report` command then closes the loop.
+
+Optional efficiency extras (both per-model/per-hardware, hence opt-in):
+- `--peak-tflops <per-GPU peak>` logs a per-epoch `mfu` metric (Model FLOPs Utilization).
+- `--gpu-log-every N` logs `gpu.<i>.utilization`/`gpu.<i>.memory_pct` from inside the
+  training loop with step+epoch attached, so the EM chart can plot them per step/epoch
+  (the background `sys.gpu.*` sampler only supports a wall-time axis).
 """
 
 import argparse
 import os
 import sys
+import time
 
 try:
     import comet_ml
@@ -57,6 +64,38 @@ def _distributed() -> tuple[int, int]:
     return rank, world_size
 
 
+def _forward_flops_per_sample(model: nn.Module, batch: torch.Tensor, device: torch.device) -> float:
+    """Measured forward FLOPs for one sample - architecture-specific, hence measured not assumed."""
+    from torch.utils.flop_counter import FlopCounterMode
+
+    counter = FlopCounterMode(display=False)
+    with counter, torch.no_grad():
+        model(batch.to(device))
+    return counter.get_total_flops() / batch.shape[0]
+
+
+def _nvml_handles() -> tuple:
+    """(pynvml module, device handles) for in-loop GPU sampling; ([], None) when unavailable."""
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        handles = [pynvml.nvmlDeviceGetHandleByIndex(i) for i in range(pynvml.nvmlDeviceGetCount())]
+        return pynvml, handles
+    except Exception:  # noqa: BLE001 - no NVML (CPU box) is a normal, silent case
+        return None, []
+
+
+def _gpu_snapshot(pynvml, handles) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for i, handle in enumerate(handles):
+        rates = pynvml.nvmlDeviceGetUtilizationRates(handle)
+        memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        metrics[f"gpu.{i}.utilization"] = rates.gpu
+        metrics[f"gpu.{i}.memory_pct"] = round(100 * memory.used / memory.total, 1)
+    return metrics
+
+
 def _predict(model: nn.Module, test_loader: "DataLoader", device: torch.device) -> tuple[list, list]:
     model.eval()
     predictions, targets = [], []
@@ -99,6 +138,21 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--run-name", default=None)
     parser.add_argument("--project", default=os.environ.get("COMET_PROJECT_NAME", "capacity-demo-training"))
+    parser.add_argument(
+        "--peak-tflops",
+        type=float,
+        default=None,
+        help="Per-GPU peak TFLOPS for the precision you train in (T4 fp32 ~8.1). "
+        "Enables the per-epoch `mfu` metric; without it MFU is skipped - a made-up "
+        "denominator would be worse than no number.",
+    )
+    parser.add_argument(
+        "--gpu-log-every",
+        type=int,
+        default=10,
+        help="Log per-GPU utilization/memory from inside the loop every N steps with "
+        "step+epoch attached (0 disables). Complements the wall-clock sys.gpu.* sampler.",
+    )
     args = parser.parse_args()
 
     if not os.environ.get("COMET_API_KEY"):
@@ -131,11 +185,24 @@ def main() -> None:
 
     experiment = _start_experiment(args, world_size) if rank == 0 else None
 
+    flops_per_sample = None
+    if experiment and args.peak_tflops:
+        sample_batch, _ = next(iter(train_loader))
+        flops_per_sample = _forward_flops_per_sample(model, sample_batch, device)
+        experiment.log_parameters(
+            {"peak_tflops_per_gpu": args.peak_tflops, "flops_per_sample": flops_per_sample}
+        )
+    pynvml, nvml_handles = (None, [])
+    if experiment and args.gpu_log_every > 0 and torch.cuda.is_available():
+        pynvml, nvml_handles = _nvml_handles()
+
+    global_step = 0
     for epoch in range(args.epochs):
         if sampler is not None:
             sampler.set_epoch(epoch)
         model.train()
         total_loss, batches = 0.0, 0
+        epoch_start = time.perf_counter()
         for images, labels in train_loader:
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
@@ -144,10 +211,22 @@ def main() -> None:
             optimizer.step()
             total_loss += loss.item()
             batches += 1
+            global_step += 1
+            if nvml_handles and global_step % args.gpu_log_every == 0:
+                experiment.log_metrics(_gpu_snapshot(pynvml, nvml_handles), step=global_step, epoch=epoch)
+        epoch_seconds = time.perf_counter() - epoch_start
         if experiment:
             predictions, targets = _predict(model, test_loader, device)
             accuracy = sum(p == t for p, t in zip(predictions, targets, strict=True)) / len(targets)
-            experiment.log_metrics({"loss": total_loss / max(batches, 1), "accuracy": accuracy}, epoch=epoch)
+            epoch_metrics = {"loss": total_loss / max(batches, 1), "accuracy": accuracy}
+            if flops_per_sample:
+                # WHY: a training step costs ~3x a forward pass (forward + ~2x backward) -
+                # a standard heuristic, so treat MFU as directional rather than exact.
+                achieved = 3 * flops_per_sample * len(train_set) / epoch_seconds
+                mfu = round(100 * achieved / (world_size * args.peak_tflops * 1e12), 2)
+                epoch_metrics["mfu"] = mfu
+                print(f"epoch {epoch}: mfu {mfu}%")
+            experiment.log_metrics(epoch_metrics, step=global_step, epoch=epoch)
 
     if experiment:
         predictions, targets = _predict(model, test_loader, device)

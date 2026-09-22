@@ -51,6 +51,9 @@ def _metric_names(exp: dict[str, Any]) -> dict[str, list[list[float]]]:
                 metrics[f"sys.gpu.{i}.{name}"] = series
     if exp.get("cpu_series"):
         metrics["sys.cpu.percent.avg"] = _series(exp["cpu_series"], 0)
+    if exp.get("mfu_series"):
+        # Model FLOPs Utilization, logged per-epoch by opted-in runs (see train_demo.py).
+        metrics["mfu"] = _series(exp["mfu_series"], 0)
     return metrics
 
 

@@ -18,6 +18,8 @@ train = [
     "torchvision",
     "comet_ml>=3.40",
     "scikit-learn",
+    # In-loop GPU sampling (train_demo --gpu-log-every); official NVML bindings.
+    "nvidia-ml-py",
 ]
 
 [project.scripts]

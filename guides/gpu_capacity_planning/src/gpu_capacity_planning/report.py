@@ -10,9 +10,13 @@ def _fmt(value: object, suffix: str = "") -> str:
 
 
 def render_runs_table(runs: list[RunMetrics]) -> str:
+    # MFU is opt-in per model, so the column only appears when at least one run logs it.
+    has_mfu = any(r.mfu_mean is not None for r in runs)
+    mfu_header = " MFU mean/peak |" if has_mfu else ""
     lines = [
-        "| Project | Run | Declared GPUs | Reporting | Coverage | GPU util mean/peak | CPU mean | Hours |",
-        "|---|---|---|---|---|---|---|---|",
+        f"| Project | Run | Declared GPUs | Reporting | Coverage | GPU util mean/peak |{mfu_header}"
+        " CPU mean | Hours |",
+        "|---|---|---|---|---|---|" + ("---|" if has_mfu else "") + "---|---|",
     ]
     for r in runs:
         declared = _fmt(r.declared_num_gpus)
@@ -21,10 +25,11 @@ def render_runs_table(runs: list[RunMetrics]) -> str:
         if r.declared_gpu_type:
             declared += f" x {r.declared_gpu_type}"
         util = f"{_fmt(r.gpu_util_mean, '%')} / {_fmt(r.gpu_util_peak, '%')}"
+        mfu_cell = f" {_fmt(r.mfu_mean, '%')} / {_fmt(r.mfu_peak, '%')} |" if has_mfu else ""
         lines.append(
             f"| {r.project} | {r.name or r.experiment_id} | {declared} "
             f"| {_fmt(r.detected_gpu_count)} | {COVERAGE_LABEL.get(r.coverage, r.coverage)} "
-            f"| {util} | {_fmt(r.cpu_util_mean, '%')} | {_fmt(r.duration_hours)} |"
+            f"| {util} |{mfu_cell} {_fmt(r.cpu_util_mean, '%')} | {_fmt(r.duration_hours)} |"
         )
     return "\n".join(lines)
 

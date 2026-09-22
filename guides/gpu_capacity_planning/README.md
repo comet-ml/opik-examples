@@ -69,6 +69,7 @@ ships with [uv](https://docs.astral.sh/uv/).
 | `COMET_URL_OVERRIDE` / `OPIK_URL_OVERRIDE` | Self-hosted deployments | Optional |
 | `OPIK_PROJECT_NAME` | Trace destination | Default `gpu-capacity-planning` |
 | `CAPACITY_LOW_UTIL_PCT` / `CAPACITY_IDLE_UTIL_PCT` / `CAPACITY_MAX_RUNS` | Threshold tuning | Defaults 30 / 10 / 50 |
+| `CAPACITY_LOW_MFU_PCT` | MFU target for runs that log an `mfu` metric | Default 20 |
 | `CAPACITY_DEVICE_PARAM_KEYS` / `CAPACITY_NODE_PARAM_KEYS` | Which params declare training scale | Defaults `num_gpus,num_devices,world_size` / `nnodes,num_nodes,config/compute/nnodes` |
 | `CAPACITY_MODEL_METRIC_KEYS` | Model-quality metrics shown by `report` | Default `precision,recall,f1,accuracy,loss` |
 | `CAPACITY_PROMPT_NAME` / `CAPACITY_QUEUE_NAME` / `CAPACITY_DATASET` / `CAPACITY_JUDGE_SCORE` / `CAPACITY_JUDGE_MODEL` | Names of the feedback-loop objects | Defaults `gpu-capacity-analyst` / `capacity-recommendations` / `capacity-recommendations-golden` / `recommendation_quality` / model without provider prefix |
@@ -166,7 +167,8 @@ set -a; source ../.env; set +a
 terraform init && terraform apply
 
 # setup + train on the box (creds travel over stdin, never argv or user-data):
-./run_remote_training.sh "$(terraform output -raw public_ip)" --epochs 2
+# --peak-tflops enables MFU (T4 fp32 peak ~8.1 TFLOPS - see the MFU section below)
+./run_remote_training.sh "$(terraform output -raw public_ip)" --epochs 4 --peak-tflops 8.1
 
 terraform destroy             # ~$4/hr on-demand - do not leave it running
 ```
@@ -179,6 +181,38 @@ Notes: `g4dn.12xlarge` needs 48 vCPUs of the "Running On-Demand G and VT instanc
 (new accounts often have 0 - request an increase first). If your training already runs on
 EKS or a self-hosted CI runner, skip the terraform and point the `cicd/` workflows'
 `runs-on` at a GPU runner instead - the training command is identical.
+
+#### MFU - Model FLOPs Utilization (optional)
+
+GPU utilization says the chip was *busy*; MFU says how much of its rated compute the model
+actually extracted: `achieved FLOPs/sec / (world_size x peak FLOPs/sec)`. A run can report
+90% utilization at single-digit MFU - busy but inefficient (wrong precision, small kernels,
+input-bound). That is why the audit weighs MFU above raw utilization when a run logs it.
+
+MFU has to be configured per model and per hardware, so it is opt-in:
+
+- **Model FLOPs**: `train_demo.py` measures one forward batch with
+  `torch.utils.flop_counter.FlopCounterMode` and approximates a training step as 3x the
+  forward pass (forward + ~2x backward). The heuristic is directional - attention variants,
+  MoE, or recompute-heavy models need their own accounting.
+- **Hardware peak**: pass `--peak-tflops` for the precision you train in (T4 ~8.1 fp32 /
+  ~65 fp16; A100 ~19.5 fp32 / ~312 bf16 dense). No flag, no `mfu` metric - a made-up
+  denominator would be worse than no number.
+
+The per-epoch `mfu` metric lands in EM next to loss/accuracy, the `report` command adds an
+"MFU mean/peak" column, and a run whose GPUs look busy (above `CAPACITY_LOW_UTIL_PCT`) while
+MFU sits under `CAPACITY_LOW_MFU_PCT` (default 20%) gets flagged as compute-inefficient
+rather than idle.
+
+#### System metrics vs in-loop GPU metrics
+
+`sys.gpu.*` series come from Comet's background sampler on a wall-clock thread, so the EM
+chart can only plot them against wall time (and a very short run yields a single sample).
+`train_demo.py` therefore also logs `gpu.<i>.utilization` / `gpu.<i>.memory_pct` from inside
+the training loop (every `--gpu-log-every` steps, default 10, `0` disables) with `step` and
+`epoch` attached - switch the chart's x-axis to step or epoch to line utilization dips up
+with what the loop was doing. The audit keeps reading `sys.gpu.*`: that is the convention
+every instrumented run shares, opted-in or not.
 
 ### 2. Recommend - the post-training report
 
@@ -291,7 +325,8 @@ winning version means updating the constant in code. See the
 - **`agent.py`** - the `ask` loop: litellm tool-calling against the same MCP session, bounded
   by `--max-turns`.
 - **`train_demo.py`** - the demo DDP training job (optional `train` extra); rank 0 logs the
-  experiment the rest of the workflow consumes.
+  experiment the rest of the workflow consumes, plus opt-in MFU (`--peak-tflops`) and
+  in-loop per-step GPU metrics (`--gpu-log-every`).
 - **`infra/`** - optional terraform for a throwaway GPU box plus `run_remote_training.sh`,
   which sets the box up over SSH and launches the training demo across all its GPUs.
 - **`training_report.py`** - the `report` command: same collector, plus model-quality metrics
@@ -303,9 +338,10 @@ winning version means updating the constant in code. See the
   `evaluate` (G-Eval of the current prompt+model against it).
 - **`synthetic_server.py`** - a FastMCP server that mimics comet-mcp's five tools from
   `data/sample_runs.json` (seven fictional runs: the 8-node/64-GPU/12% offender, a
-  256-device JAX run with no system metrics, a healthy LoRA run, a CPU-bound run, a
-  declared/reporting mismatch, an uninstrumented run, and a well-utilized baseline - two of
-  them carry precision/recall/F1 so `report --synthetic` shows the model-quality table).
+  256-device JAX run with no system metrics, a busy-but-low-MFU LoRA run, a CPU-bound run, a
+  declared/reporting mismatch, an uninstrumented run, and a well-utilized baseline - two
+  carry precision/recall/F1 for the model-quality table, two carry `mfu` so the MFU column
+  and the compute-inefficiency rule show up in `report --synthetic`).
   Because it speaks the same tool contract, the dry run exercises the exact code path used
   against production.
 

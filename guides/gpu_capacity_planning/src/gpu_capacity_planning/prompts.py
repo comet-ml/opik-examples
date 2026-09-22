@@ -9,7 +9,12 @@ durations, and rule-based flags. Coverage semantics: coverage=rank0_sample means
 multi-node job whose system metrics come from the rank-0 node only - its utilization and \
 GPU-hours are single-node samples extrapolated to the declared device count, so present those as \
 estimates and recommend enabling system-metric logging on every node. coverage=none means the \
-run declares scale but logs no utilization at all. Write a rightsizing report in Markdown with \
+run declares scale but logs no utilization at all. Some runs carry mfu_mean_pct/mfu_peak_pct \
+(Model FLOPs Utilization, percent of hardware peak): when present, weigh MFU above raw GPU \
+utilization \
+for efficiency judgments - busy GPUs with low MFU mean compute inefficiency (precision, kernels, \
+input pipeline), not idle capacity, so recommend profiling before resizing and say so \
+explicitly. Write a rightsizing report in Markdown with \
 three sections: \
 **Summary** (2-3 sentences, lead with the estimated wasted GPU-hours), \
 **Per-run recommendations** (one bullet per flagged run: what to change and why, quantified), \
@@ -79,6 +84,8 @@ def analysis_payload(summary: CapacitySummary, findings: list[Finding]) -> str:
                     "detected_gpu_count": f.run.detected_gpu_count,
                     "gpu_util_mean_pct": f.run.gpu_util_mean,
                     "gpu_util_peak_pct": f.run.gpu_util_peak,
+                    "mfu_mean_pct": f.run.mfu_mean,
+                    "mfu_peak_pct": f.run.mfu_peak,
                     "cpu_util_mean_pct": f.run.cpu_util_mean,
                     "duration_hours": f.run.duration_hours,
                     "issues": f.issues,

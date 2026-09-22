@@ -27,6 +27,10 @@ LOW_UTIL_PCT = float(os.environ.get("CAPACITY_LOW_UTIL_PCT", "30"))
 IDLE_UTIL_PCT = float(os.environ.get("CAPACITY_IDLE_UTIL_PCT", "10"))
 MAX_RUNS = int(os.environ.get("CAPACITY_MAX_RUNS", "50"))
 
+# Model FLOPs Utilization threshold (percent of hardware peak). Only applied to runs that
+# log an `mfu` metric - MFU is configured per model (see train_demo.py --peak-tflops).
+LOW_MFU_PCT = float(os.environ.get("CAPACITY_LOW_MFU_PCT", "20"))
+
 
 def _key_list(env_var: str, default: str) -> list[str]:
     return [k.strip() for k in os.environ.get(env_var, default).split(",") if k.strip()]

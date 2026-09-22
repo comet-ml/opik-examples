@@ -12,6 +12,8 @@ from .mcp_client import call_tool
 GPU_UTIL_RE = re.compile(r"^sys\.gpu\.(\d+)\.gpu_utilization$")
 GPU_MEM_RE = re.compile(r"^sys\.gpu\.(\d+)\.memory_utilization$")
 CPU_METRIC = "sys.cpu.percent.avg"
+# Model FLOPs Utilization, logged per-epoch by runs that opted in (model-specific metric).
+MFU_METRIC = "mfu"
 
 
 @dataclass
@@ -32,6 +34,8 @@ class RunMetrics:
     gpu_util_peak: float | None = None
     gpu_mem_peak_pct: float | None = None
     cpu_util_mean: float | None = None
+    mfu_mean: float | None = None  # Model FLOPs Utilization (percent of hardware peak)
+    mfu_peak: float | None = None
     model_metrics: dict[str, float] | None = None  # precision/recall/f1/... (last logged values)
 
     def as_dict(self) -> dict[str, Any]:
@@ -180,7 +184,12 @@ async def fetch_run(session: ClientSession, workspace: str, project: str, experi
         run.declared_num_gpus = nodes * run.detected_gpu_count
     run.coverage = resolve_coverage(run)
 
-    wanted = gpu_util_names + gpu_mem_names + ([CPU_METRIC] if CPU_METRIC in names else [])
+    wanted = (
+        gpu_util_names
+        + gpu_mem_names
+        + ([CPU_METRIC] if CPU_METRIC in names else [])
+        + ([MFU_METRIC] if MFU_METRIC in names else [])
+    )
     if not wanted:
         return run
 
@@ -203,6 +212,8 @@ async def fetch_run(session: ClientSession, workspace: str, project: str, experi
             mem_peaks.append(peak)
         elif name == CPU_METRIC:
             run.cpu_util_mean = mean
+        elif name == MFU_METRIC:
+            run.mfu_mean, run.mfu_peak = mean, peak
 
     if util_means:
         run.gpu_util_mean = round(sum(util_means) / len(util_means), 1)
