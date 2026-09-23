@@ -41,10 +41,10 @@ ONLINE_JUDGE_TEMPLATE = f"""\
 
 {JUDGE_RUBRIC}
 
-Utilization findings the recommendation is based on:
+Utilization findings the report is based on:
 {{{{input}}}}
 
-Recommendation to score:
+Training report to score (judge its Recommendations section):
 {{{{output}}}}"""
 
 AGENT_SYSTEM_PROMPT = """\

@@ -55,7 +55,10 @@ def _links_section(runs: list[RunMetrics], trace_id: str | None) -> str:
     return "\n".join(lines)
 
 
-@opik.track(name="training_report", project_name=config.OPIK_PROJECT_NAME)
+# WHY: capture_output=False - otherwise the decorator writes the returned ReportResult over the
+# trace output; the report Markdown is set explicitly below as the single `output` key, which
+# is the shape Opik's Pretty view renders as Markdown.
+@opik.track(name="training_report", project_name=config.OPIK_PROJECT_NAME, capture_output=False)
 async def build_report(
     workspace: str,
     project: str,
@@ -103,7 +106,7 @@ async def build_report(
         # traces into dataset items, and `evaluate` re-runs the analyst on that input.
         opik_context.update_current_trace(
             input={"analysis_payload": prompts.analysis_payload(summary, findings)},
-            output={"recommendations": recommendations or "", "report": markdown},
+            output={"output": markdown},
             tags=["capacity-planning", "training-report", "synthetic" if synthetic else "live"],
             metadata={
                 "comet_workspace": workspace,

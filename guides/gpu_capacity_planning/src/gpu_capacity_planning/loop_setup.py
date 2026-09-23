@@ -68,7 +68,7 @@ def _ensure_judge_rule(client: opik.Opik) -> str:
                 # Grounded criterion is checkable against the data.
                 "variables": {
                     "input": "input.analysis_payload",
-                    "output": "output.recommendations",
+                    "output": "output.output",
                 },
                 # WHY: the generated client validates by field name; "schema" is aliased to schema_.
                 "schema_": [
