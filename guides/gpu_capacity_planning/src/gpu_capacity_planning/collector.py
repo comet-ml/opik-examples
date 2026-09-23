@@ -115,13 +115,15 @@ def _parse_dt(value: Any) -> datetime | None:
 
 
 def duration_hours(details: dict[str, Any]) -> float | None:
+    # WHY: 3 decimals - runs lasting seconds otherwise read as 0.0 h and the analyst
+    # model concludes duration logging is broken instead of the run being short.
     millis = details.get("durationMillis")
     if millis is not None:
-        return round(_to_float(millis) / 3.6e6, 2) if _to_float(millis) else None
+        return round(_to_float(millis) / 3.6e6, 3) if _to_float(millis) else None
     start = _parse_dt(details.get("created_at"))
     end = _parse_dt(details.get("updated_at"))
     if start and end and end > start:
-        return round((end - start).total_seconds() / 3600, 2)
+        return round((end - start).total_seconds() / 3600, 3)
     return None
 
 

@@ -172,15 +172,15 @@ def analyze(
 
         stats = by_project.setdefault(run.project, {"runs": 0, "flagged": 0, "gpu_hours": 0.0})
         stats["runs"] += 1
-        stats["gpu_hours"] = round(stats["gpu_hours"] + gpu_hours, 1)
+        stats["gpu_hours"] = round(stats["gpu_hours"] + gpu_hours, 2)
         if finding.severity in ("high", "medium"):
             stats["flagged"] += 1
 
     summary = CapacitySummary(
         runs_analyzed=len(runs),
         runs_flagged=sum(1 for f in findings if f.severity in ("high", "medium")),
-        total_gpu_hours=round(total_gpu_hours, 1),
-        est_wasted_gpu_hours=round(wasted_gpu_hours, 1),
+        total_gpu_hours=round(total_gpu_hours, 2),
+        est_wasted_gpu_hours=round(wasted_gpu_hours, 2),
         by_project=by_project,
         coverage=coverage,
         extrapolated_runs=coverage["rank0_sample"],
