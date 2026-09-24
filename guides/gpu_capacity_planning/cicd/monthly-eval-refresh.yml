@@ -1,0 +1,61 @@
+# Reference workflow: copy to .github/workflows/ in YOUR training repo.
+# Monthly (or manual): fold newly high-rated recommendation traces into the golden
+# dataset, then run the offline evaluation so prompt/code/model changes are compared
+# against the same reference set.
+# Secrets: OPIK_API_KEY, ANTHROPIC_API_KEY; variables: OPIK_WORKSPACE.
+
+name: Monthly eval refresh
+
+on:
+  schedule:
+    - cron: "0 6 1 * *" # 06:00 UTC on the 1st of each month
+  workflow_dispatch:
+    inputs:
+      min_score:
+        description: Minimum feedback score for curation
+        default: "0.8"
+
+permissions:
+  contents: read
+
+# The run steps assume this guide's pyproject is at the repo root. If you vendored the
+# folder into a subdirectory of your training repo, point working-directory at it:
+defaults:
+  run:
+    shell: bash
+    # working-directory: path/to/gpu_capacity_planning
+
+jobs:
+  curate-and-evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+      OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      MIN_SCORE: ${{ inputs.min_score || '0.8' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+
+      - name: Install
+        run: uv sync
+
+      - name: Curate highly rated traces into the golden dataset
+        run: uv run gpu-capacity-planning curate --min-score "$MIN_SCORE"
+
+      - name: Offline evaluation against the golden dataset
+        run: uv run gpu-capacity-planning evaluate
+
+      # --- Optional: post the experiment link to Slack ----------------------
+      # The webhook URL is a secret, so it goes through curl's config stdin,
+      # never through argv (visible to other processes on the runner).
+      # - name: Notify Slack
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #   run: |
+      #     printf '{"text":"Monthly capacity-analyst eval refreshed - review the new experiment in Opik."}' > payload.json
+      #     curl -sf -X POST -H 'Content-Type: application/json' \
+      #       -d @payload.json --config - <<< "url = \"$SLACK_WEBHOOK_URL\""
+      # ----------------------------------------------------------------------

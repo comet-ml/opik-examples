@@ -9,12 +9,43 @@ durations, and rule-based flags. Coverage semantics: coverage=rank0_sample means
 multi-node job whose system metrics come from the rank-0 node only - its utilization and \
 GPU-hours are single-node samples extrapolated to the declared device count, so present those as \
 estimates and recommend enabling system-metric logging on every node. coverage=none means the \
-run declares scale but logs no utilization at all. Write a rightsizing report in Markdown with \
+run declares scale but logs no utilization at all. Some runs carry mfu_mean_pct/mfu_peak_pct \
+(Model FLOPs Utilization, percent of hardware peak): when present, weigh MFU above raw GPU \
+utilization \
+for efficiency judgments - busy GPUs with low MFU mean compute inefficiency (precision, kernels, \
+input pipeline), not idle capacity, so recommend profiling before resizing and say so \
+explicitly. Write a rightsizing report in Markdown with \
 three sections: \
 **Summary** (2-3 sentences, lead with the estimated wasted GPU-hours), \
 **Per-run recommendations** (one bullet per flagged run: what to change and why, quantified), \
 **Next steps** (instrumentation or scheduling improvements). \
 Be specific and quantitative; recommend concrete GPU counts. Do not invent runs or numbers."""
+
+JUDGE_TASK_INTRO = """\
+You evaluate GPU rightsizing recommendations written by a capacity-planning analyst for \
+machine-learning training runs."""
+
+JUDGE_RUBRIC = """\
+Score the recommendation text from 0.0 to 1.0:
+- Actionable (0.4): names concrete GPU counts or instrumentation steps, not vague advice.
+- Grounded (0.4): every number traces back to the utilization findings; nothing is invented; \
+extrapolated multi-node figures are labeled as estimates.
+- Safe (0.2): no recommendation to downsize a run whose metrics only cover one node of many \
+without flagging the uncertainty."""
+
+# Template for the online LLM-as-judge rule created by `setup-loop`. Opik fills
+# {{input}} with the utilization findings and {{output}} with the recommendation,
+# so the judge can actually check the Grounded criterion against the data.
+ONLINE_JUDGE_TEMPLATE = f"""\
+{JUDGE_TASK_INTRO}
+
+{JUDGE_RUBRIC}
+
+Utilization findings the report is based on:
+{{{{input}}}}
+
+Training report to score (judge its Recommendations section):
+{{{{output}}}}"""
 
 AGENT_SYSTEM_PROMPT = """\
 You are a GPU capacity-planning assistant with tool access to a Comet experiment-management \
@@ -53,6 +84,8 @@ def analysis_payload(summary: CapacitySummary, findings: list[Finding]) -> str:
                     "detected_gpu_count": f.run.detected_gpu_count,
                     "gpu_util_mean_pct": f.run.gpu_util_mean,
                     "gpu_util_peak_pct": f.run.gpu_util_peak,
+                    "mfu_mean_pct": f.run.mfu_mean,
+                    "mfu_peak_pct": f.run.mfu_peak,
                     "cpu_util_mean_pct": f.run.cpu_util_mean,
                     "duration_hours": f.run.duration_hours,
                     "issues": f.issues,

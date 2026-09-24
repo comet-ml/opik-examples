@@ -79,6 +79,88 @@ def list_runs(
 
 
 @app.command()
+def report(
+    project: str = typer.Option(..., "--project", "-p", help="Project holding the training runs"),
+    experiment: list[str] = typer.Option(
+        None, "--experiment", "-e", help="Experiment key(s) or name(s); default: all in the project"
+    ),
+    workspace: str = typer.Option(None, help="Comet workspace (default: COMET_WORKSPACE)"),
+    synthetic: bool = typer.Option(False, help="Force the bundled synthetic MCP server"),
+    output: Path = typer.Option(None, help="Also write the Markdown report here"),
+) -> None:
+    """Post-training report: model quality + capacity efficiency + review links, traced in Opik."""
+    ws, use_synthetic = _resolve(workspace, synthetic)
+    from .training_report import add_report_to_queue, build_report
+
+    result = asyncio.run(build_report(ws, project, experiment or None, use_synthetic))
+    typer.echo(result.markdown)
+    if config.DRY_RUN:
+        typer.echo(
+            f"\n[DRY RUN] Opik credentials not set - would call {config.GEN_MODEL} for the "
+            f"recommendations section, log the report trace to Opik project "
+            f"'{config.OPIK_PROJECT_NAME}', and add it to the '{config.QUEUE_NAME}' queue."
+        )
+    elif result.trace_id:
+        queue = add_report_to_queue(result.trace_id)
+        if queue:
+            typer.echo(f"\nTrace {result.trace_id} added to annotation queue '{queue}'.")
+        else:
+            typer.echo(f"\nAnnotation queue '{config.QUEUE_NAME}' not found - run setup-loop to create it.")
+    if output:
+        output.write_text(result.markdown)
+        typer.echo(f"\nReport written to {output}")
+
+
+@app.command("setup-loop")
+def setup_loop() -> None:
+    """Create the Opik feedback loop: prompt in the library, annotation queue, online judge rule."""
+    if config.DRY_RUN:
+        typer.echo("Opik credentials (OPIK_API_KEY + OPIK_WORKSPACE) are required for setup-loop.")
+        raise typer.Exit(1)
+    from .loop_setup import ensure_loop
+
+    for line in ensure_loop():
+        typer.echo(f"- {line}")
+
+
+@app.command()
+def curate(
+    min_score: float = typer.Option(0.8, help="Minimum feedback score a trace needs"),
+    dataset: str = typer.Option(config.GOLDEN_DATASET, help="Target Opik dataset"),
+    max_items: int = typer.Option(50, help="Cap on traces considered"),
+) -> None:
+    """Copy recommendation traces rated >= min-score into the golden evaluation dataset."""
+    if config.DRY_RUN:
+        typer.echo("Opik credentials (OPIK_API_KEY + OPIK_WORKSPACE) are required for curate.")
+        raise typer.Exit(1)
+    from .curation import curate as run_curate
+
+    sent = run_curate(min_score, dataset, max_items)
+    typer.echo(
+        f"{sent} report trace(s) with {config.JUDGE_SCORE_NAME} >= {min_score} sent to dataset "
+        f"'{dataset}' (re-inserting an unchanged trace is a no-op - items deduplicate)."
+    )
+
+
+@app.command()
+def evaluate(
+    dataset: str = typer.Option(config.GOLDEN_DATASET, help="Opik dataset to evaluate against"),
+    experiment_name: str = typer.Option(None, help="Experiment name (default: generated)"),
+) -> None:
+    """Offline evaluation of the current prompt + model against the golden dataset."""
+    if config.DRY_RUN:
+        typer.echo(
+            "Opik credentials (OPIK_API_KEY + OPIK_WORKSPACE) are required for evaluate, "
+            f"plus an LLM provider key matching {config.GEN_MODEL}."
+        )
+        raise typer.Exit(1)
+    from .offline_eval import run_offline_eval
+
+    name = run_offline_eval(dataset, experiment_name)
+    typer.echo(f"Offline evaluation logged as Opik experiment '{name}'.")
+
+
+@app.command()
 def ask(
     question: str,
     workspace: str = typer.Option(None, help="Comet workspace (default: COMET_WORKSPACE)"),

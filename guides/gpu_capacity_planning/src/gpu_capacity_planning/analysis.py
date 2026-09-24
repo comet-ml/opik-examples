@@ -99,6 +99,18 @@ def flag_run(run: RunMetrics, low_util: float, idle_util: float) -> Finding:
             "likely dataloader/CPU-bound."
         )
 
+    # MFU is opt-in per model (train_demo --peak-tflops); runs without it are untouched.
+    mfu_inefficient = bool(
+        run.mfu_mean is not None and run.gpu_util_mean >= low_util and run.mfu_mean < config.LOW_MFU_PCT
+    )
+    if mfu_inefficient:
+        severity = "high" if severity == "high" else "medium"
+        issues.append(
+            f"MFU {run.mfu_mean}% is below the {config.LOW_MFU_PCT}% target while GPUs report "
+            f"{run.gpu_util_mean}% busy - compute inefficiency (precision, kernels, input "
+            "pipeline), not idle capacity; raw utilization overstates efficiency here."
+        )
+
     if run.declared_num_gpus is None and severity == "ok":
         return Finding(
             run,
@@ -115,6 +127,12 @@ def flag_run(run: RunMetrics, low_util: float, idle_util: float) -> Finding:
         action = (
             f"Consider downsizing from {gpus} to ~{target}{gpu_type} GPUs{scope}, "
             "or batching jobs to raise utilization."
+        )
+    elif mfu_inefficient:
+        action = (
+            f"Profile the training step before resizing - at {run.mfu_mean}% MFU the GPUs are "
+            "busy but inefficient. Check mixed precision, batch size, kernel fusion, and the "
+            "input pipeline."
         )
     elif run.coverage == "rank0_sample" and severity == "ok":
         action = (
@@ -154,15 +172,15 @@ def analyze(
 
         stats = by_project.setdefault(run.project, {"runs": 0, "flagged": 0, "gpu_hours": 0.0})
         stats["runs"] += 1
-        stats["gpu_hours"] = round(stats["gpu_hours"] + gpu_hours, 1)
+        stats["gpu_hours"] = round(stats["gpu_hours"] + gpu_hours, 2)
         if finding.severity in ("high", "medium"):
             stats["flagged"] += 1
 
     summary = CapacitySummary(
         runs_analyzed=len(runs),
         runs_flagged=sum(1 for f in findings if f.severity in ("high", "medium")),
-        total_gpu_hours=round(total_gpu_hours, 1),
-        est_wasted_gpu_hours=round(wasted_gpu_hours, 1),
+        total_gpu_hours=round(total_gpu_hours, 2),
+        est_wasted_gpu_hours=round(wasted_gpu_hours, 2),
         by_project=by_project,
         coverage=coverage,
         extrapolated_runs=coverage["rank0_sample"],

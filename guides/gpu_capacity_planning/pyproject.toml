@@ -11,6 +11,17 @@ dependencies = [
     "mcp>=2",
 ]
 
+[project.optional-dependencies]
+# Only needed for the demo training runs (train_demo.py); the audit/report path stays light.
+train = [
+    "torch>=2",
+    "torchvision",
+    "comet_ml>=3.40",
+    "scikit-learn",
+    # In-loop GPU sampling (train_demo --gpu-log-every); official NVML bindings.
+    "nvidia-ml-py",
+]
+
 [project.scripts]
 gpu-capacity-planning = "gpu_capacity_planning.cli:main"
 

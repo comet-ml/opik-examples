@@ -1,0 +1,75 @@
+# Reference workflow: copy to .github/workflows/ in YOUR training repo.
+# Manually dispatched: run a training job, then generate the capacity + quality report.
+# Secrets to configure in your repo: COMET_API_KEY, OPIK_API_KEY, ANTHROPIC_API_KEY
+# and variables: COMET_WORKSPACE, OPIK_WORKSPACE.
+
+name: Train and audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: Comet EM project for the training run
+        default: capacity-demo-training
+      epochs:
+        description: Training epochs
+        default: "2"
+
+permissions:
+  contents: read
+
+# The run steps assume this guide's pyproject is at the repo root. If you vendored the
+# folder into a subdirectory of your training repo, point working-directory at it:
+defaults:
+  run:
+    shell: bash
+    # working-directory: path/to/gpu_capacity_planning
+
+jobs:
+  train-and-report:
+    # For real GPU training, point this at a self-hosted GPU runner label
+    # (e.g. [self-hosted, gpu]) and raise --nproc_per_node to the GPU count.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMET_API_KEY: ${{ secrets.COMET_API_KEY }}
+      COMET_WORKSPACE: ${{ vars.COMET_WORKSPACE }}
+      OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+      OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PROJECT: ${{ inputs.project }}
+      EPOCHS: ${{ inputs.epochs }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+
+      - name: Install (with training extra)
+        run: uv sync --extra train
+
+      - name: Train (2 DDP ranks on CPU; swap nproc for your GPU count)
+        run: |
+          uv run torchrun --nproc_per_node=2 -m gpu_capacity_planning.train_demo \
+            --epochs "$EPOCHS" --project "$PROJECT"
+
+      - name: Capacity + quality report (traced in Opik, queued for review)
+        run: |
+          uv run gpu-capacity-planning report --project "$PROJECT" --output report.md
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: capacity-report
+          path: report.md
+
+      # --- Optional: post the summary to Slack ------------------------------
+      # The webhook URL is a secret, so it goes through curl's config stdin,
+      # never through argv (visible to other processes on the runner).
+      # - name: Notify Slack
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      #   run: |
+      #     jq -Rs '{text: .[:3000]}' report.md > payload.json
+      #     curl -sf -X POST -H 'Content-Type: application/json' \
+      #       -d @payload.json --config - <<< "url = \"$SLACK_WEBHOOK_URL\""
+      # ----------------------------------------------------------------------
