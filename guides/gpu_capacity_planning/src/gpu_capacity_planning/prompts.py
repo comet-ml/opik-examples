@@ -11,8 +11,7 @@ GPU-hours are single-node samples extrapolated to the declared device count, so 
 estimates and recommend enabling system-metric logging on every node. coverage=none means the \
 run declares scale but logs no utilization at all. Some runs carry mfu_mean_pct/mfu_peak_pct \
 (Model FLOPs Utilization, percent of hardware peak): when present, weigh MFU above raw GPU \
-utilization \
-for efficiency judgments - busy GPUs with low MFU mean compute inefficiency (precision, kernels, \
+utilization for efficiency judgments - busy GPUs with low MFU mean compute inefficiency (precision, kernels, \
 input pipeline), not idle capacity, so recommend profiling before resizing and say so \
 explicitly. Write a rightsizing report in Markdown with \
 three sections: \

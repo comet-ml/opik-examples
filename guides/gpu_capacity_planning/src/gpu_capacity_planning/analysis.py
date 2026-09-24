@@ -167,7 +167,9 @@ def analyze(
         hours = run.duration_hours or 0.0
         gpu_hours = gpus * hours
         total_gpu_hours += gpu_hours
-        if finding.severity in ("high", "medium") and run.gpu_util_mean is not None:
+        # WHY: waste = idle capacity, so only under-utilized runs count; an MFU-flagged run is
+        # busy, and its inefficiency is not reclaimable GPU-hours.
+        if run.gpu_util_mean is not None and run.gpu_util_mean < low_util:
             wasted_gpu_hours += gpu_hours * (1 - run.gpu_util_mean / 100)
 
         stats = by_project.setdefault(run.project, {"runs": 0, "flagged": 0, "gpu_hours": 0.0})

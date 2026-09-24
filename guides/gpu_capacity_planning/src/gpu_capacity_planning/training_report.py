@@ -1,6 +1,6 @@
 """Post-training report: model quality + capacity efficiency for one project's runs.
 
-The report trace carries the analysis payload as input and the recommendation as output,
+The report trace carries the analysis payload as input and the Markdown report as output,
 so curated traces become directly replayable dataset items for offline evaluation.
 """
 
