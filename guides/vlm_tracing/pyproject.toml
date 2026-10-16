@@ -1,0 +1,26 @@
+[project]
+name = "vlm-tracing"
+version = "0.1.0"
+description = "Trace VLM (image + text) inference in Opik, with a focus on visualizing image inputs alongside text outputs in the trace view."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "opik>=2.0.74",
+    "litellm",
+]
+
+[dependency-groups]
+dev = ["ruff"]
+
+# WHY: notebook-only example — uv manages the env, no installable package.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+# WHY: ruff can't parse the notebook's cell schema; lint .py files only.
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
