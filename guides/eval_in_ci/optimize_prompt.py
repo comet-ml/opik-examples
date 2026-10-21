@@ -1,4 +1,4 @@
-"""Manual local helper: let Opik's MetaPromptOptimizer improve the scenario prompt."""
+"""Quick win: let Opik's MetaPromptOptimizer improve the scenario prompt."""
 
 from __future__ import annotations
 
