@@ -34,7 +34,7 @@ class Multi(BaseMetric):
 
 
 def test_all_thresholds_met_yields_pass_and_zero_failed() -> None:
-    m = CompositePassMetric([Const("a", 1.0), Const("b", 0.9)], {"a": 1.0, "b": 0.5})
+    m = CompositePassMetric([Const("a", 1.0), Const("b", 0.9)], {"a": 1.0, "b": 0.5}, track=False)
     out = {r.name: r for r in m.score(expected={}, output={})}
     assert out["scenario_pass"].value == 1.0
     assert out["scenario_pass"].reason == "all thresholds met"
@@ -43,7 +43,7 @@ def test_all_thresholds_met_yields_pass_and_zero_failed() -> None:
 
 
 def test_one_below_threshold_fails_with_named_reason() -> None:
-    m = CompositePassMetric([Const("a", 0.35), Const("b", 1.0)], {"a": 0.9, "b": 1.0})
+    m = CompositePassMetric([Const("a", 0.35), Const("b", 1.0)], {"a": 0.9, "b": 1.0}, track=False)
     out = {r.name: r for r in m.score()}
     assert out["scenario_pass"].value == 0.0
     assert out["scenario_pass"].reason == "failed: a 0.35 < 0.90"
@@ -51,20 +51,20 @@ def test_one_below_threshold_fails_with_named_reason() -> None:
 
 
 def test_raising_submetric_counts_as_unscored_failure() -> None:
-    m = CompositePassMetric([Boom("a"), Const("b", 1.0)], {"a": 1.0, "b": 1.0})
+    m = CompositePassMetric([Boom("a"), Const("b", 1.0)], {"a": 1.0, "b": 1.0}, track=False)
     out = {r.name: r for r in m.score()}
     assert out["a"].scoring_failed is True
     assert out["scenario_pass"].reason == "failed: a unscored"
 
 
 def test_threshold_for_missing_metric_fails() -> None:
-    m = CompositePassMetric([Const("a", 1.0)], {"a": 1.0, "zzz": 1.0})
+    m = CompositePassMetric([Const("a", 1.0)], {"a": 1.0, "zzz": 1.0}, track=False)
     out = {r.name: r for r in m.score()}
     assert out["scenario_pass"].reason == "failed: zzz missing"
 
 
 def test_list_returning_submetric_is_flattened_and_gated() -> None:
-    m = CompositePassMetric([Multi("multi")], {"m2": 0.5})
+    m = CompositePassMetric([Multi("multi")], {"m2": 0.5}, track=False)
     results = m.score()
     assert [r.name for r in results] == [
         "m1",
@@ -76,7 +76,7 @@ def test_list_returning_submetric_is_flattened_and_gated() -> None:
 
 
 def test_unthresholded_metric_is_ignored() -> None:
-    m = CompositePassMetric([Const("a", 0.0), Const("b", 1.0)], {"b": 1.0})
+    m = CompositePassMetric([Const("a", 0.0), Const("b", 1.0)], {"b": 1.0}, track=False)
     out = {r.name: r for r in m.score()}
     assert out["scenario_pass"].value == 1.0
     assert out["a"].value == 0.0
@@ -95,13 +95,14 @@ def test_names_with_spaces_roundtrip_through_composite() -> None:
     m = CompositePassMetric(
         [Const("tool use", 0.1), Boom("sim valid"), Const("x", 1.0)],
         {"tool use": 0.9, "sim valid": 1.0, "x": 1.0, "gone away": 1.0},
+        track=False,
     )
     reason = {r.name: r for r in m.score()}["scenario_pass"].reason
     assert failing_metrics_from_reason(reason) == ("tool use", "sim valid", "gone away")
 
 
 def test_nan_submetric_value_is_unscored_failure() -> None:
-    m = CompositePassMetric([Const("a", float("nan"))], {"a": 0.5})
+    m = CompositePassMetric([Const("a", float("nan"))], {"a": 0.5}, track=False)
     out = {r.name: r for r in m.score()}
     assert out["scenario_pass"].value == 0.0
     assert out["scenario_pass"].reason == "failed: a unscored"

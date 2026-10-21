@@ -99,8 +99,7 @@ def _print_prompt(prompt: Any) -> None:
         print(prompt)
 
 
-# WHY: toy ceiling - only about 5 of 12 scenarios are inferable from their input (the rest hide a
-# gap_m target), so the best reachable score is about 5/12.
+# WHY: toy ceiling - only about 5 of 12 scenarios are inferable from their input, so max score is 5/12.
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:

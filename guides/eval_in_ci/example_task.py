@@ -177,6 +177,7 @@ class ParametersCorrect(BaseMetric):
 
 
 def build_metric() -> CompositePassMetric:
+    # WHY: track=False keeps direct score() calls from opening Opik traces (and from needing credentials).
     return CompositePassMetric(
         metrics=[ActorsCorrect(), ManeuverCorrect(), ParametersCorrect()],
         thresholds={
@@ -184,6 +185,7 @@ def build_metric() -> CompositePassMetric:
             "maneuver_correct": 1.0,
             "parameters_correct": 1.0,
         },
+        track=False,
     )
 
 

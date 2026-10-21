@@ -42,8 +42,7 @@ def git_context(pr_override: str | None = None) -> GitContext:
     branch = (
         os.environ.get("GITHUB_HEAD_REF") or ref_name or _git("rev-parse", "--abbrev-ref", "HEAD") or "local"
     )
-    # WHY: on pull_request events GITHUB_SHA is the merge commit; the workflow passes
-    # the PR head sha as OPIK_EVAL_GIT_SHA so names match the commit under review.
+    # WHY: on pull_request events GITHUB_SHA is the merge commit, so the workflow passes the head sha.
     sha = os.environ.get("OPIK_EVAL_GIT_SHA") or os.environ.get("GITHUB_SHA")
     sha7 = sha[:7] if sha else (_git("rev-parse", "--short=7", "HEAD") or "nogit")
 
@@ -106,8 +105,7 @@ def find_baseline(
     exclude_id: str | None = None,
 ) -> ExperimentPublic | None:
     """Newest experiment on the dataset with the exact tag, skipping exclude_id."""
-    # WHY: the backend's contains filter is a case-insensitive substring match and every run is
-    # also tagged with its branch name, so post-filter on exact tag equality.
+    # WHY: the backend tag filter is a substring match and runs carry the branch tag too; match exactly.
     page = client.rest_client.experiments.find_experiments(
         dataset_id=dataset_id,
         filters=json.dumps([{"field": "tags", "operator": "contains", "value": tag}]),
@@ -122,8 +120,7 @@ def find_baseline(
 
 def mark_baseline(client: Any, experiment_id: str, tag: str = "baseline") -> None:
     """Add the baseline tag once the run has finished successfully."""
-    # WHY: tagging at creation would make a crashed or cancelled run the newest baseline,
-    # because evaluate() registers the experiment before items run.
+    # WHY: tag only after success, since evaluate() registers the experiment before the items run.
     client.rest_client.experiments.update_experiment(id=experiment_id, tags_to_add=[tag])
 
 
@@ -135,8 +132,7 @@ def resolve_experiment(client: Any, name_or_id: str, project_name: str | None) -
         pass
     exact: list[Any] = []
     last_error: Exception | None = None
-    # WHY: project_name is only a hint: experiments are filed under the dataset's
-    # project, so retry without it when the hinted lookup finds nothing.
+    # WHY: project_name is only a hint (experiments live under the dataset's project); retry without it.
     for hint in [project_name, None] if project_name else [None]:
         try:
             candidates = client.get_experiments_by_name(name_or_id, project_name=hint)

@@ -63,10 +63,10 @@ def _meta(**kwargs: Any) -> ec.DigestMeta:
 
 def _four_items() -> list[SimpleNamespace]:
     return [
-        row("i1", "s1", {"B": [_ok()], "C": [_bad("a")]}),  # newly failing
-        row("i2", "s2", {"B": [_bad()], "C": [_ok()]}),  # newly passing
-        row("i3", "s3", {"B": [_bad()], "C": [_bad("b")]}),  # still failing
-        row("i4", "s4", {"B": [_ok()], "C": [_ok()]}),  # passing both
+        row("i1", "s1", {"B": [_ok()], "C": [_bad("a")]}),
+        row("i2", "s2", {"B": [_bad()], "C": [_ok()]}),
+        row("i3", "s3", {"B": [_bad()], "C": [_bad("b")]}),
+        row("i4", "s4", {"B": [_ok()], "C": [_ok()]}),
     ]
 
 
