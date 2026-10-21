@@ -12,7 +12,6 @@ from opik.evaluation.metrics import BaseMetric, score_result
 from composite_metric import CompositePassMetric
 
 DATASET_NAME = "eval-in-ci-example"
-PROJECT_NAME = "eval-in-ci-example"
 
 SCENARIOS: list[dict[str, Any]] = [
     {
@@ -179,9 +178,9 @@ class ParametersCorrect(BaseMetric):
         return _binary(self.name, ok, f"parameters {output['parameters']}")
 
 
-# WHY: track=False skips the opik.track span around score(); the evaluation engine still logs the
-# returned ScoreResults, so scores are unchanged and the demo and tests run with no tracing.
-def build_metric() -> CompositePassMetric:
+# WHY: track=True (the default) keeps the composite span the runbook's span counts assume; pass
+# track=False only for the offline demo and tests, which run with no tracing and unchanged scores.
+def build_metric(track: bool = True) -> CompositePassMetric:
     return CompositePassMetric(
         metrics=[ActorsCorrect(), ManeuverCorrect(), ParametersCorrect()],
         thresholds={
@@ -189,7 +188,7 @@ def build_metric() -> CompositePassMetric:
             "maneuver_correct": 1.0,
             "parameters_correct": 1.0,
         },
-        track=False,
+        track=track,
     )
 
 

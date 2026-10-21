@@ -14,7 +14,7 @@ from example_task import (
 
 def composite_value(item: dict[str, Any]) -> float:
     output = scenario_agent(**item)
-    results = build_metric().score(expected=item["expected"], **output)
+    results = build_metric(track=False).score(expected=item["expected"], **output)
     return next(r.value for r in results if r.name == "scenario_pass")
 
 
@@ -40,3 +40,8 @@ def test_v1_is_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_v2_fixes_two_and_breaks_one(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AGENT_VERSION", "v2")
     assert broken_ids() == (set(V1_BROKEN) - set(V2_FIXED)) | set(V2_NEWLY_BROKEN)
+
+
+def test_build_metric_tracks_by_default() -> None:
+    assert build_metric().track is True
+    assert build_metric(track=False).track is False

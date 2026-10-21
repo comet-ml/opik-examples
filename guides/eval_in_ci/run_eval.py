@@ -184,10 +184,11 @@ def _demo(args: argparse.Namespace) -> int:
         "Demo mode: no Opik connection; comparing AGENT_VERSION=v1 (baseline) with v2 (candidate) in-process."
     )
     runs: list[eval_compare.ItemRun] = []
+    metric = example_task.build_metric(track=False)
     for version in ("v1", "v2"):
         for item in example_task.SCENARIOS:
             output = example_task.scenario_agent(item["scenario_id"], item["input"], version=version)
-            results = example_task.build_metric().score(expected=item["expected"], **output)
+            results = metric.score(expected=item["expected"], **output)
             scores = tuple(
                 eval_compare.RunScore(name=r.name, value=r.value, reason=r.reason) for r in results
             )
