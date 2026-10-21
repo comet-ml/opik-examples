@@ -73,6 +73,7 @@ ships with [uv](https://docs.astral.sh/uv/).
 | `CAPACITY_DEVICE_PARAM_KEYS` / `CAPACITY_NODE_PARAM_KEYS` | Which params declare training scale | Defaults `num_gpus,num_devices,world_size` / `nnodes,num_nodes,config/compute/nnodes` |
 | `CAPACITY_MODEL_METRIC_KEYS` | Model-quality metrics shown by `report` | Default `precision,recall,f1,accuracy,loss` |
 | `CAPACITY_PROMPT_NAME` / `CAPACITY_QUEUE_NAME` / `CAPACITY_DATASET` / `CAPACITY_JUDGE_SCORE` / `CAPACITY_JUDGE_MODEL` | Names of the feedback-loop objects | Defaults `gpu-capacity-analyst` / `capacity-recommendations` / `capacity-recommendations-golden` / `recommendation_quality` / model without provider prefix |
+| `AWS_PROFILE` / `TF_VAR_*` | The optional real GPU box only | See [Run it on a real GPU box](#run-it-on-a-real-gpu-box-optional) |
 
 The two credential pairs gate independently, giving three useful modes:
 
@@ -163,14 +164,14 @@ multi-GPU DDP run).
 ```bash
 cp .env.example .env          # fill in the AWS + Comet sections
 cd infra
-set -a; source ../.env; set +a
-terraform init && terraform apply
+# subshell: the TF_VAR_* values reach terraform without exporting your API keys into the shell
+(set -a; source ../.env; set +a; terraform init && terraform apply)
 
 # setup + train on the box (creds travel over stdin, never argv or user-data):
 # --peak-tflops enables MFU (T4 fp32 peak ~8.1 TFLOPS - see the MFU section below)
 ./run_remote_training.sh "$(terraform output -raw public_ip)" --epochs 4 --peak-tflops 8.1
 
-terraform destroy             # ~$4/hr on-demand - do not leave it running
+(set -a; source ../.env; set +a; terraform destroy)   # ~$4/hr on-demand - do not leave it running
 ```
 
 The runner installs uv, clones this repo on the box, runs `torchrun` across every GPU
@@ -178,7 +179,9 @@ The runner installs uv, clones this repo on the box, runs `torchrun` across ever
 on your machine, continue with the `report` command below - it only talks to the EM API.
 
 Notes: `g4dn.12xlarge` needs 48 vCPUs of the "Running On-Demand G and VT instances" quota
-(new accounts often have 0 - request an increase first). If your training already runs on
+(new accounts often have 0 - request an increase first). The config expects a default VPC in
+the region. `terraform.tfstate` stays local (gitignored): it records your account id, public
+key and IP. If your training already runs on
 EKS or a self-hosted CI runner, skip the terraform and point the `cicd/` workflows'
 `runs-on` at a GPU runner instead - the training command is identical.
 
@@ -247,7 +250,9 @@ actionable/grounded/safe rubric in `prompts.py` - it reads both the utilization 
 (trace input) and the recommendation (trace output), so the grounding check is real. The
 rule runs inside the Opik platform, so it needs an AI provider key configured in your Opik
 workspace (Configuration -> AI providers); the judge model name is `CAPACITY_JUDGE_MODEL`
-(default: the `OPIK_EXAMPLES_MODEL` without its provider prefix).
+(default: the `OPIK_EXAMPLES_MODEL` without its provider prefix). Re-running `setup-loop`
+after an upgrade is safe: it recreates the rule only when its variable mapping is stale
+(the trace output shape changed in this version).
 
 ### 4. Improve - golden dataset and offline evaluations
 
@@ -317,8 +322,10 @@ winning version means updating the constant in code. See the
 - **`analysis.py`** - pure rules, no LLM: mean GPU utilization under the idle threshold ->
   **high**; under the target threshold -> **medium**; declared != reporting GPU count (and not
   explained by multi-node logging) -> flag; high CPU + idle GPU -> likely dataloader-bound;
+  busy GPUs but `mfu` under `CAPACITY_LOW_MFU_PCT` -> **medium**, profile before resizing;
   missing metrics -> instrumentation advice.
-  Also estimates wasted GPU-hours (`duration * GPUs * (1 - util)` over flagged runs).
+  Also estimates wasted GPU-hours (`duration * GPUs * (1 - util)` over under-utilized runs;
+  MFU-flagged runs are busy, so their inefficiency is not counted as reclaimable hours).
 - **`recommender.py`** - one `litellm` call turns the findings JSON into the Markdown
   recommendations section. Opik's litellm callback nests the LLM span (model, tokens, cost)
   under the audit trace.

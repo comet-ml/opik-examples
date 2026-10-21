@@ -75,7 +75,7 @@ def _forward_flops_per_sample(model: nn.Module, batch: torch.Tensor, device: tor
 
 
 def _nvml_handles() -> tuple:
-    """(pynvml module, device handles) for in-loop GPU sampling; ([], None) when unavailable."""
+    """(pynvml module, device handles) for in-loop GPU sampling; (None, []) when unavailable."""
     try:
         import pynvml
 
@@ -188,7 +188,11 @@ def main() -> None:
     flops_per_sample = None
     if experiment and args.peak_tflops:
         sample_batch, _ = next(iter(train_loader))
-        flops_per_sample = _forward_flops_per_sample(model, sample_batch, device)
+        # WHY: count on the bare module - rank 0 alone entering a DDP forward would hang the
+        # other ranks in a buffer broadcast on any model with BatchNorm-style buffers.
+        flops_per_sample = _forward_flops_per_sample(getattr(model, "module", model), sample_batch, device)
+        if not flops_per_sample:
+            print("FlopCounterMode counted no FLOPs for this model - mfu will not be logged")
         experiment.log_parameters(
             {"peak_tflops_per_gpu": args.peak_tflops, "flops_per_sample": flops_per_sample}
         )
@@ -213,7 +217,11 @@ def main() -> None:
             batches += 1
             global_step += 1
             if nvml_handles and global_step % args.gpu_log_every == 0:
-                experiment.log_metrics(_gpu_snapshot(pynvml, nvml_handles), step=global_step, epoch=epoch)
+                try:
+                    experiment.log_metrics(_gpu_snapshot(pynvml, nvml_handles), step=global_step, epoch=epoch)
+                except Exception as exc:  # noqa: BLE001 - telemetry must never kill the training run
+                    print(f"NVML sampling stopped: {exc}")
+                    nvml_handles = []
         epoch_seconds = time.perf_counter() - epoch_start
         if experiment:
             predictions, targets = _predict(model, test_loader, device)

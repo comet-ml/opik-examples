@@ -85,6 +85,7 @@ resource "aws_instance" "training" {
   root_block_device {
     volume_size = 200
     volume_type = "gp3"
+    encrypted   = true # the Comet API key sits on this disk for the run
   }
 
   # IMDSv2 only.

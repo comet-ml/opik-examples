@@ -44,11 +44,22 @@ def _project_id(client: opik.Opik) -> str:
 
 def _ensure_judge_rule(client: opik.Opik) -> str:
     project_id = _project_id(client)
+    variables = {"input": "input.analysis_payload", "output": "output.output"}
     existing = client.rest_client.automation_rule_evaluators.find_evaluators(
         project_id=project_id, name=RULE_NAME
     )
-    if any(rule.name == RULE_NAME for rule in existing.content or []):
-        return f"online judge rule '{RULE_NAME}' (exists)"
+    status = "created"
+    for rule in existing.content or []:
+        if rule.name != RULE_NAME:
+            continue
+        if getattr(getattr(rule, "code", None), "variables", None) == variables:
+            return f"online judge rule '{RULE_NAME}' (exists)"
+        # WHY: the trace output shape changed across versions; a rule left with the old
+        # variable paths would keep scoring an empty {{output}} without any error.
+        client.rest_client.automation_rule_evaluators.delete_automation_rule_evaluator_batch(
+            ids=[rule.id], project_id=project_id
+        )
+        status = "recreated, variable mapping was stale"
 
     rule = AutomationRuleEvaluatorWrite_LlmAsJudge.model_validate(
         {
@@ -64,12 +75,9 @@ def _ensure_judge_rule(client: opik.Opik) -> str:
                 # WHY: reasoning models (claude-sonnet-5 family) accept only temperature=1.
                 "model": {"name": config.JUDGE_RULE_MODEL, "temperature": 1.0},
                 "messages": [{"role": "USER", "content": prompts.ONLINE_JUDGE_TEMPLATE}],
-                # Feed the judge both the findings and the recommendation so the
+                # Feed the judge both the findings and the full report so the
                 # Grounded criterion is checkable against the data.
-                "variables": {
-                    "input": "input.analysis_payload",
-                    "output": "output.output",
-                },
+                "variables": variables,
                 # WHY: the generated client validates by field name; "schema" is aliased to schema_.
                 "schema_": [
                     {
@@ -83,7 +91,7 @@ def _ensure_judge_rule(client: opik.Opik) -> str:
     )
     client.rest_client.automation_rule_evaluators.create_automation_rule_evaluator(request=rule)
     return (
-        f"online judge rule '{RULE_NAME}' (created, model {config.JUDGE_RULE_MODEL}) - "
+        f"online judge rule '{RULE_NAME}' ({status}, model {config.JUDGE_RULE_MODEL}) - "
         "requires an AI provider key configured in the Opik workspace to execute"
     )
 
