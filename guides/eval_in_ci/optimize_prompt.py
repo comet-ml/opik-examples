@@ -22,6 +22,7 @@ SUB_METRICS = ("actors_correct", "maneuver_correct", "parameters_correct")
 _INVALID_JSON = "invalid json"
 _FENCE_RE = re.compile(r"^```[a-zA-Z0-9_-]*\s*\n?(?P<body>.*?)\s*```$", re.DOTALL)
 
+# WHY: toy ceiling - only about 5 of 12 scenarios are inferable from their input, so max score is 5/12.
 DEFAULT_SYSTEM_PROMPT = (
     "You turn a short description of a driving scenario into a structured plan. "
     "Answer with a single JSON object with exactly these keys and nothing else: "
@@ -49,6 +50,8 @@ def _invalid_json_scores() -> list[score_result.ScoreResult]:
     return scores
 
 
+# WHY: the composite metric is the objective because "better prompt" means "more scenarios pass
+# every threshold", the same number the CI gate uses.
 def composite_metric_adapter(dataset_item: dict[str, Any], llm_output: str) -> list[score_result.ScoreResult]:
     """Score raw LLM text with the composite metric. Optimizer metric function."""
     try:
@@ -99,7 +102,6 @@ def _print_prompt(prompt: Any) -> None:
         print(prompt)
 
 
-# WHY: toy ceiling - only about 5 of 12 scenarios are inferable from their input, so max score is 5/12.
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:

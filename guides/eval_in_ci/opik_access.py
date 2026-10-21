@@ -1,5 +1,8 @@
 """Every Opik SDK and REST call used by the eval-in-CI example lives here."""
 
+# WHY: one access layer so the CLI and the pure compare core never touch the network, and tests
+# swap in stub clients.
+
 import importlib
 import json
 import os
@@ -97,6 +100,7 @@ def ui_base_and_workspace(client: opik.Opik) -> tuple[str, str]:
     return base, workspace
 
 
+# WHY: the backend tag filter is a substring match and runs carry the branch tag too; match exactly.
 def find_baseline(
     client: Any,
     dataset_id: str,
@@ -105,7 +109,6 @@ def find_baseline(
     exclude_id: str | None = None,
 ) -> ExperimentPublic | None:
     """Newest experiment on the dataset with the exact tag, skipping exclude_id."""
-    # WHY: the backend tag filter is a substring match and runs carry the branch tag too; match exactly.
     page = client.rest_client.experiments.find_experiments(
         dataset_id=dataset_id,
         filters=json.dumps([{"field": "tags", "operator": "contains", "value": tag}]),
@@ -118,9 +121,9 @@ def find_baseline(
     return None
 
 
+# WHY: tag only after success, since evaluate() registers the experiment before the items run.
 def mark_baseline(client: Any, experiment_id: str, tag: str = "baseline") -> None:
     """Add the baseline tag once the run has finished successfully."""
-    # WHY: tag only after success, since evaluate() registers the experiment before the items run.
     client.rest_client.experiments.update_experiment(id=experiment_id, tags_to_add=[tag])
 
 

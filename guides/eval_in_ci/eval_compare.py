@@ -138,7 +138,8 @@ def _means(runs: Iterable[ItemRun]) -> dict[str, float]:
 
 
 # WHY: an item with 0 < pass_runs < runs in either experiment is flaky and excluded from newly
-# failing/passing by default, mirroring opik-verify's `flaky_policy: exclude`. Items with no
+# failing/passing by default, mirroring opik-verify's `flaky_policy: exclude`,
+# so judge noise does not count as a regression or a fix. Items with no
 # candidate runs are never new or flipped; with no baseline, failing items go to still_failing only.
 def classify(
     runs: Sequence[ItemRun],

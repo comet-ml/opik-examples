@@ -1,5 +1,8 @@
 """Deterministic toy driving-scenario task, sub-metrics and dataset."""
 
+# WHY: the task is a lookup, not an LLM call, so every run is reproducible; AGENT_VERSION (or the
+# version argument) switches v1/v2 to show regressions and fixes in the digest.
+
 import os
 from typing import Any
 
@@ -176,8 +179,8 @@ class ParametersCorrect(BaseMetric):
         return _binary(self.name, ok, f"parameters {output['parameters']}")
 
 
-# WHY: the toy metric opens no tracing spans, so demo and tests run with no Opik configuration;
-# scores are still logged by the evaluation engine.
+# WHY: track=False skips the opik.track span around score(); the evaluation engine still logs the
+# returned ScoreResults, so scores are unchanged and the demo and tests run with no tracing.
 def build_metric() -> CompositePassMetric:
     return CompositePassMetric(
         metrics=[ActorsCorrect(), ManeuverCorrect(), ParametersCorrect()],
