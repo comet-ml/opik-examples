@@ -123,11 +123,6 @@ def test_run_mark_baseline_tags_after_success(
     assert marked == ["e9"]
 
 
-@pytest.fixture(autouse=True)
-def _live_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(run_eval, "DRY_RUN", False, raising=False)
-
-
 def _demo_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPIK_API_KEY", raising=False)
     monkeypatch.delenv("OPIK_WORKSPACE", raising=False)
@@ -139,6 +134,7 @@ def test_demo_prints_three_sections_offline(
     _demo_env(monkeypatch)
     assert run_eval.main(["demo"]) == 0
     out = capsys.readouterr().out
+    assert 'Demo exit code is always 0. In CI, use "run --fail-on-regression"' in out
     for text in ("Newly failing", "s05", "Newly passing", "s03", "s07", "0.75 -> 0.83"):
         assert text in out
 
@@ -157,6 +153,12 @@ def test_demo_json_payload(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
 def test_run_without_credentials_exits_2_pointing_to_demo(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    def boom() -> Any:
+        raise ConfigError("Set OPIK_API_KEY and OPIK_WORKSPACE")
+
+    monkeypatch.setattr(run_eval.opik_access, "make_client", boom)
     monkeypatch.setattr(run_eval, "DRY_RUN", True)
     assert run_eval.main(["run", "--dataset", "d", "--task", "m:f"]) == 2
-    assert "demo" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "demo" in err
+    assert "opik configure" in err

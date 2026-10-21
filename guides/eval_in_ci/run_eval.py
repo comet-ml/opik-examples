@@ -27,7 +27,10 @@ import opik_access
 from opik_access import ConfigError
 
 DRY_RUN: bool = not (os.environ.get("OPIK_API_KEY") and os.environ.get("OPIK_WORKSPACE"))
-DRY_RUN_MESSAGE = 'No OPIK_API_KEY and OPIK_WORKSPACE in the environment; use "demo" for an offline run.'
+DRY_RUN_HINT = (
+    "Hint: no OPIK_API_KEY / OPIK_WORKSPACE in the environment. "
+    'Set them, run "opik configure", or use "demo" for an offline run.'
+)
 DEFAULT_METRIC = "example_task:build_metric"
 PROJECT_HELP = (
     "Project hint for experiment lookup by name. Opik files experiments under "
@@ -228,6 +231,7 @@ def _demo(args: argparse.Namespace) -> int:
     # WHY: the demo is illustrative, so the exit code ignores the policy verdict.
     markdown = eval_compare.render_markdown(cmp, verdict, meta)
     _emit_files(args, markdown, eval_compare.render_json(cmp, verdict, meta))
+    print('Demo exit code is always 0. In CI, use "run --fail-on-regression" so a hold fails the job.')
     return 0
 
 
@@ -327,15 +331,14 @@ def _digest(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.mode != "demo" and DRY_RUN:
-        print(DRY_RUN_MESSAGE, file=sys.stderr)
-        return 2
     try:
         if args.mode == "demo":
             return _demo(args)
         return _run(args) if args.mode == "run" else _digest(args)
     except (ConfigError, eval_compare.PolicyError) as exc:
         print(str(exc), file=sys.stderr)
+        if isinstance(exc, ConfigError) and DRY_RUN:
+            print(DRY_RUN_HINT, file=sys.stderr)
         return 2
     except Exception as exc:
         print(f"Run failed: {_fmt_error(exc)}", file=sys.stderr)
