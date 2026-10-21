@@ -1,5 +1,7 @@
 """CLI wiring tests for run_eval (no network)."""
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -119,3 +121,42 @@ def test_run_mark_baseline_tags_after_success(
     )
     assert "baseline" not in seen["experiment_tags"]
     assert marked == ["e9"]
+
+
+@pytest.fixture(autouse=True)
+def _live_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(run_eval, "DRY_RUN", False, raising=False)
+
+
+def _demo_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPIK_API_KEY", raising=False)
+    monkeypatch.delenv("OPIK_WORKSPACE", raising=False)
+
+
+def test_demo_prints_three_sections_offline(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _demo_env(monkeypatch)
+    assert run_eval.main(["demo"]) == 0
+    out = capsys.readouterr().out
+    for text in ("Newly failing", "s05", "Newly passing", "s03", "s07", "0.75 -> 0.83"):
+        assert text in out
+
+
+def test_demo_json_payload(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _demo_env(monkeypatch)
+    target = tmp_path / "digest.json"
+    assert run_eval.main(["demo", "--json", str(target)]) == 0
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    assert payload["pass_rate"]["baseline"] == 0.75
+    assert payload["pass_rate"]["candidate"] == pytest.approx(0.8333, abs=1e-3)
+    assert [o["dataset_item_id"] for o in payload["newly_failing"]] == ["s05"]
+    assert sorted(o["dataset_item_id"] for o in payload["newly_passing"]) == ["s03", "s07"]
+
+
+def test_run_without_credentials_exits_2_pointing_to_demo(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(run_eval, "DRY_RUN", True)
+    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f"]) == 2
+    assert "demo" in capsys.readouterr().err

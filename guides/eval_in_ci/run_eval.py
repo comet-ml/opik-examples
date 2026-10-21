@@ -3,6 +3,7 @@
 Modes:
   run     evaluate a task on a dataset, then compare against the baseline
   digest  compare an already-finished experiment against the baseline
+  demo    offline: compare the toy agent v1 vs v2 in-process, no credentials
 
 Exit codes: 0 ok, 1 policy hold or insufficient evidence with
 --fail-on-regression, 2 setup or connection problem.
@@ -21,9 +22,12 @@ from typing import Any, Sequence
 from opik import evaluate
 
 import eval_compare
+import example_task
 import opik_access
 from opik_access import ConfigError
 
+DRY_RUN: bool = not (os.environ.get("OPIK_API_KEY") and os.environ.get("OPIK_WORKSPACE"))
+DRY_RUN_MESSAGE = 'No OPIK_API_KEY and OPIK_WORKSPACE in the environment; use "demo" for an offline run.'
 DEFAULT_METRIC = "example_task:build_metric"
 PROJECT_HELP = (
     "Project hint for experiment lookup by name. Opik files experiments under "
@@ -77,6 +81,14 @@ def build_parser() -> argparse.ArgumentParser:
     dig.add_argument("--experiment", required=True, help="Experiment name or id")
     dig.add_argument("--project", help=PROJECT_HELP)
     _add_common(dig)
+
+    demo = sub.add_parser(
+        "demo", help="Offline demo: compare the toy agent v1 vs v2 in-process, no credentials needed."
+    )
+    demo.add_argument("--pass-threshold", type=int, default=None, help="Trials that must pass per item")
+    demo.add_argument("--policy", type=Path, help="Path to opik-release-policy.yaml")
+    demo.add_argument("--out", type=Path, help="Write the markdown digest here")
+    demo.add_argument("--json", type=Path, help="Write the JSON digest here")
     return parser
 
 
@@ -136,12 +148,17 @@ def _build_digest(
     )
 
 
-def _emit(args: argparse.Namespace, markdown: str, payload: dict[str, Any]) -> int:
+def _emit_files(args: argparse.Namespace, markdown: str, payload: dict[str, Any]) -> None:
+    """Print the markdown digest and write the optional --out and --json files."""
     print(markdown)
     if args.out:
         args.out.write_text(markdown + "\n", encoding="utf-8")
     if args.json:
         args.json.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _emit(args: argparse.Namespace, markdown: str, payload: dict[str, Any]) -> int:
+    _emit_files(args, markdown, payload)
     if args.fail_on_regression and payload.get("status") in {
         "hold",
         "insufficient_evidence",
@@ -169,6 +186,49 @@ def _git_meta(ctx: opik_access.GitContext) -> dict[str, str]:
     if ctx.actor:
         meta["actor"] = ctx.actor
     return meta
+
+
+def _demo(args: argparse.Namespace) -> int:
+    print(
+        "Demo mode: no Opik connection; "
+        "comparing AGENT_VERSION=v1 (baseline) with v2 (candidate) in-process."
+    )
+    runs: list[eval_compare.ItemRun] = []
+    for version in ("v1", "v2"):
+        for item in example_task.SCENARIOS:
+            output = example_task.scenario_agent(item["scenario_id"], item["input"], version=version)
+            results = example_task.build_metric().score(expected=item["expected"], **output)
+            scores = tuple(
+                eval_compare.RunScore(name=r.name, value=r.value, reason=r.reason) for r in results
+            )
+            runs.append(
+                eval_compare.ItemRun(
+                    experiment_id=f"local-{version}",
+                    dataset_item_id=item["scenario_id"],
+                    trace_id=None,
+                    label=item["scenario_id"],
+                    scores=scores,
+                )
+            )
+    cmp = eval_compare.classify(
+        runs, baseline_id="local-v1", candidate_id="local-v2", pass_threshold=args.pass_threshold
+    )
+    policy, policy_source = eval_compare.load_policy(args.policy)
+    verdict = eval_compare.evaluate_policy(cmp, policy)
+    meta = eval_compare.DigestMeta(
+        baseline_name="local-v1",
+        candidate_name="local-v2",
+        compare_url=None,
+        trace_url=lambda _tid: None,
+        policy_source=policy_source,
+        server_version=None,
+        git=_git_meta(opik_access.git_context()),
+        mark_baseline=False,
+    )
+    # WHY: the demo is illustrative, so the exit code ignores the policy verdict.
+    markdown = eval_compare.render_markdown(cmp, verdict, meta)
+    _emit_files(args, markdown, eval_compare.render_json(cmp, verdict, meta))
+    return 0
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -267,7 +327,12 @@ def _digest(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.mode != "demo" and DRY_RUN:
+        print(DRY_RUN_MESSAGE, file=sys.stderr)
+        return 2
     try:
+        if args.mode == "demo":
+            return _demo(args)
         return _run(args) if args.mode == "run" else _digest(args)
     except (ConfigError, eval_compare.PolicyError) as exc:
         print(str(exc), file=sys.stderr)

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections.abc import Sequence
@@ -29,7 +30,7 @@ from opik.evaluation.metrics import score_result
 
 from example_task import DATASET_NAME, build_metric
 
-DEFAULT_MODEL = "openai/gpt-4o-mini"
+DEFAULT_MODEL = os.environ.get("OPIK_EXAMPLES_MODEL", "openai/gpt-4o-mini")
 DEFAULT_MAX_TRIALS = 5
 SUB_METRICS = ("actors_correct", "maneuver_correct", "parameters_correct")
 _INVALID_JSON = "invalid json"
@@ -89,7 +90,11 @@ composite_metric_adapter.__name__ = "scenario_pass"
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--dataset", default=DATASET_NAME, help="Opik dataset name")
-    p.add_argument("--model", default=DEFAULT_MODEL, help="LiteLLM model name")
+    p.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="LiteLLM model name (default: $OPIK_EXAMPLES_MODEL, else openai/gpt-4o-mini)",
+    )
     p.add_argument("--max-trials", type=int, default=DEFAULT_MAX_TRIALS)
     p.add_argument(
         "--prompt-file",

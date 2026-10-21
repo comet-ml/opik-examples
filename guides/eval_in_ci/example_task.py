@@ -141,9 +141,10 @@ def _broken_ids(version: str) -> frozenset[str]:
     return V1_BROKEN
 
 
-def scenario_agent(scenario_id: str, input: str, **_: Any) -> dict[str, Any]:
+def scenario_agent(scenario_id: str, input: str, version: str | None = None, **_: Any) -> dict[str, Any]:
     """Return the expected plan, with the maneuver wrong for "broken" scenarios."""
-    version = os.environ.get("AGENT_VERSION", "v1")
+    # WHY: an explicit version lets the offline demo run v1 and v2 without touching the environment.
+    version = version or os.environ.get("AGENT_VERSION", "v1")
     plan = dict(_BY_ID[scenario_id])
     if scenario_id in _broken_ids(version):
         plan["maneuver"] = "unknown"
