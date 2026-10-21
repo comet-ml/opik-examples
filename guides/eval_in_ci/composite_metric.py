@@ -16,6 +16,7 @@ _BELOW_RE = re.compile(r"^(?P<name>.+) -?\d+(?:\.\d+)? < -?\d+(?:\.\d+)?$")
 _KEYWORD_RE = re.compile(r"^(?P<name>.+) (?:unscored|missing)$")
 
 
+# WHY: only metrics named in `thresholds` gate the result; other sub-metric scores pass through unchanged.
 class CompositePassMetric(BaseMetric):
     """Run sub-metrics and gate a scenario on per-metric thresholds."""
 

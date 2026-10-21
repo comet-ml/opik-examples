@@ -1,5 +1,8 @@
 """Pure compare, policy and digest logic for eval-in-CI."""
 
+# WHY: no network calls and no opik imports here; callers hand in REST rows, so the module is
+# testable without Opik.
+
 import json
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
@@ -134,6 +137,9 @@ def _means(runs: Iterable[ItemRun]) -> dict[str, float]:
     return {name: sum(v) / len(v) for name, v in values.items()}
 
 
+# WHY: an item with 0 < pass_runs < runs in either experiment is flaky and excluded from newly
+# failing/passing by default, mirroring opik-verify's `flaky_policy: exclude`. Items with no
+# candidate runs are never new or flipped; with no baseline, failing items go to still_failing only.
 def classify(
     runs: Sequence[ItemRun],
     *,

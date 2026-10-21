@@ -176,8 +176,9 @@ class ParametersCorrect(BaseMetric):
         return _binary(self.name, ok, f"parameters {output['parameters']}")
 
 
+# WHY: the toy metric opens no tracing spans, so demo and tests run with no Opik configuration;
+# scores are still logged by the evaluation engine.
 def build_metric() -> CompositePassMetric:
-    # WHY: track=False keeps direct score() calls from opening Opik traces (and from needing credentials).
     return CompositePassMetric(
         metrics=[ActorsCorrect(), ManeuverCorrect(), ParametersCorrect()],
         thresholds={
