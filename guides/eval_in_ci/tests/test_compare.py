@@ -39,9 +39,7 @@ def row(
                     feedback_scores=[SimpleNamespace(**s) for s in scores],
                 )
             )
-    return SimpleNamespace(
-        id=item_id, data={"scenario_id": label}, experiment_items=items
-    )
+    return SimpleNamespace(id=item_id, data={"scenario_id": label}, experiment_items=items)
 
 
 def _classify(rows: list[SimpleNamespace], **kwargs: Any) -> ec.Comparison:
@@ -75,9 +73,7 @@ def _four_items() -> list[SimpleNamespace]:
 def test_rows_to_item_runs_reads_scores_and_label() -> None:
     r = row("i1", "s1", {"B": [[_score(PASS, 1.0, "ok"), _score("m", 0.5)]]})
     r.experiment_items.append(
-        SimpleNamespace(
-            experiment_id="B", dataset_item_id="i1", trace_id=None, feedback_scores=None
-        )
+        SimpleNamespace(experiment_id="B", dataset_item_id="i1", trace_id=None, feedback_scores=None)
     )
     runs = ec.rows_to_item_runs([r])
     assert len(runs) == 2
@@ -155,9 +151,7 @@ def test_flaky_excluded_from_regressions_by_default() -> None:
     policy = ec.Policy(min_items=1, pass_rate=0.0)
     assert cmp.newly_failing == []
     assert ec.evaluate_policy(cmp, policy).status == "ok"
-    counted = ec.evaluate_policy(
-        cmp, ec.Policy(min_items=1, pass_rate=0.0, flaky_policy="count")
-    )
+    counted = ec.evaluate_policy(cmp, ec.Policy(min_items=1, pass_rate=0.0, flaky_policy="count"))
     assert counted.status == "hold"
     assert any(c.name == "max_regressions" and not c.passed for c in counted.criteria)
 
@@ -168,9 +162,7 @@ def test_no_baseline_without_mark_gives_no_baseline() -> None:
     assert verdict.status == "no_baseline"
     assert verdict.passed is True
     md = ec.render_markdown(cmp, verdict, _meta(baseline_name=None))
-    assert (
-        "Baseline: none found - merge to main with --mark-baseline to create one" in md
-    )
+    assert "Baseline: none found - merge to main with --mark-baseline to create one" in md
 
 
 def test_no_baseline_gives_baseline_created() -> None:
@@ -244,9 +236,7 @@ def test_load_policy_unknown_key_raises(tmp_path: Path) -> None:
         ec.load_policy(bad)
 
 
-def test_load_policy_defaults_when_no_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_policy_defaults_when_no_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
     policy, source = ec.load_policy(None)
     assert policy == ec.Policy()
@@ -298,9 +288,7 @@ def test_render_markdown_groups_still_failing_by_metric() -> None:
 
 def test_compare_url_encodes_both_ids() -> None:
     url = ec.compare_url("https://h/", "ws", "ds1", ["e1", "e2"])
-    assert url == (
-        "https://h/opik/ws/experiments/ds1/compare?experiments=%5B%22e1%22%2C%20%22e2%22%5D"
-    )
+    assert url == ("https://h/opik/ws/experiments/ds1/compare?experiments=%5B%22e1%22%2C%20%22e2%22%5D")
 
 
 def test_failing_row_without_reason_is_not_rendered_as_passed() -> None:

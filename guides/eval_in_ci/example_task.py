@@ -1,10 +1,4 @@
-"""Deterministic toy driving-scenario task, sub-metrics and dataset.
-
-The "agent" turns a scenario description into a structured plan (actors,
-maneuver, parameters). It is a lookup, not an LLM, so every run is
-reproducible. Set AGENT_VERSION to "v1" (default) or "v2" to switch which
-scenarios it gets wrong.
-"""
+"""Deterministic toy driving-scenario task, sub-metrics and dataset."""
 
 import os
 from typing import Any
@@ -170,9 +164,7 @@ class ManeuverCorrect(BaseMetric):
 
     def score(self, expected: dict, output: dict, **_: Any) -> score_result.ScoreResult:
         ok = output["maneuver"] == expected["maneuver"]
-        return _binary(
-            self.name, ok, f"maneuver {output['maneuver']} vs {expected['maneuver']}"
-        )
+        return _binary(self.name, ok, f"maneuver {output['maneuver']} vs {expected['maneuver']}")
 
 
 class ParametersCorrect(BaseMetric):

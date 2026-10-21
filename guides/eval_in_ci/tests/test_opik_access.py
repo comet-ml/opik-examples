@@ -43,9 +43,7 @@ def test_find_baseline_skips_excluded_id() -> None:
         )
 
     client = SimpleNamespace(
-        rest_client=SimpleNamespace(
-            experiments=SimpleNamespace(find_experiments=find_experiments)
-        )
+        rest_client=SimpleNamespace(experiments=SimpleNamespace(find_experiments=find_experiments))
     )
     found = opik_access.find_baseline(client, "ds1", exclude_id="cand")
     assert found is not None and found.id == "base"
@@ -57,13 +55,9 @@ def test_find_baseline_skips_excluded_id() -> None:
 
 def test_ui_base_and_workspace_resolves_default() -> None:
     client = SimpleNamespace(
-        config=SimpleNamespace(
-            url_override="https://host.example.com/opik/api", workspace="default"
-        ),
+        config=SimpleNamespace(url_override="https://host.example.com/opik/api", workspace="default"),
         rest_client=SimpleNamespace(
-            check=SimpleNamespace(
-                get_workspace_name=lambda: SimpleNamespace(workspace_name="acme")
-            )
+            check=SimpleNamespace(get_workspace_name=lambda: SimpleNamespace(workspace_name="acme"))
         ),
     )
     base, ws = opik_access.ui_base_and_workspace(client)
@@ -80,14 +74,10 @@ def test_fetch_compare_rows_pages_until_total() -> None:
         page = kwargs["page"]
         calls.append(page)
         n = 100 if page < 3 else 50
-        return SimpleNamespace(
-            content=[object()] * n, page=page, size=kwargs["size"], total=250
-        )
+        return SimpleNamespace(content=[object()] * n, page=page, size=kwargs["size"], total=250)
 
     client = SimpleNamespace(
-        rest_client=SimpleNamespace(
-            datasets=SimpleNamespace(find_dataset_items_with_experiment_items=find)
-        )
+        rest_client=SimpleNamespace(datasets=SimpleNamespace(find_dataset_items_with_experiment_items=find))
     )
     rows = opik_access.fetch_compare_rows(client, "ds1", ["e1", "e2"])
     assert len(rows) == 250
@@ -120,9 +110,7 @@ def test_resolve_experiment_falls_back_without_project() -> None:
 
     client = SimpleNamespace(
         get_experiments_by_name=get_by_name,
-        rest_client=SimpleNamespace(
-            experiments=SimpleNamespace(get_experiment_by_id=by_id)
-        ),
+        rest_client=SimpleNamespace(experiments=SimpleNamespace(get_experiment_by_id=by_id)),
     )
     assert opik_access.resolve_experiment(client, "exp", "proj") is match
     assert seen == ["proj", None]
@@ -133,9 +121,7 @@ def test_find_baseline_requires_exact_tag_not_substring() -> None:
     older = SimpleNamespace(id="old", tags=["ci", "main", "baseline"])
     client = SimpleNamespace(
         rest_client=SimpleNamespace(
-            experiments=SimpleNamespace(
-                find_experiments=lambda **_k: SimpleNamespace(content=[newer, older])
-            )
+            experiments=SimpleNamespace(find_experiments=lambda **_k: SimpleNamespace(content=[newer, older]))
         )
     )
     found = opik_access.find_baseline(client, "ds1")

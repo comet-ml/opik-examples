@@ -1,16 +1,13 @@
-"""Every Opik SDK and REST call used by the eval-in-CI example lives here.
-
-Keeping the access layer in one module means the CLI and the pure compare
-core never touch the network directly, and tests can swap in stub clients.
-"""
+"""Every Opik SDK and REST call used by the eval-in-CI example lives here."""
 
 import importlib
 import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any
 
 import opik
 from opik import url_helpers
@@ -33,9 +30,7 @@ class GitContext:
 
 def _git(*args: str) -> str | None:
     try:
-        out = subprocess.run(
-            ["git", *args], capture_output=True, text=True, check=True, timeout=10
-        )
+        out = subprocess.run(["git", *args], capture_output=True, text=True, check=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout.strip() or None
@@ -45,12 +40,9 @@ def git_context(pr_override: str | None = None) -> GitContext:
     """Resolve branch, short sha, PR number and actor from CI env or git."""
     ref_name = os.environ.get("GITHUB_REF_NAME") or None
     branch = (
-        os.environ.get("GITHUB_HEAD_REF")
-        or ref_name
-        or _git("rev-parse", "--abbrev-ref", "HEAD")
-        or "local"
+        os.environ.get("GITHUB_HEAD_REF") or ref_name or _git("rev-parse", "--abbrev-ref", "HEAD") or "local"
     )
-    # On pull_request events GITHUB_SHA is the merge commit; the workflow passes
+    # WHY: on pull_request events GITHUB_SHA is the merge commit; the workflow passes
     # the PR head sha as OPIK_EVAL_GIT_SHA so names match the commit under review.
     sha = os.environ.get("OPIK_EVAL_GIT_SHA") or os.environ.get("GITHUB_SHA")
     sha7 = sha[:7] if sha else (_git("rev-parse", "--short=7", "HEAD") or "nogit")
@@ -113,12 +105,9 @@ def find_baseline(
     tag: str = "baseline",
     exclude_id: str | None = None,
 ) -> ExperimentPublic | None:
-    """Newest experiment on the dataset with the exact tag, skipping exclude_id.
-
-    The backend's ``contains`` filter is a case-insensitive substring match, and
-    every run is also tagged with its branch name, so a branch such as
-    ``fix-baseline-loader`` would match. Post-filter on exact tag equality.
-    """
+    """Newest experiment on the dataset with the exact tag, skipping exclude_id."""
+    # WHY: the backend's contains filter is a case-insensitive substring match and every run is
+    # also tagged with its branch name, so post-filter on exact tag equality.
     page = client.rest_client.experiments.find_experiments(
         dataset_id=dataset_id,
         filters=json.dumps([{"field": "tags", "operator": "contains", "value": tag}]),
@@ -132,19 +121,13 @@ def find_baseline(
 
 
 def mark_baseline(client: Any, experiment_id: str, tag: str = "baseline") -> None:
-    """Add the baseline tag once the run has finished successfully.
-
-    Tagging at creation would make a crashed or cancelled run the newest
-    baseline, because evaluate() registers the experiment before items run.
-    """
-    client.rest_client.experiments.update_experiment(
-        id=experiment_id, tags_to_add=[tag]
-    )
+    """Add the baseline tag once the run has finished successfully."""
+    # WHY: tagging at creation would make a crashed or cancelled run the newest baseline,
+    # because evaluate() registers the experiment before items run.
+    client.rest_client.experiments.update_experiment(id=experiment_id, tags_to_add=[tag])
 
 
-def resolve_experiment(
-    client: Any, name_or_id: str, project_name: str | None
-) -> ExperimentPublic:
+def resolve_experiment(client: Any, name_or_id: str, project_name: str | None) -> ExperimentPublic:
     """Resolve an experiment by id first, then by exact name (newest wins)."""
     try:
         return client.rest_client.experiments.get_experiment_by_id(name_or_id)
@@ -152,7 +135,7 @@ def resolve_experiment(
         pass
     exact: list[Any] = []
     last_error: Exception | None = None
-    # project_name is only a hint: experiments are filed under the dataset's
+    # WHY: project_name is only a hint: experiments are filed under the dataset's
     # project, so retry without it when the hinted lookup finds nothing.
     for hint in [project_name, None] if project_name else [None]:
         try:
@@ -198,17 +181,13 @@ def fetch_compare_rows(
     return rows
 
 
-def trace_url_builder(
-    ui_base: str, workspace: str, project_id: str | None
-) -> Callable[[str], str | None]:
+def trace_url_builder(ui_base: str, workspace: str, project_id: str | None) -> Callable[[str], str | None]:
     """Return trace_id -> UI URL, or None when the project id is unknown."""
 
     def build(trace_id: str) -> str | None:
         if not project_id:
             return None
-        return (
-            f"{ui_base}opik/{workspace}/projects/{project_id}/traces?trace={trace_id}"
-        )
+        return f"{ui_base}opik/{workspace}/projects/{project_id}/traces?trace={trace_id}"
 
     return build
 
@@ -228,7 +207,5 @@ def load_callable(ref: str) -> Callable[..., Any]:
     try:
         target = getattr(module, attr)
     except AttributeError as exc:
-        raise ConfigError(
-            f"Module '{module_name}' has no attribute for '{ref}'."
-        ) from exc
+        raise ConfigError(f"Module '{module_name}' has no attribute for '{ref}'.") from exc
     return target  # type: ignore[no-any-return]

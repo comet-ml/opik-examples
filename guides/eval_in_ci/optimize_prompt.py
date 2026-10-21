@@ -1,18 +1,4 @@
-"""Quick win: let Opik's MetaPromptOptimizer improve the scenario prompt.
-
-Uses the same composite pass/fail metric as the eval gate as the optimizer
-objective, so "better prompt" means "more scenarios pass every threshold".
-This is a manual, local helper. It is not run in CI.
-
-Toy ceiling: only about 5 of the 12 scenarios are fully inferable from their
-input (the others hide a gap_m target), so the best reachable score is about
-5/12. A real task should state every target value in its input.
-
-Needs Opik credentials (for the dataset) and an LLM provider key for the
-chosen model, for example OPENAI_API_KEY for the default model.
-
-Exit codes: 0 ok, 2 setup or connection problem.
-"""
+"""Manual local helper: let Opik's MetaPromptOptimizer improve the scenario prompt."""
 
 from __future__ import annotations
 
@@ -55,24 +41,15 @@ def _strip_fences(text: str) -> str:
 
 
 def _invalid_json_scores() -> list[score_result.ScoreResult]:
-    scores = [
-        score_result.ScoreResult(name=name, value=0.0, reason=_INVALID_JSON)
-        for name in SUB_METRICS
-    ]
+    scores = [score_result.ScoreResult(name=name, value=0.0, reason=_INVALID_JSON) for name in SUB_METRICS]
     scores.append(
-        score_result.ScoreResult(
-            name="scenario_pass", value=0.0, reason=f"failed: {_INVALID_JSON}"
-        )
+        score_result.ScoreResult(name="scenario_pass", value=0.0, reason=f"failed: {_INVALID_JSON}")
     )
-    scores.append(
-        score_result.ScoreResult(name="n_metrics_failed", value=float(len(SUB_METRICS)))
-    )
+    scores.append(score_result.ScoreResult(name="n_metrics_failed", value=float(len(SUB_METRICS))))
     return scores
 
 
-def composite_metric_adapter(
-    dataset_item: dict[str, Any], llm_output: str
-) -> list[score_result.ScoreResult]:
+def composite_metric_adapter(dataset_item: dict[str, Any], llm_output: str) -> list[score_result.ScoreResult]:
     """Score raw LLM text with the composite metric. Optimizer metric function."""
     try:
         parsed = json.loads(_strip_fences(llm_output))
@@ -83,7 +60,7 @@ def composite_metric_adapter(
     return build_metric().score(expected=dataset_item["expected"], output=parsed)
 
 
-# The optimizer requires a __name__ and reads this entry as the objective.
+# WHY: the optimizer requires a __name__ and reads this entry as the objective.
 composite_metric_adapter.__name__ = "scenario_pass"
 
 
@@ -122,19 +99,15 @@ def _print_prompt(prompt: Any) -> None:
         print(prompt)
 
 
+# WHY: toy ceiling - only about 5 of 12 scenarios are inferable from their input (the rest hide a
+# gap_m target), so the best reachable score is about 5/12.
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
         from opik_optimizer import ChatPrompt, MetaPromptOptimizer
 
-        system = (
-            args.prompt_file.read_text(encoding="utf-8")
-            if args.prompt_file
-            else DEFAULT_SYSTEM_PROMPT
-        )
-        prompt = ChatPrompt(
-            name="scenario-generator", system=system, user="{input}", model=args.model
-        )
+        system = args.prompt_file.read_text(encoding="utf-8") if args.prompt_file else DEFAULT_SYSTEM_PROMPT
+        prompt = ChatPrompt(name="scenario-generator", system=system, user="{input}", model=args.model)
         client = opik.Opik()
         dataset = client.get_dataset(args.dataset)
         optimizer = MetaPromptOptimizer(model=args.model, n_threads=2, verbose=1)

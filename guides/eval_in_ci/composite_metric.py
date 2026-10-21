@@ -1,9 +1,4 @@
-"""Composite pass/fail metric for eval-in-CI.
-
-Wraps several Opik metrics, passes their scores through unchanged, and adds
-two extra scores: a binary pass/fail for the whole scenario and a count of
-failed metrics. Only metrics named in ``thresholds`` gate the result.
-"""
+"""Composite pass/fail metric for eval-in-CI."""
 
 import math
 import re
@@ -35,9 +30,7 @@ class CompositePassMetric(BaseMetric):
         self._metrics = list(metrics)
         self._thresholds = dict(thresholds)
 
-    def _run_metric(
-        self, metric: BaseMetric, kwargs: dict[str, Any]
-    ) -> list[score_result.ScoreResult]:
+    def _run_metric(self, metric: BaseMetric, kwargs: dict[str, Any]) -> list[score_result.ScoreResult]:
         try:
             result = metric.score(**kwargs)
         except Exception as exc:
@@ -69,9 +62,7 @@ class CompositePassMetric(BaseMetric):
             elif found.value < threshold:
                 failures.append(f"{metric_name} {found.value:.2f} < {threshold:.2f}")
 
-        reason = (
-            _ALL_MET_REASON if not failures else _FAILED_PREFIX + "; ".join(failures)
-        )
+        reason = _ALL_MET_REASON if not failures else _FAILED_PREFIX + "; ".join(failures)
         results.append(
             score_result.ScoreResult(
                 name=self.name,
@@ -79,9 +70,7 @@ class CompositePassMetric(BaseMetric):
                 reason=reason,
             )
         )
-        results.append(
-            score_result.ScoreResult(name=N_METRICS_FAILED, value=float(len(failures)))
-        )
+        results.append(score_result.ScoreResult(name=N_METRICS_FAILED, value=float(len(failures))))
         return results
 
 

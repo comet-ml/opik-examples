@@ -1,13 +1,4 @@
-"""Run an Opik evaluation and render a release digest, or digest an existing run.
-
-Modes:
-  run     evaluate a task on a dataset, then compare against the baseline
-  digest  compare an already-finished experiment against the baseline
-  demo    offline: compare the toy agent v1 vs v2 in-process, no credentials
-
-Exit codes: 0 ok, 1 policy hold or insufficient evidence with
---fail-on-regression, 2 setup or connection problem.
-"""
+"""Run an Opik evaluation and render a release digest, or digest an existing run."""
 
 from __future__ import annotations
 
@@ -16,8 +7,9 @@ import json
 import os
 import sys
 import traceback
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from opik import evaluate
 
@@ -57,9 +49,7 @@ def _add_common(p: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="run_eval", description="Opik evaluation in CI: run and digest."
-    )
+    parser = argparse.ArgumentParser(prog="run_eval", description="Opik evaluation in CI: run and digest.")
     sub = parser.add_subparsers(dest="mode", required=True)
 
     run = sub.add_parser("run", help="Evaluate a task and compare to the baseline")
@@ -174,9 +164,7 @@ def _resolve_baseline(
     client: Any, args: argparse.Namespace, dataset_id: str, exclude_id: str
 ) -> tuple[str | None, str | None]:
     if args.baseline:
-        exp = opik_access.resolve_experiment(
-            client, args.baseline, getattr(args, "project", None)
-        )
+        exp = opik_access.resolve_experiment(client, args.baseline, getattr(args, "project", None))
         return exp.id, exp.name
     found = opik_access.find_baseline(client, dataset_id, exclude_id=exclude_id)
     return (found.id, found.name) if found else (None, None)
@@ -193,8 +181,7 @@ def _git_meta(ctx: opik_access.GitContext) -> dict[str, str]:
 
 def _demo(args: argparse.Namespace) -> int:
     print(
-        "Demo mode: no Opik connection; "
-        "comparing AGENT_VERSION=v1 (baseline) with v2 (candidate) in-process."
+        "Demo mode: no Opik connection; comparing AGENT_VERSION=v1 (baseline) with v2 (candidate) in-process."
     )
     runs: list[eval_compare.ItemRun] = []
     for version in ("v1", "v2"):
@@ -249,9 +236,7 @@ def _run(args: argparse.Namespace) -> int:
     try:
         dataset = client.get_dataset(args.dataset)
     except Exception as exc:
-        raise ConfigError(
-            f"Dataset '{args.dataset}' not found or unreadable: {_fmt_error(exc)}"
-        ) from exc
+        raise ConfigError(f"Dataset '{args.dataset}' not found or unreadable: {_fmt_error(exc)}") from exc
 
     ctx = opik_access.git_context(args.pr)
     name = opik_access.experiment_name(ctx)
@@ -267,15 +252,12 @@ def _run(args: argparse.Namespace) -> int:
                 "git_branch": ctx.branch,
                 "pr_number": ctx.pr_number,
                 "actor": ctx.actor,
-                "runner": "github-actions"
-                if os.environ.get("GITHUB_ACTIONS")
-                else "local",
+                "runner": "github-actions" if os.environ.get("GITHUB_ACTIONS") else "local",
                 "trial_count": args.trials,
                 "task_ref": args.task,
             },
-            # The baseline tag is added after a successful run (mark_baseline).
-            experiment_tags=["ci", ctx.branch]
-            + ([] if args.mark_baseline else ["candidate"]),
+            # WHY: the baseline tag is added only after a successful run (mark_baseline).
+            experiment_tags=["ci", ctx.branch] + ([] if args.mark_baseline else ["candidate"]),
             trial_count=args.trials,
             task_threads=4,
         )
@@ -286,12 +268,10 @@ def _run(args: argparse.Namespace) -> int:
     if args.mark_baseline:
         opik_access.mark_baseline(client, result.experiment_id)
     if args.mark_baseline and not args.baseline:
-        # This run becomes the baseline, so there is nothing to compare against.
+        # WHY: this run becomes the baseline, so there is nothing to compare against.
         baseline_id, baseline_name = None, None
     else:
-        baseline_id, baseline_name = _resolve_baseline(
-            client, args, dataset.id, result.experiment_id
-        )
+        baseline_id, baseline_name = _resolve_baseline(client, args, dataset.id, result.experiment_id)
     md, payload = _build_digest(
         client,
         dataset.id,

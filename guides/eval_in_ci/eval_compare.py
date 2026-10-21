@@ -1,8 +1,4 @@
-"""Pure compare, policy and digest logic for eval-in-CI.
-
-No network calls and no ``opik`` imports: callers fetch experiment rows and
-hand them in. Everything here is deterministic and unit-testable.
-"""
+"""Pure compare, policy and digest logic for eval-in-CI."""
 
 import json
 from collections import Counter
@@ -76,15 +72,11 @@ class Comparison:
     still_failing: list[ItemOutcome] = field(default_factory=list)
     new_items: list[ItemOutcome] = field(default_factory=list)
     flaky: list[ItemOutcome] = field(default_factory=list)
-    metric_means: dict[str, tuple[float | None, float | None]] = field(
-        default_factory=dict
-    )
+    metric_means: dict[str, tuple[float | None, float | None]] = field(default_factory=dict)
     pass_rule: str = ""
 
 
-def rows_to_item_runs(
-    rows: Iterable[Any], label_key: str = "scenario_id"
-) -> list[ItemRun]:
+def rows_to_item_runs(rows: Iterable[Any], label_key: str = "scenario_id") -> list[ItemRun]:
     """Flatten DatasetItemCompare-shaped rows into one ItemRun per experiment item."""
     runs: list[ItemRun] = []
     for row in rows:
@@ -92,10 +84,7 @@ def rows_to_item_runs(
         raw_label = data.get(label_key) if isinstance(data, dict) else None
         label = None if raw_label is None else str(raw_label)
         for item in getattr(row, "experiment_items", None) or []:
-            scores = tuple(
-                RunScore(s.name, float(s.value), s.reason)
-                for s in (item.feedback_scores or [])
-            )
+            scores = tuple(RunScore(s.name, float(s.value), s.reason) for s in (item.feedback_scores or []))
             runs.append(
                 ItemRun(
                     experiment_id=item.experiment_id,
@@ -153,13 +142,7 @@ def classify(
     pass_name: str = DEFAULT_PASS_NAME,
     pass_threshold: int | None = None,
 ) -> Comparison:
-    """Compare candidate against baseline per dataset item.
-
-    Flaky items (0 < pass_runs < runs in either experiment) go only to
-    ``flaky``. Items with no candidate runs are never new or flipped; they
-    count as still failing only when they failed in the baseline. Without a
-    baseline, failing items go to ``still_failing`` and nothing is "newly".
-    """
+    """Compare candidate against baseline per dataset item."""
     grouped: dict[tuple[str, str], list[ItemRun]] = {}
     order: list[str] = []
     for run in runs:
@@ -237,9 +220,7 @@ def classify(
     if baseline_id is not None:
         cmp.pass_rate_baseline = base_passed / base_scored if base_scored else 0.0
 
-    base_means = _means(
-        r for r in runs if baseline_id and r.experiment_id == baseline_id
-    )
+    base_means = _means(r for r in runs if baseline_id and r.experiment_id == baseline_id)
     cand_means = _means(r for r in runs if r.experiment_id == candidate_id)
     for name in [*base_means, *(n for n in cand_means if n not in base_means)]:
         cmp.metric_means[name] = (base_means.get(name), cand_means.get(name))
@@ -290,8 +271,7 @@ def load_policy(path: Path | None) -> tuple[Policy, str]:
     defaults = Policy()
     pass_rate = raw.get("pass_rate", defaults.pass_rate)
     if isinstance(pass_rate, bool) or not (
-        pass_rate == _NOT_BELOW
-        or (isinstance(pass_rate, int | float) and 0 <= pass_rate <= 1)
+        pass_rate == _NOT_BELOW or (isinstance(pass_rate, int | float) and 0 <= pass_rate <= 1)
     ):
         raise PolicyError(f"pass_rate must be '{_NOT_BELOW}' or a number in 0..1")
     flaky_policy = raw.get("flaky_policy", defaults.flaky_policy)
@@ -327,20 +307,12 @@ class PolicyVerdict:
     status: str
 
 
-def evaluate_policy(
-    cmp: Comparison, policy: Policy, *, mark_baseline: bool = False
-) -> PolicyVerdict:
-    """Apply the policy; hold beats insufficient_evidence.
-
-    Without a baseline the status is ``baseline_created`` when this run was
-    tagged as the baseline (``mark_baseline``), else ``no_baseline``. Both pass.
-    """
+def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = False) -> PolicyVerdict:
+    """Apply the policy; hold beats insufficient_evidence."""
     has_baseline = cmp.baseline_id is not None
     regressions = len(cmp.newly_failing)
     if policy.flaky_policy == "count":
-        regressions += sum(
-            1 for o in cmp.flaky if o.baseline_passed and not o.candidate_passed
-        )
+        regressions += sum(1 for o in cmp.flaky if o.baseline_passed and not o.candidate_passed)
 
     criteria = [
         Criterion(
@@ -369,13 +341,9 @@ def evaluate_policy(
             threshold = f">= {float(policy.pass_rate):.2f}"
         criteria.append(Criterion("pass_rate", threshold, f"{cand:.2f}", rate_ok))
     else:
-        criteria.append(
-            Criterion("max_regressions", f"<= {policy.max_regressions}", "n/a", True)
-        )
+        criteria.append(Criterion("max_regressions", f"<= {policy.max_regressions}", "n/a", True))
         criteria.append(Criterion("pass_rate", str(policy.pass_rate), "n/a", True))
-    criteria.append(
-        Criterion("flaky_policy", policy.flaky_policy, str(len(cmp.flaky)), True)
-    )
+    criteria.append(Criterion("flaky_policy", policy.flaky_policy, str(len(cmp.flaky)), True))
 
     by_name = {c.name: c for c in criteria}
     if not has_baseline:
@@ -429,9 +397,7 @@ def _row(o: ItemOutcome, meta: DigestMeta, indent: str = "") -> str:
     return f"{indent}- {name}: {detail}{suffix}"
 
 
-def _section(
-    title: str, outcomes: list[ItemOutcome], meta: DigestMeta, max_rows: int
-) -> list[str]:
+def _section(title: str, outcomes: list[ItemOutcome], meta: DigestMeta, max_rows: int) -> list[str]:
     lines = ["", f"### {title}", ""]
     if not outcomes:
         return [*lines, "none"]
@@ -441,9 +407,7 @@ def _section(
     return lines
 
 
-def _still_failing_section(
-    outcomes: list[ItemOutcome], meta: DigestMeta, max_rows: int
-) -> list[str]:
+def _still_failing_section(outcomes: list[ItemOutcome], meta: DigestMeta, max_rows: int) -> list[str]:
     lines = ["", "### Still failing", ""]
     if not outcomes:
         return [*lines, "none"]
@@ -467,17 +431,13 @@ def _still_failing_section(
     return lines
 
 
-def render_markdown(
-    cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta, max_rows: int = 25
-) -> str:
+def render_markdown(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta, max_rows: int = 25) -> str:
     failed = [c.name for c in verdict.criteria if not c.passed]
     verdict_line = f"**Verdict:** {verdict.status}"
     if failed:
         verdict_line += f" - failed: {', '.join(failed)}"
     delta = _delta(cmp.pass_rate_baseline, cmp.pass_rate_candidate)
-    rate = (
-        f"Pass rate: {_fmt(cmp.pass_rate_baseline)} -> {_fmt(cmp.pass_rate_candidate)}"
-    )
+    rate = f"Pass rate: {_fmt(cmp.pass_rate_baseline)} -> {_fmt(cmp.pass_rate_candidate)}"
     if delta is not None:
         rate += f" ({delta:+.2f})"
 
@@ -506,17 +466,13 @@ def render_markdown(
     ]
     for name, (base, cand) in cmp.metric_means.items():
         d = _delta(base, cand)
-        lines.append(
-            f"| {name} | {_fmt(base)} | {_fmt(cand)} | {'n/a' if d is None else f'{d:+.2f}'} |"
-        )
+        lines.append(f"| {name} | {_fmt(base)} | {_fmt(cand)} | {'n/a' if d is None else f'{d:+.2f}'} |")
     lines += ["", "### Compare", ""]
     lines.append(f"[Open in Opik]({meta.compare_url})" if meta.compare_url else "none")
     return "\n".join(lines) + "\n"
 
 
-def render_json(
-    cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta
-) -> dict[str, Any]:
+def render_json(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta) -> dict[str, Any]:
     delta = _delta(cmp.pass_rate_baseline, cmp.pass_rate_candidate)
     failed = [c.name for c in verdict.criteria if not c.passed]
     return {
@@ -534,10 +490,7 @@ def render_json(
         "still_failing": [asdict(o) for o in cmp.still_failing],
         "new_items": [asdict(o) for o in cmp.new_items],
         "flaky": [asdict(o) for o in cmp.flaky],
-        "metric_means": {
-            name: {"baseline": b, "candidate": c}
-            for name, (b, c) in cmp.metric_means.items()
-        },
+        "metric_means": {name: {"baseline": b, "candidate": c} for name, (b, c) in cmp.metric_means.items()},
         "criteria": [asdict(c) for c in verdict.criteria],
         "compare_url": meta.compare_url,
         "meta": {
@@ -550,10 +503,6 @@ def render_json(
     }
 
 
-def compare_url(
-    ui_base: str, workspace: str, dataset_id: str, experiment_ids: Sequence[str]
-) -> str:
+def compare_url(ui_base: str, workspace: str, dataset_id: str, experiment_ids: Sequence[str]) -> str:
     ids = quote(json.dumps(list(experiment_ids)))
-    return (
-        f"{ui_base}opik/{workspace}/experiments/{dataset_id}/compare?experiments={ids}"
-    )
+    return f"{ui_base}opik/{workspace}/experiments/{dataset_id}/compare?experiments={ids}"

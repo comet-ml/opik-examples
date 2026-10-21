@@ -17,9 +17,7 @@ def test_parser_run_requires_dataset_and_task() -> None:
     assert exc.value.code == 2
     args = parser.parse_args(["run", "--dataset", "d", "--task", "m:f"])
     assert args.project is None
-    args = parser.parse_args(
-        ["run", "--dataset", "d", "--project", "p", "--task", "m:f"]
-    )
+    args = parser.parse_args(["run", "--dataset", "d", "--project", "p", "--task", "m:f"])
     assert args.metric == "example_task:build_metric"
     assert args.trials == 1
     assert args.mark_baseline is False
@@ -43,9 +41,7 @@ def _stub_digest(monkeypatch: pytest.MonkeyPatch, status: str) -> None:
 
     monkeypatch.setattr(run_eval.opik_access, "make_client", lambda: Stub())
     monkeypatch.setattr(run_eval.opik_access, "server_version", lambda c: "9.9.9")
-    monkeypatch.setattr(
-        run_eval.opik_access, "find_baseline", lambda c, d, exclude_id=None: None
-    )
+    monkeypatch.setattr(run_eval.opik_access, "find_baseline", lambda c, d, exclude_id=None: None)
     exp = type("Exp", (), {"id": "e1", "name": "cand", "dataset_id": "ds"})()
     monkeypatch.setattr(run_eval.opik_access, "resolve_experiment", lambda c, n, p: exp)
 
@@ -78,9 +74,7 @@ def _stub_run(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     monkeypatch.setattr(run_eval.opik_access, "make_client", lambda: client)
     monkeypatch.setattr(run_eval.opik_access, "server_version", lambda c: "9.9.9")
     monkeypatch.setattr(run_eval.opik_access, "load_callable", lambda ref: lambda: None)
-    monkeypatch.setattr(
-        run_eval.opik_access, "mark_baseline", lambda c, eid: marked.append(eid)
-    )
+    monkeypatch.setattr(run_eval.opik_access, "mark_baseline", lambda c, eid: marked.append(eid))
     return marked
 
 
@@ -115,10 +109,7 @@ def test_run_mark_baseline_tags_after_success(
         "_build_digest",
         lambda *a, **k: ("# d", {"status": "baseline_created"}),
     )
-    assert (
-        run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--mark-baseline"])
-        == 0
-    )
+    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--mark-baseline"]) == 0
     assert "baseline" not in seen["experiment_tags"]
     assert marked == ["e9"]
 
