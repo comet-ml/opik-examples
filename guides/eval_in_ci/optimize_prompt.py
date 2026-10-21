@@ -104,10 +104,21 @@ def _print_prompt(prompt: Any) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    system = args.prompt_file.read_text(encoding="utf-8") if args.prompt_file else DEFAULT_SYSTEM_PROMPT
+    if not (os.environ.get("OPIK_API_KEY") and os.environ.get("OPIK_WORKSPACE")):
+        print(
+            f"[DRY RUN] would run MetaPromptOptimizer on dataset {args.dataset!r} "
+            f"with model {args.model!r} for {args.max_trials} trials, starting from:"
+        )
+        print(system)
+        print("Set OPIK_API_KEY and OPIK_WORKSPACE (and a provider key) to run it.")
+        return 0
     try:
         from opik_optimizer import ChatPrompt, MetaPromptOptimizer
-
-        system = args.prompt_file.read_text(encoding="utf-8") if args.prompt_file else DEFAULT_SYSTEM_PROMPT
+    except ModuleNotFoundError:
+        print("error: opik_optimizer is not installed; run: uv sync --extra optimizer", file=sys.stderr)
+        return 2
+    try:
         prompt = ChatPrompt(name="scenario-generator", system=system, user="{input}", model=args.model)
         client = opik.Opik()
         dataset = client.get_dataset(args.dataset)

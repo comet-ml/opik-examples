@@ -202,5 +202,13 @@ def ensure_dataset(client: opik.Opik, name: str = DATASET_NAME) -> opik.Dataset:
 
 
 if __name__ == "__main__":
-    created = ensure_dataset(opik.Opik())
-    print(f"{created.name}: {len(SCENARIOS)} items")
+    # WHY: opik.Opik() falls back to ~/.opik.config, so without the env gate a bare run would
+    # write to whatever workspace that file names.
+    dry_run = not (os.environ.get("OPIK_API_KEY") and os.environ.get("OPIK_WORKSPACE"))
+    if dry_run:
+        print(f"[DRY RUN] would insert {len(SCENARIOS)} items into dataset {DATASET_NAME!r}:")
+        for scenario in SCENARIOS:
+            print(f"  {scenario['scenario_id']}: {scenario['input']}")
+    else:
+        created = ensure_dataset(opik.Opik())
+        print(f"{created.name}: {len(SCENARIOS)} items")

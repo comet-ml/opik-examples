@@ -1,3 +1,7 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -45,3 +49,17 @@ def test_v2_fixes_two_and_breaks_one(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_build_metric_tracks_by_default() -> None:
     assert build_metric().track is True
     assert build_metric(track=False).track is False
+
+
+def test_script_dry_runs_without_credentials() -> None:
+    env = {k: v for k, v in os.environ.items() if k not in ("OPIK_API_KEY", "OPIK_WORKSPACE")}
+    proc = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve().parent.parent / "example_task.py")],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.startswith("[DRY RUN] would insert 12 items")
+    assert "s12" in proc.stdout

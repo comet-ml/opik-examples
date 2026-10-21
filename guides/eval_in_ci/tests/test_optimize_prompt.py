@@ -3,8 +3,10 @@
 import json
 from typing import Any
 
+import pytest
+
 from example_task import SCENARIOS
-from optimize_prompt import composite_metric_adapter
+from optimize_prompt import DEFAULT_SYSTEM_PROMPT, composite_metric_adapter, main
 
 
 def _by_name(results: list[Any]) -> dict[str, Any]:
@@ -45,3 +47,15 @@ def test_fenced_json_parses() -> None:
 def test_non_object_json_fails() -> None:
     results = _by_name(composite_metric_adapter(SCENARIOS[0], "[1, 2]"))
     assert results["scenario_pass"].value == 0.0
+
+
+def test_main_dry_runs_without_credentials(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("OPIK_API_KEY", raising=False)
+    monkeypatch.delenv("OPIK_WORKSPACE", raising=False)
+    assert main(["--max-trials", "2", "--model", "openai/gpt-4o-mini"]) == 0
+    out = capsys.readouterr().out
+    assert "[DRY RUN]" in out
+    assert "2 trials" in out
+    assert DEFAULT_SYSTEM_PROMPT in out

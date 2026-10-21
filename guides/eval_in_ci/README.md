@@ -53,7 +53,7 @@ guard paths.
 | File | Purpose |
 |---|---|
 | `run_eval.py` | CLI with three modes: `run` (evaluate, then compare to baseline), `digest` (compare a finished experiment) and `demo` (offline) |
-| `eval_compare.py` | Baseline lookup, item compare, digest rendering, policy verdict |
+| `eval_compare.py` | Item compare, policy verdict, digest rendering (no network) |
 | `opik_access.py` | SDK and REST layer: baseline lookup, experiment lookup, compare rows, URLs |
 | `composite_metric.py` | `CompositePassMetric`: one pass/fail per item from several sub-metrics |
 | `example_task.py` | Toy task (`scenario_agent`), sub-metrics, `build_metric`, and dataset seeding |
@@ -76,10 +76,9 @@ guard paths.
 
 - An Opik workspace. Create a service-account key if your deployment has them (Admin dashboard >
   Service accounts), otherwise a dedicated personal API key for CI.
-- Three repository secrets: `OPIK_API_KEY`, `OPIK_WORKSPACE` and `OPIK_URL_OVERRIDE`. Set all
-  three, because the workflow exports them as-is and an empty value breaks the SDK. On comet.com
-  `OPIK_URL_OVERRIDE` is `https://www.comet.com/opik/api`. For a custom host it is
-  `https://<host>/opik/api`.
+- Two repository secrets: `OPIK_API_KEY` and `OPIK_WORKSPACE`. On a custom host also set
+  `OPIK_URL_OVERRIDE` to `https://<host>/opik/api`; when it is unset the workflow defaults to
+  `https://www.comet.com/opik/api`.
 
 Tested with Opik SDK 2.2.113 against Opik server 2.2.x.
 
@@ -87,7 +86,7 @@ Tested with Opik SDK 2.2.113 against Opik server 2.2.x.
 |---|---|---|
 | `OPIK_API_KEY` | yes | CLI, workflow, MCP |
 | `OPIK_WORKSPACE` | yes | CLI, workflow, MCP |
-| `OPIK_URL_OVERRIDE` | yes in the workflow | CLI, workflow; `https://<host>/opik/api` on a custom host |
+| `OPIK_URL_OVERRIDE` | custom host only | CLI, workflow; `https://<host>/opik/api`; workflow defaults to Opik Cloud |
 | `COMET_URL_OVERRIDE` | MCP only | MCP; `https://<host>` on a custom host |
 | `OPENAI_API_KEY` | optimizer only | `optimize_prompt.py` |
 | `OPIK_EXAMPLES_MODEL` | optimizer only | `optimize_prompt.py`; default `openai/gpt-4o-mini` |
@@ -120,12 +119,13 @@ code is always 0; in CI use `run --fail-on-regression` so a hold fails the job.
 
 ### 10-minute setup for CI
 
-1. Add the three secrets from Prerequisites.
+1. Add the secrets from Prerequisites.
 2. Copy `github/opik-eval.yml` to `.github/workflows/opik-eval.yml`. The workflow installs
    `opik==2.2.113`; bump it to the SDK version your server supports.
 3. In the workflow, point `--task` at your task and `--dataset` at your dataset. The task is
    called as `task(**item)`, so it must accept the dataset fields as keyword arguments (or
-   `**kwargs`). To try the toy first, seed its dataset once:
+   `**kwargs`). To try the toy first, seed its dataset once (without `OPIK_API_KEY` and
+   `OPIK_WORKSPACE` in the shell the script only prints what it would insert):
 
    ```bash
    pip install "opik==2.2.113"
@@ -317,8 +317,8 @@ this gate reads:
 | `pass_rate` | `not_below_baseline`, or a number from 0 to 1 | `not_below_baseline` |
 | `flaky_policy` | `exclude` or `count` flaky items | `exclude` |
 
-Other `opik-verify` keys are accepted and ignored. Unknown keys are an error (exit 2). PyYAML
-arrives with `opik`, so there is nothing extra to install.
+Other `opik-verify` keys are accepted and ignored. Unknown keys are an error (exit 2). The policy
+file is read with PyYAML, which `pyproject.toml` and the workflow's `pip install` both declare.
 
 ### Guardrails
 

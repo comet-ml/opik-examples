@@ -55,14 +55,15 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Opik
-        run: pip install "opik==2.2.113"  # bump to the Opik SDK version your server supports
+        run: pip install "opik==2.2.113" "pyyaml>=6"  # bump to the Opik SDK version your server supports
       - name: Run evaluation
         id: eval
         continue-on-error: true
         env:
           OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
           OPIK_WORKSPACE: ${{ secrets.OPIK_WORKSPACE }}
-          OPIK_URL_OVERRIDE: ${{ secrets.OPIK_URL_OVERRIDE }}
+          # An unset secret expands to "", which the SDK takes literally; default to Opik Cloud.
+          OPIK_URL_OVERRIDE: ${{ secrets.OPIK_URL_OVERRIDE || 'https://www.comet.com/opik/api' }}
           # On pull_request, github.sha is the merge commit; name runs by the PR head.
           OPIK_EVAL_GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         # Exit codes: 0 ok or baseline created, 1 policy failed, 2 config or connection error.
