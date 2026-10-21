@@ -52,7 +52,7 @@ guard paths.
 
 | File | Purpose |
 |---|---|
-| `run_eval.py` | CLI with two modes: `run` (evaluate, then compare to baseline) and `digest` (compare a finished experiment) |
+| `run_eval.py` | CLI with three modes: `run` (evaluate, then compare to baseline), `digest` (compare a finished experiment) and `demo` (offline) |
 | `eval_compare.py` | Baseline lookup, item compare, digest rendering, policy verdict |
 | `opik_access.py` | SDK and REST layer: baseline lookup, experiment lookup, compare rows, URLs |
 | `composite_metric.py` | `CompositePassMetric`: one pass/fail per item from several sub-metrics |
@@ -60,12 +60,20 @@ guard paths.
 | `optimize_prompt.py` | Optional prompt optimizer, run by hand |
 | `github/opik-eval.yml` | The GitHub Actions workflow |
 | `agent/opik-eval-loop.md` | The coding-agent runbook, plus thin wrappers in `agent/cursor/` and `agent/claude/` |
-| `tests/` | Unit tests, no network: `pytest examples/eval_in_ci/tests` |
+| `run.sh` | Entry point for CI smoke runs: the offline demo, or a live run when credentials are set |
+| `pyproject.toml` | Dependencies (`uv sync --group dev`; the optimizer is an optional extra) |
+| `.env.example` | Variable names for local runs |
+| `tests/` | Unit tests, no network: `uv run pytest` from this folder, or `pytest examples/eval_in_ci/tests` from your repo root |
 
 ## Prerequisites
 
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/) (`uv sync`; the optimizer is an optional
-  extra).
+- Python 3.12+ and [uv](https://docs.astral.sh/uv/). Install the dependencies (the optimizer is an
+  optional extra):
+
+  ```bash
+  uv sync --group dev
+  ```
+
 - An Opik workspace. Create a service-account key if your deployment has them (Admin dashboard >
   Service accounts), otherwise a dedicated personal API key for CI.
 - Three repository secrets: `OPIK_API_KEY`, `OPIK_WORKSPACE` and `OPIK_URL_OVERRIDE`. Set all
@@ -73,30 +81,37 @@ guard paths.
   `OPIK_URL_OVERRIDE` is `https://www.comet.com/opik/api`. For a custom host it is
   `https://<host>/opik/api`.
 
-Tested with Opik SDK 2.2.114 against Opik server 2.2.x.
+Tested with Opik SDK 2.2.113 against Opik server 2.2.x.
 
-The Opik MCP server reads different variable names than the SDK:
-
-| | SDK / CI | MCP (Cursor) |
+| Variable | Required | Used by |
 |---|---|---|
-| API key | `OPIK_API_KEY` | `OPIK_API_KEY` |
-| Workspace | `OPIK_WORKSPACE` | `OPIK_WORKSPACE` |
-| URL | `OPIK_URL_OVERRIDE=https://<host>/opik/api` | `COMET_URL_OVERRIDE=https://<host>` |
+| `OPIK_API_KEY` | yes | CLI, workflow, MCP |
+| `OPIK_WORKSPACE` | yes | CLI, workflow, MCP |
+| `OPIK_URL_OVERRIDE` | yes in the workflow | CLI, workflow; `https://<host>/opik/api` on a custom host |
+| `COMET_URL_OVERRIDE` | MCP only | MCP; `https://<host>` on a custom host |
+| `OPENAI_API_KEY` | optimizer only | `optimize_prompt.py` |
+| `OPIK_EXAMPLES_MODEL` | optimizer only | `optimize_prompt.py`; default `openai/gpt-4o-mini` |
+| `AGENT_VERSION` | toy task only | `example_task.py`; `v1` by default, `v2` to show a regression |
+| `OPIK_EVAL_GIT_SHA` | set by the workflow | experiment names; the PR head sha |
+| `OPIK_EVAL_DEBUG` | no | CLI; print tracebacks on unexpected errors |
 
-`OPIK_WORKSPACE` is the path segment after `/opik/` in the UI URL. `.env.example` lists the
-variables for local runs (plus `OPENAI_API_KEY`, used only by the optimizer); you can also run
+The Opik MCP server reads a different URL variable than the SDK: `COMET_URL_OVERRIDE=https://<host>`
+instead of `OPIK_URL_OVERRIDE=https://<host>/opik/api`. `OPIK_WORKSPACE` is the path segment after
+`/opik/` in the UI URL. `.env.example` lists the variables for local runs; you can also run
 `opik configure`. The offline demo needs none of them.
 
 ## Running it
 
 ### Offline demo
 
+Run from this folder (`guides/eval_in_ci` here, `examples/eval_in_ci` after copying it).
+
 ```bash
 bash run.sh
 # or: uv run python run_eval.py demo
 ```
 
-No credentials, no network. The demo compares the toy task at `AGENT_VERSION=v1` (the baseline)
+No credentials and no Opik server. The demo compares the toy task at `AGENT_VERSION=v1` (the baseline)
 with `v2` (the candidate) in-process and prints a digest with three kinds of content: the verdict
 and pass rate (`0.75 -> 0.83`), the item lists (newly failing, newly passing, still failing), and
 the per-metric means table. `AGENT_VERSION=v2` is what makes the toy both regress (`s05` starts
@@ -107,13 +122,13 @@ code is always 0; in CI use `run --fail-on-regression` so a hold fails the job.
 
 1. Add the three secrets from Prerequisites.
 2. Copy `github/opik-eval.yml` to `.github/workflows/opik-eval.yml`. The workflow installs
-   `opik==2.2.114`; bump it to the SDK version your server supports.
+   `opik==2.2.113`; bump it to the SDK version your server supports.
 3. In the workflow, point `--task` at your task and `--dataset` at your dataset. The task is
    called as `task(**item)`, so it must accept the dataset fields as keyword arguments (or
    `**kwargs`). To try the toy first, seed its dataset once:
 
    ```bash
-   pip install "opik==2.2.114"
+   pip install "opik==2.2.113"
    python examples/eval_in_ci/example_task.py
    ```
 
@@ -142,7 +157,10 @@ helps look an experiment up by name.
 
 Compare a finished experiment without re-running it with
 `uv run python run_eval.py digest --experiment <name or id>`. `digest` flags: `--experiment`,
-`--baseline`, `--pass-threshold`, `--policy`, `--fail-on-regression`, `--out`, `--json`.
+`--baseline`, `--pass-threshold`, `--policy`, `--fail-on-regression`, `--out`, `--json`, and an
+optional `--project` lookup hint (same as for `run`).
+
+`demo` flags: `--pass-threshold`, `--policy`, `--out`, `--json`.
 
 ### Reading the digest
 
@@ -157,8 +175,8 @@ The exit code is the contract:
 | Code | Meaning |
 |---|---|
 | 0 | OK, or a baseline was created |
-| 1 | Policy failed (only with `--fail-on-regression`) |
-| 2 | Config, policy-file or connection error |
+| 1 | Policy verdict hold or insufficient_evidence (only with `--fail-on-regression`) |
+| 2 | Configuration or connection error, invalid policy file, or a crash in your task or metric |
 
 The workflow captures the code, still uploads `digest.md` and `digest.json`, posts the comment, and
 then fails the job with the original code in a final step that runs `if: always()`.
@@ -183,7 +201,7 @@ table. In Cursor's `mcp.json`:
     "opik-mcp": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["opik-mcp"],
+      "args": ["opik-mcp@latest"],
       "env": {
         "COMET_URL_OVERRIDE": "https://<host>",
         "OPIK_WORKSPACE": "<workspace>",
@@ -232,8 +250,10 @@ uv run python optimize_prompt.py --max-trials 3
 ```
 
 Flags: `--dataset`, `--model` (default `$OPIK_EXAMPLES_MODEL`, else `openai/gpt-4o-mini`),
-`--max-trials` (default 5) and `--prompt-file`. Observed on the toy dataset after seeding the prompt with the actor naming rule and a partial
-maneuver list: 3 trials, `scenario_pass` 0.17 to 0.25. The toy ceiling is about 5 of 12
+`--max-trials` (default 5) and `--prompt-file`.
+
+Observed on the toy dataset after seeding `DEFAULT_SYSTEM_PROMPT` in `optimize_prompt.py` with the
+actor naming rule and a partial maneuver list: 3 trials, `scenario_pass` 0.17 to 0.25. The toy ceiling is about 5 of 12
 scenarios, because seven targets carry a `gap_m` value the input never states. In a real task,
 state every target value in the input.
 
