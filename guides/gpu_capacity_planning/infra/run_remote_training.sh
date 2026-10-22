@@ -17,7 +17,7 @@ if [[ -f "${SCRIPT_DIR}/../.env" ]]; then
     set +a
 fi
 
-usage() { grep '^#' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,/^[^#]/{ /^#/s/^# \{0,1\}//p; }' "${BASH_SOURCE[0]}"; }
 
 host="${1:-}"
 [[ -n "$host" ]] || { usage; exit 1; }
