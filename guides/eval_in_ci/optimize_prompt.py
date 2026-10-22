@@ -14,6 +14,7 @@ from typing import Any
 import opik
 from opik.evaluation.metrics import score_result
 
+from composite_metric import CompositePassMetric
 from example_task import DATASET_NAME, build_metric
 
 DEFAULT_MODEL = os.environ.get("OPIK_EXAMPLES_MODEL", "openai/gpt-4o-mini")
@@ -50,6 +51,17 @@ def _invalid_json_scores() -> list[score_result.ScoreResult]:
     return scores
 
 
+_METRIC: CompositePassMetric | None = None
+
+
+def _metric() -> CompositePassMetric:
+    """Build the composite metric once; the optimizer scores every item of every trial."""
+    global _METRIC
+    if _METRIC is None:
+        _METRIC = build_metric(track=False)
+    return _METRIC
+
+
 # WHY: the composite metric is the objective because "better prompt" means "more scenarios pass
 # every threshold", the same number the CI gate uses.
 def composite_metric_adapter(dataset_item: dict[str, Any], llm_output: str) -> list[score_result.ScoreResult]:
@@ -60,7 +72,7 @@ def composite_metric_adapter(dataset_item: dict[str, Any], llm_output: str) -> l
         return _invalid_json_scores()
     if not isinstance(parsed, dict):
         return _invalid_json_scores()
-    return build_metric().score(expected=dataset_item["expected"], output=parsed)
+    return _metric().score(expected=dataset_item["expected"], output=parsed)
 
 
 # WHY: the optimizer requires a __name__ and reads this entry as the objective.

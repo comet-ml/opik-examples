@@ -59,3 +59,21 @@ def test_main_dry_runs_without_credentials(
     assert "[DRY RUN]" in out
     assert "2 trials" in out
     assert DEFAULT_SYSTEM_PROMPT in out
+
+
+def test_adapter_builds_the_metric_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    import optimize_prompt
+
+    real = optimize_prompt.build_metric
+    calls: list[int] = []
+
+    def counting(*args: Any, **kwargs: Any) -> Any:
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(optimize_prompt, "build_metric", counting)
+    monkeypatch.setattr(optimize_prompt, "_METRIC", None)
+    item = SCENARIOS[0]
+    composite_metric_adapter(item, json.dumps(item["expected"]))
+    composite_metric_adapter(item, json.dumps(item["expected"]))
+    assert len(calls) == 1

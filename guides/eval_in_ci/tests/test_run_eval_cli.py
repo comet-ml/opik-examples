@@ -107,7 +107,7 @@ def test_run_mark_baseline_tags_after_success(
     monkeypatch.setattr(
         run_eval,
         "_build_digest",
-        lambda *a, **k: ("# d", {"status": "baseline_created"}),
+        lambda *a, **k: ("# d", {"status": "baseline_created", "items_scored": 12, "items_unscored": 0}),
     )
     assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--mark-baseline"]) == 0
     assert "baseline" not in seen["experiment_tags"]
@@ -153,3 +153,71 @@ def test_run_without_credentials_exits_2_pointing_to_demo(
     err = capsys.readouterr().err
     assert "demo" in err
     assert "opik configure" in err
+
+
+def test_run_mark_baseline_skips_tag_when_nothing_scored(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    marked = _stub_run(monkeypatch)
+    monkeypatch.setattr(run_eval, "evaluate", lambda **_k: type("R", (), {"experiment_id": "e9"})())
+    monkeypatch.setattr(
+        run_eval,
+        "_build_digest",
+        lambda *a, **k: ("# d", {"status": "insufficient_evidence", "items_scored": 3, "items_unscored": 3}),
+    )
+    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--mark-baseline"]) == 0
+    assert marked == []
+    assert "not tagged" in capsys.readouterr().err
+
+
+def test_run_task_does_not_receive_item_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    _stub_run(monkeypatch)
+
+    def load(ref: str) -> Any:
+        if ref == "m:f":
+            return lambda question: {"output": question}
+        return lambda: None
+
+    monkeypatch.setattr(run_eval.opik_access, "load_callable", load)
+    seen: dict[str, Any] = {}
+
+    def fake_eval(**kwargs: Any) -> Any:
+        seen.update(kwargs)
+        return type("R", (), {"experiment_id": "e9"})()
+
+    monkeypatch.setattr(run_eval, "evaluate", fake_eval)
+    monkeypatch.setattr(run_eval, "_build_digest", lambda *a, **k: ("# d", {"status": "ok"}))
+    monkeypatch.setattr(run_eval.opik_access, "find_baseline", lambda c, d, exclude_id=None: None)
+    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f"]) == 0
+    assert seen["task"]({"id": "item-1", "question": "q"}) == {"output": "q"}
+
+
+def test_build_digest_links_traces_to_candidate_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    def item(exp: str, project: str, value: float, reason: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            experiment_id=exp,
+            dataset_item_id="i1",
+            trace_id=f"t-{exp}",
+            project_id=project,
+            feedback_scores=[SimpleNamespace(name="scenario_pass", value=value, reason=reason)],
+        )
+
+    rows = [
+        SimpleNamespace(
+            id="i1",
+            data={"scenario_id": "s1"},
+            experiment_items=[
+                item("B", "proj-base", 1.0, "ok"),
+                item("C", "proj-cand", 0.0, "failed: a 0 < 1"),
+            ],
+        )
+    ]
+    monkeypatch.setattr(run_eval.opik_access, "fetch_compare_rows", lambda c, d, ids: rows)
+    monkeypatch.setattr(run_eval.opik_access, "ui_base_and_workspace", lambda c: ("https://h/", "ws"))
+    md, _ = run_eval._build_digest(
+        None, "ds", "B", "base", "C", "cand", pass_threshold=None, policy_path=None, git={}, version=None
+    )
+    assert "projects/proj-cand/traces?trace=t-C" in md
+    assert "proj-base" not in md

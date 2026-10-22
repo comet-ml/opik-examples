@@ -59,7 +59,7 @@ guard paths.
 | `example_task.py` | Toy task (`scenario_agent`), sub-metrics, `build_metric`, and dataset seeding |
 | `optimize_prompt.py` | Optional prompt optimizer, run by hand |
 | `github/opik-eval.yml` | The GitHub Actions workflow |
-| `agent/opik-eval-loop.md` | The coding-agent runbook, plus thin wrappers in `agent/cursor/` and `agent/claude/` |
+| `agent/opik-eval-loop.md` | The coding-agent runbook; `agent/cursor/` and `agent/claude/` carry the same text (a test keeps them identical) |
 | `run.sh` | Entry point for CI smoke runs: the offline demo, or a live run when credentials are set |
 | `pyproject.toml` | Dependencies (`uv sync --group dev`; the optimizer is an optional extra) |
 | `.env.example` | Variable names for local runs |
@@ -115,7 +115,9 @@ with `v2` (the candidate) in-process and prints a digest with three kinds of con
 and pass rate (`0.75 -> 0.83`), the item lists (newly failing, newly passing, still failing), and
 the per-metric means table. `AGENT_VERSION=v2` is what makes the toy both regress (`s05` starts
 failing) and improve (`s03` and `s07` start passing). The last line explains that the demo exit
-code is always 0; in CI use `run --fail-on-regression` so a hold fails the job.
+code is always 0; in CI use `run --fail-on-regression` so a hold fails the job. `run` and `digest`
+deliberately exit 2 without credentials instead of falling back to the demo: in CI that keeps a fork
+pull request from showing a green eval that never ran.
 
 ### 10-minute setup for CI
 
@@ -124,8 +126,8 @@ code is always 0; in CI use `run --fail-on-regression` so a hold fails the job.
    `opik==2.2.113`; bump it to the SDK version your server supports.
 3. In the workflow, point `--task` at your task and `--dataset` at your dataset. The task is
    called as `task(**item)`, so it must accept the dataset fields as keyword arguments (or
-   `**kwargs`). To try the toy first, seed its dataset once (without `OPIK_API_KEY` and
-   `OPIK_WORKSPACE` in the shell the script only prints what it would insert):
+   `**kwargs`); the item `id` is not passed. To try the toy first, seed its dataset once (without
+   `OPIK_API_KEY` and `OPIK_WORKSPACE` in the shell the script only prints what it would insert):
 
    ```bash
    pip install "opik==2.2.113"
@@ -292,8 +294,9 @@ To use your own metrics, write a zero-argument function that returns your metric
 ### How baselines work
 
 - On a push to `main` the workflow passes `--mark-baseline`. The experiment gets the `baseline`
-  tag after the run finishes successfully, so a crashed run never becomes the baseline. The digest
-  reports `baseline_created`; no comparison is made.
+  tag after the run finishes successfully, so a crashed run never becomes the baseline. A run in
+  which no item carries the pass score is not tagged either; its digest reports
+  `insufficient_evidence`. Otherwise the digest reports `baseline_created`; no comparison is made.
 - On a pull request, the baseline is the newest experiment on the same dataset with an exact
   `baseline` tag. Override it with `--baseline NAME_OR_ID`. The digest names the baseline on its
   second line; with no baseline it reports `no_baseline` (exit 0).

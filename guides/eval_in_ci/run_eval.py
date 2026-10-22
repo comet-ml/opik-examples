@@ -117,10 +117,12 @@ def _build_digest(
     verdict = eval_compare.evaluate_policy(cmp, policy, mark_baseline=mark_baseline)
 
     ui_base, workspace = opik_access.ui_base_and_workspace(client)
+    # WHY: trace ids in the digest are the candidate's, so the project must be too.
     project_id: str | None = None
     for row in rows:
         for item in getattr(row, "experiment_items", None) or []:
-            project_id = getattr(item, "project_id", None)
+            if getattr(item, "experiment_id", None) == candidate_id:
+                project_id = getattr(item, "project_id", None)
             if project_id:
                 break
         if project_id:
@@ -231,7 +233,8 @@ def _run(args: argparse.Namespace) -> int:
 
     def task(item: dict[str, Any]) -> Any:
         """Call the user task with the dataset item fields as keyword args."""
-        return task_fn(**item)
+        # WHY: the engine adds the item id to the dict, and it is not a dataset field.
+        return task_fn(**{k: v for k, v in item.items() if k != "id"})
 
     metric = opik_access.load_callable(args.metric)()
     try:
@@ -266,8 +269,6 @@ def _run(args: argparse.Namespace) -> int:
         print("Task or metric error during evaluation:", file=sys.stderr)
         traceback.print_exc()
         return 2
-    if args.mark_baseline:
-        opik_access.mark_baseline(client, result.experiment_id)
     if args.mark_baseline and not args.baseline:
         # WHY: this run becomes the baseline, so there is nothing to compare against.
         baseline_id, baseline_name = None, None
@@ -286,6 +287,12 @@ def _run(args: argparse.Namespace) -> int:
         version=version,
         mark_baseline=args.mark_baseline,
     )
+    if args.mark_baseline:
+        # WHY: a run with no scored items would become a baseline every later PR beats.
+        if payload.get("items_scored", 0) > payload.get("items_unscored", 0):
+            opik_access.mark_baseline(client, result.experiment_id)
+        else:
+            print("Baseline not tagged: no item carried the pass score.", file=sys.stderr)
     return _emit(args, md, payload)
 
 

@@ -77,6 +77,10 @@ class Comparison:
     flaky: list[ItemOutcome] = field(default_factory=list)
     metric_means: dict[str, tuple[float | None, float | None]] = field(default_factory=dict)
     pass_rule: str = ""
+    items_unscored: int = 0
+    baseline_scored: int = 0
+    baseline_passed: int = 0
+    candidate_passed: int = 0
 
 
 def rows_to_item_runs(rows: Iterable[Any], label_key: str = "scenario_id") -> list[ItemRun]:
@@ -151,10 +155,8 @@ def classify(
 ) -> Comparison:
     """Compare candidate against baseline per dataset item."""
     grouped: dict[tuple[str, str], list[ItemRun]] = {}
-    order: list[str] = []
+    order = list(dict.fromkeys(run.dataset_item_id for run in runs))
     for run in runs:
-        if run.dataset_item_id not in order:
-            order.append(run.dataset_item_id)
         grouped.setdefault((run.dataset_item_id, run.experiment_id), []).append(run)
 
     def passes(n_pass: int, n_runs: int) -> bool | None:
@@ -186,6 +188,8 @@ def classify(
             cand_scored += 1
             cand_passed += bool(c_ok)
             trial_counts[len(c_runs)] += 1
+            if all(_pass_value(r, pass_name) is None for r in c_runs):
+                cmp.items_unscored += 1
 
         worst = _worst_run(c_runs, pass_name) if c_runs else None
         failing: tuple[str, ...] = ()
@@ -223,6 +227,9 @@ def classify(
             cmp.still_failing.append(outcome)
 
     cmp.items_scored = cand_scored
+    cmp.candidate_passed = cand_passed
+    cmp.baseline_scored = base_scored
+    cmp.baseline_passed = base_passed
     cmp.pass_rate_candidate = cand_passed / cand_scored if cand_scored else 0.0
     if baseline_id is not None:
         cmp.pass_rate_baseline = base_passed / base_scored if base_scored else 0.0
@@ -314,6 +321,22 @@ class PolicyVerdict:
     status: str
 
 
+# WHY: under flaky_policy "exclude" a flaky item must not count as a failure in the pass rate either,
+# or one noisy judge call still holds the release.
+def _policy_pass_rates(cmp: Comparison, *, exclude_flaky: bool) -> tuple[float, float]:
+    b_n, b_p = cmp.baseline_scored, cmp.baseline_passed
+    c_n, c_p = cmp.items_scored, cmp.candidate_passed
+    if exclude_flaky:
+        for o in cmp.flaky:
+            if o.baseline_runs:
+                b_n -= 1
+                b_p -= bool(o.baseline_passed)
+            if o.candidate_runs:
+                c_n -= 1
+                c_p -= bool(o.candidate_passed)
+    return (b_p / b_n if b_n else 0.0), (c_p / c_n if c_n else 0.0)
+
+
 def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = False) -> PolicyVerdict:
     """Apply the policy; hold beats insufficient_evidence."""
     has_baseline = cmp.baseline_id is not None
@@ -338,14 +361,15 @@ def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = Fa
                 regressions <= policy.max_regressions,
             )
         )
-        cand = cmp.pass_rate_candidate
+        exclude_flaky = policy.flaky_policy == "exclude" and bool(cmp.flaky)
+        base, cand = _policy_pass_rates(cmp, exclude_flaky=exclude_flaky)
+        note = " (flaky excluded)" if exclude_flaky else ""
         if policy.pass_rate == _NOT_BELOW:
-            base = cmp.pass_rate_baseline or 0.0
             rate_ok = cand >= base - 1e-9
-            threshold = f">= baseline ({base:.2f})"
+            threshold = f">= baseline ({base:.2f}){note}"
         else:
             rate_ok = cand >= float(policy.pass_rate) - 1e-9
-            threshold = f">= {float(policy.pass_rate):.2f}"
+            threshold = f">= {float(policy.pass_rate):.2f}{note}"
         criteria.append(Criterion("pass_rate", threshold, f"{cand:.2f}", rate_ok))
     else:
         criteria.append(Criterion("max_regressions", f"<= {policy.max_regressions}", "n/a", True))
@@ -354,7 +378,13 @@ def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = Fa
 
     by_name = {c.name: c for c in criteria}
     if not has_baseline:
-        status = "baseline_created" if mark_baseline else "no_baseline"
+        if not mark_baseline:
+            status = "no_baseline"
+        elif cmp.items_scored > cmp.items_unscored:
+            status = "baseline_created"
+        else:
+            # WHY: a run whose items all lack the pass score must never become the baseline.
+            status = "insufficient_evidence"
     elif not by_name["max_regressions"].passed or not by_name["pass_rate"].passed:
         status = "hold"
     elif not by_name["min_items"].passed:
@@ -422,8 +452,8 @@ def _still_failing_section(outcomes: list[ItemOutcome], meta: DigestMeta, max_ro
     for o in outcomes:
         for metric in o.failing_metrics or (_NO_REASON,):
             groups.setdefault(metric, []).append(o)
-    total = sum(len(v) for v in groups.values())
     shown = 0
+    shown_ids: set[str] = set()
     for metric, members in groups.items():
         if shown >= max_rows:
             break
@@ -433,8 +463,10 @@ def _still_failing_section(outcomes: list[ItemOutcome], meta: DigestMeta, max_ro
             suffix = f" ([trace]({link}))" if link else ""
             lines.append(f"  - {o.label or o.dataset_item_id}{suffix}")
             shown += 1
-    if total > shown:
-        lines.append(f"+{total - shown} more")
+            shown_ids.add(o.dataset_item_id)
+    hidden = len(outcomes) - len(shown_ids)
+    if hidden > 0:
+        lines.append(f"+{hidden} more")
     return lines
 
 
@@ -492,6 +524,7 @@ def render_json(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta) -> di
         },
         "pass_rule": cmp.pass_rule,
         "items_scored": cmp.items_scored,
+        "items_unscored": cmp.items_unscored,
         "newly_failing": [asdict(o) for o in cmp.newly_failing],
         "newly_passing": [asdict(o) for o in cmp.newly_passing],
         "still_failing": [asdict(o) for o in cmp.still_failing],

@@ -18,6 +18,8 @@ from opik.config import OPIK_WORKSPACE_DEFAULT_NAME
 from opik.rest_api.types.dataset_item_compare import DatasetItemCompare
 from opik.rest_api.types.experiment_public import ExperimentPublic
 
+_BASELINE_PAGE = 20
+
 
 class ConfigError(RuntimeError):
     """Raised for setup problems the user can fix (env vars, refs, names)."""
@@ -109,16 +111,23 @@ def find_baseline(
     exclude_id: str | None = None,
 ) -> ExperimentPublic | None:
     """Newest experiment on the dataset with the exact tag, skipping exclude_id."""
-    page = client.rest_client.experiments.find_experiments(
-        dataset_id=dataset_id,
-        filters=json.dumps([{"field": "tags", "operator": "contains", "value": tag}]),
-        sorting=json.dumps([{"field": "created_at", "direction": "DESC"}]),
-        size=20,
-    )
-    for exp in page.content or []:
-        if exp.id != exclude_id and tag in (exp.tags or []):
-            return exp
-    return None
+    # WHY: candidate runs whose branch tag contains the word push the baseline past page one.
+    page = 1
+    while True:
+        resp = client.rest_client.experiments.find_experiments(
+            dataset_id=dataset_id,
+            filters=json.dumps([{"field": "tags", "operator": "contains", "value": tag}]),
+            sorting=json.dumps([{"field": "created_at", "direction": "DESC"}]),
+            page=page,
+            size=_BASELINE_PAGE,
+        )
+        content = list(resp.content or [])
+        for exp in content:
+            if exp.id != exclude_id and tag in (exp.tags or []):
+                return exp
+        if len(content) < _BASELINE_PAGE:
+            return None
+        page += 1
 
 
 # WHY: tag only after success, since evaluate() registers the experiment before the items run.

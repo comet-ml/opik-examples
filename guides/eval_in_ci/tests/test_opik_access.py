@@ -153,3 +153,35 @@ def test_server_version_unwraps_version_key() -> None:
 
     assert opik_access.server_version(make({"version": "2.2.113"})) == "2.2.113"
     assert opik_access.server_version(make("2.2.9")) == "2.2.9"
+
+
+def test_find_baseline_pages_past_first_page() -> None:
+    pages: list[int] = []
+    filler = [SimpleNamespace(id=f"c{i}", tags=["ci", "fix-baseline-loader", "candidate"]) for i in range(20)]
+
+    def find_experiments(**kwargs: Any) -> SimpleNamespace:
+        pages.append(kwargs["page"])
+        if kwargs["page"] == 1:
+            return SimpleNamespace(content=filler)
+        return SimpleNamespace(content=[SimpleNamespace(id="base", tags=["ci", "main", "baseline"])])
+
+    client = SimpleNamespace(
+        rest_client=SimpleNamespace(experiments=SimpleNamespace(find_experiments=find_experiments))
+    )
+    found = opik_access.find_baseline(client, "ds1")
+    assert found is not None and found.id == "base"
+    assert pages == [1, 2]
+
+
+def test_find_baseline_stops_on_short_page() -> None:
+    pages: list[int] = []
+
+    def find_experiments(**kwargs: Any) -> SimpleNamespace:
+        pages.append(kwargs["page"])
+        return SimpleNamespace(content=[SimpleNamespace(id="c1", tags=["ci", "candidate"])])
+
+    client = SimpleNamespace(
+        rest_client=SimpleNamespace(experiments=SimpleNamespace(find_experiments=find_experiments))
+    )
+    assert opik_access.find_baseline(client, "ds1") is None
+    assert pages == [1]

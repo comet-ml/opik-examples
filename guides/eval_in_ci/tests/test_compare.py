@@ -298,3 +298,37 @@ def test_failing_row_without_reason_is_not_rendered_as_passed() -> None:
     md = ec.render_markdown(cmp, ec.evaluate_policy(cmp, ec.Policy()), _meta())
     assert "- s1: failed (no reason)" in md
     assert "s1: passed" not in md
+
+
+def test_unscored_candidate_run_does_not_create_a_baseline() -> None:
+    # Every candidate run lacks the pass score (metric errors tolerated by evaluate()).
+    rows = [row(f"i{n}", f"s{n}", {"C": [[_score("other", 1.0)]]}) for n in range(3)]
+    cmp = _classify(rows, baseline_id=None)
+    assert cmp.items_unscored == 3
+    verdict = ec.evaluate_policy(cmp, ec.Policy(min_items=1), mark_baseline=True)
+    assert verdict.status == "insufficient_evidence"
+    scored = _classify([row("i9", "s9", {"C": [_ok()]})], baseline_id=None)
+    assert scored.items_unscored == 0
+    assert ec.evaluate_policy(scored, ec.Policy(min_items=1), mark_baseline=True).status == "baseline_created"
+
+
+def test_flaky_exclude_drops_flaky_items_from_pass_rate() -> None:
+    rows = [row(f"i{n}", f"s{n}", {"B": [_ok()] * 3, "C": [_ok()] * 3}) for n in range(9)]
+    rows.append(row("i9", "s9", {"B": [_ok()] * 3, "C": [_ok(), _bad(), _ok()]}))
+    cmp = _classify(rows)
+    assert len(cmp.flaky) == 1
+    excluded = ec.evaluate_policy(cmp, ec.Policy(min_items=1))
+    assert excluded.status == "ok", [c for c in excluded.criteria if not c.passed]
+    rate = next(c for c in excluded.criteria if c.name == "pass_rate")
+    assert rate.observed == "1.00"
+    counted = ec.evaluate_policy(cmp, ec.Policy(min_items=1, flaky_policy="count"))
+    assert counted.status == "hold"
+
+
+def test_still_failing_more_counts_items_not_metric_rows() -> None:
+    both = [_score(PASS, 0.0, "failed: a 0.35 < 0.90; b 0.35 < 0.90")]
+    rows = [row(f"i{n}", f"s{n}", {"B": [_bad()], "C": [both]}) for n in range(30)]
+    cmp = _classify(rows)
+    md = ec.render_markdown(cmp, ec.evaluate_policy(cmp, ec.Policy()), _meta())
+    assert "+5 more" in md
+    assert "+35 more" not in md
