@@ -9,7 +9,7 @@ Evaluating an agent is not a one-time "does it pass?" check; it is a loop. This 
 ## Prerequisites
 
 ```bash
-uv sync    # or: pip install "opik>=2.2.72" openai matplotlib ipywidgets
+uv sync    # or: pip install "opik>=2.2.72" anthropic matplotlib ipywidgets
 ```
 
 | Variable | Description |
@@ -17,9 +17,10 @@ uv sync    # or: pip install "opik>=2.2.72" openai matplotlib ipywidgets
 | `OPIK_API_KEY` | Opik API key |
 | `OPIK_WORKSPACE` | Opik workspace name |
 | `OPIK_URL_OVERRIDE` | Optional; set for a self-hosted Opik deployment |
-| `OPENAI_API_KEY` | OpenAI key; the agent uses `gpt-4o-mini` and the judges use `gpt-4o` |
+| `ANTHROPIC_API_KEY` | Anthropic key; the agent calls `claude-haiku-4-5-20251001` through the Anthropic SDK |
+| `OPIK_EXAMPLES_MODEL` | Optional judge model as a LiteLLM `provider/model` string; defaults to `anthropic/claude-haiku-4-5-20251001`. A non-Anthropic judge also needs that provider's key (e.g. `OPENAI_API_KEY`) |
 
-If a variable is not set, the setup cells prompt for it (`opik.configure()` for Opik, `getpass` for the OpenAI key). There is **no dry-run**: the guide logs real traces, experiments, an annotation queue and an online rule to your workspace, and calls the OpenAI API. The online rule in Part C only scores traffic if your workspace has an LLM provider configured for online evaluation.
+If a variable is not set, the setup cells prompt for it (`opik.configure()` for Opik, `getpass` for the model keys). There is **no dry-run**: the guide logs real traces, experiments, an annotation queue and an online rule to your workspace, and calls the model APIs. The online rule in Part C only scores traffic if your workspace has an LLM provider configured for online evaluation.
 
 ## Running it
 
