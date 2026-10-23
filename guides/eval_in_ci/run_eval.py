@@ -118,15 +118,15 @@ def _build_digest(
 
     ui_base, workspace = opik_access.ui_base_and_workspace(client)
     # WHY: trace ids in the digest are the candidate's, so the project must be too.
-    project_id: str | None = None
-    for row in rows:
-        for item in getattr(row, "experiment_items", None) or []:
-            if getattr(item, "experiment_id", None) == candidate_id:
-                project_id = getattr(item, "project_id", None)
-            if project_id:
-                break
-        if project_id:
-            break
+    project_id = next(
+        (
+            item.project_id
+            for row in rows
+            for item in row.experiment_items or []
+            if item.experiment_id == candidate_id and item.project_id
+        ),
+        None,
+    )
     meta = eval_compare.DigestMeta(
         baseline_name=baseline_name,
         candidate_name=candidate_name,
@@ -289,7 +289,7 @@ def _run(args: argparse.Namespace) -> int:
     )
     if args.mark_baseline:
         # WHY: a run with no scored items would become a baseline every later PR beats.
-        if payload.get("items_scored", 0) > payload.get("items_unscored", 0):
+        if payload["has_pass_evidence"]:
             opik_access.mark_baseline(client, result.experiment_id)
         else:
             print("Baseline not tagged: no item carried the pass score.", file=sys.stderr)

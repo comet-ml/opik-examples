@@ -1,9 +1,10 @@
 name: eval-in-ci selftest
 
 # Exercises guides/eval_in_ci's own gate (github/opik-eval.yml) inside this repo, which pr-test.yml
-# does not: it runs the unit tests, then run_eval.py with --mark-baseline or --fail-on-regression,
+# does not: it runs the unit tests, then run.sh with --mark-baseline or --fail-on-regression,
 # uploads the digest and posts the sticky PR comment. Paths and the workspace variable differ from
 # the template because the guide lives under guides/ here and the workspace is a repo variable.
+# A unit test keeps the comment script identical to the template's.
 #
 # To create or refresh the baseline: dispatch with mark_baseline=true (agent_version v2).
 # To see a hold: dispatch with agent_version=v1 against a v2 baseline.
@@ -42,6 +43,9 @@ jobs:
   eval:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+      OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
     steps:
       - uses: actions/checkout@v7
 
@@ -56,39 +60,25 @@ jobs:
           uv sync --group dev
           uv run pytest -q
 
-      - name: Seed the toy dataset
-        env:
-          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
-          OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
-          OPIK_PROJECT_NAME: eval-in-ci-example
-        run: uv run python example_task.py
-
       - name: Run evaluation
         id: eval
         continue-on-error: true
         env:
-          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
-          OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
-          OPIK_PROJECT_NAME: eval-in-ci-example
           OPIK_EVAL_GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           AGENT_VERSION: ${{ inputs.agent_version || 'v2' }}
           MODE_FLAG: ${{ inputs.mark_baseline == true && '--mark-baseline' || '--fail-on-regression' }}
+        # run.sh seeds the dataset and forwards these args to run_eval.py run.
         # Exit codes: 0 ok or baseline created, 1 policy failed, 2 config or connection error.
         run: |
           set +e
-          uv run python run_eval.py run \
-            --dataset eval-in-ci-example \
-            --task example_task:scenario_agent \
-            "$MODE_FLAG" \
-            --out digest.md \
-            --json digest.json
+          bash run.sh "$MODE_FLAG" --out digest.md --json digest.json
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Upload digest
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: opik-eval-digest-${{ github.run_id }}
+          name: opik-eval-digest
           path: |
             guides/eval_in_ci/digest.md
             guides/eval_in_ci/digest.json

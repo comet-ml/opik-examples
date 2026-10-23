@@ -72,7 +72,7 @@ def test_adapter_builds_the_metric_once(monkeypatch: pytest.MonkeyPatch) -> None
         return real(*args, **kwargs)
 
     monkeypatch.setattr(optimize_prompt, "build_metric", counting)
-    monkeypatch.setattr(optimize_prompt, "_METRIC", None)
+    optimize_prompt._metric.cache_clear()
     item = SCENARIOS[0]
     composite_metric_adapter(item, json.dumps(item["expected"]))
     composite_metric_adapter(item, json.dumps(item["expected"]))

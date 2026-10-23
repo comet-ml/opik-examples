@@ -67,9 +67,11 @@ class ItemOutcome:
 class Comparison:
     baseline_id: str | None
     candidate_id: str
-    items_scored: int
-    pass_rate_baseline: float | None
-    pass_rate_candidate: float
+    items_scored: int = 0
+    items_unscored: int = 0
+    candidate_passed: int = 0
+    baseline_scored: int = 0
+    baseline_passed: int = 0
     newly_failing: list[ItemOutcome] = field(default_factory=list)
     newly_passing: list[ItemOutcome] = field(default_factory=list)
     still_failing: list[ItemOutcome] = field(default_factory=list)
@@ -77,10 +79,36 @@ class Comparison:
     flaky: list[ItemOutcome] = field(default_factory=list)
     metric_means: dict[str, tuple[float | None, float | None]] = field(default_factory=dict)
     pass_rule: str = ""
-    items_unscored: int = 0
-    baseline_scored: int = 0
-    baseline_passed: int = 0
-    candidate_passed: int = 0
+
+    @property
+    def has_pass_evidence(self) -> bool:
+        """At least one candidate item carried the pass score."""
+        return self.items_scored > self.items_unscored
+
+    # WHY: under flaky_policy "exclude" a flaky item must not count as a failure in the pass rate
+    # either, or one noisy judge call still holds the release.
+    def pass_rates(self, *, exclude_flaky: bool = False) -> tuple[float | None, float]:
+        """(baseline, candidate) pass rates; baseline is None without a baseline experiment."""
+        b_n, b_p = self.baseline_scored, self.baseline_passed
+        c_n, c_p = self.items_scored, self.candidate_passed
+        if exclude_flaky:
+            for o in self.flaky:
+                if o.baseline_runs:
+                    b_n -= 1
+                    b_p -= bool(o.baseline_passed)
+                if o.candidate_runs:
+                    c_n -= 1
+                    c_p -= bool(o.candidate_passed)
+        base = None if self.baseline_id is None else (b_p / b_n if b_n else 0.0)
+        return base, (c_p / c_n if c_n else 0.0)
+
+    @property
+    def pass_rate_baseline(self) -> float | None:
+        return self.pass_rates()[0]
+
+    @property
+    def pass_rate_candidate(self) -> float:
+        return self.pass_rates()[1]
 
 
 def rows_to_item_runs(rows: Iterable[Any], label_key: str = "scenario_id") -> list[ItemRun]:
@@ -164,14 +192,7 @@ def classify(
             return None
         return n_pass >= (n_runs if pass_threshold is None else pass_threshold)
 
-    cmp = Comparison(
-        baseline_id=baseline_id,
-        candidate_id=candidate_id,
-        items_scored=0,
-        pass_rate_baseline=None,
-        pass_rate_candidate=0.0,
-    )
-    base_scored = base_passed = cand_scored = cand_passed = 0
+    cmp = Comparison(baseline_id=baseline_id, candidate_id=candidate_id)
     trial_counts: Counter[int] = Counter()
 
     for item_id in order:
@@ -182,11 +203,11 @@ def classify(
         b_ok = passes(b_pass, len(b_runs))
         c_ok = passes(c_pass, len(c_runs))
         if b_runs:
-            base_scored += 1
-            base_passed += bool(b_ok)
+            cmp.baseline_scored += 1
+            cmp.baseline_passed += bool(b_ok)
         if c_runs:
-            cand_scored += 1
-            cand_passed += bool(c_ok)
+            cmp.items_scored += 1
+            cmp.candidate_passed += bool(c_ok)
             trial_counts[len(c_runs)] += 1
             if all(_pass_value(r, pass_name) is None for r in c_runs):
                 cmp.items_unscored += 1
@@ -225,14 +246,6 @@ def classify(
             cmp.newly_passing.append(outcome)
         elif not c_ok and not b_ok:
             cmp.still_failing.append(outcome)
-
-    cmp.items_scored = cand_scored
-    cmp.candidate_passed = cand_passed
-    cmp.baseline_scored = base_scored
-    cmp.baseline_passed = base_passed
-    cmp.pass_rate_candidate = cand_passed / cand_scored if cand_scored else 0.0
-    if baseline_id is not None:
-        cmp.pass_rate_baseline = base_passed / base_scored if base_scored else 0.0
 
     base_means = _means(r for r in runs if baseline_id and r.experiment_id == baseline_id)
     cand_means = _means(r for r in runs if r.experiment_id == candidate_id)
@@ -319,27 +332,13 @@ class PolicyVerdict:
     passed: bool
     criteria: list[Criterion]
     status: str
-
-
-# WHY: under flaky_policy "exclude" a flaky item must not count as a failure in the pass rate either,
-# or one noisy judge call still holds the release.
-def _policy_pass_rates(cmp: Comparison, *, exclude_flaky: bool) -> tuple[float, float]:
-    b_n, b_p = cmp.baseline_scored, cmp.baseline_passed
-    c_n, c_p = cmp.items_scored, cmp.candidate_passed
-    if exclude_flaky:
-        for o in cmp.flaky:
-            if o.baseline_runs:
-                b_n -= 1
-                b_p -= bool(o.baseline_passed)
-            if o.candidate_runs:
-                c_n -= 1
-                c_p -= bool(o.candidate_passed)
-    return (b_p / b_n if b_n else 0.0), (c_p / c_n if c_n else 0.0)
+    flaky_excluded: bool = False
 
 
 def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = False) -> PolicyVerdict:
     """Apply the policy; hold beats insufficient_evidence."""
     has_baseline = cmp.baseline_id is not None
+    exclude_flaky = policy.flaky_policy == "exclude" and bool(cmp.flaky)
     regressions = len(cmp.newly_failing)
     if policy.flaky_policy == "count":
         regressions += sum(1 for o in cmp.flaky if o.baseline_passed and not o.candidate_passed)
@@ -361,8 +360,8 @@ def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = Fa
                 regressions <= policy.max_regressions,
             )
         )
-        exclude_flaky = policy.flaky_policy == "exclude" and bool(cmp.flaky)
-        base, cand = _policy_pass_rates(cmp, exclude_flaky=exclude_flaky)
+        base_rate, cand = cmp.pass_rates(exclude_flaky=exclude_flaky)
+        base = base_rate or 0.0
         note = " (flaky excluded)" if exclude_flaky else ""
         if policy.pass_rate == _NOT_BELOW:
             rate_ok = cand >= base - 1e-9
@@ -380,7 +379,7 @@ def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = Fa
     if not has_baseline:
         if not mark_baseline:
             status = "no_baseline"
-        elif cmp.items_scored > cmp.items_unscored:
+        elif cmp.has_pass_evidence:
             status = "baseline_created"
         else:
             # WHY: a run whose items all lack the pass score must never become the baseline.
@@ -392,7 +391,7 @@ def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = Fa
     else:
         status = "ok"
     passed = status in ("ok", "baseline_created", "no_baseline")
-    return PolicyVerdict(passed=passed, criteria=criteria, status=status)
+    return PolicyVerdict(passed=passed, criteria=criteria, status=status, flaky_excluded=exclude_flaky)
 
 
 @dataclass(frozen=True)
@@ -475,10 +474,13 @@ def render_markdown(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta, m
     verdict_line = f"**Verdict:** {verdict.status}"
     if failed:
         verdict_line += f" - failed: {', '.join(failed)}"
-    delta = _delta(cmp.pass_rate_baseline, cmp.pass_rate_candidate)
-    rate = f"Pass rate: {_fmt(cmp.pass_rate_baseline)} -> {_fmt(cmp.pass_rate_candidate)}"
+    base, cand = cmp.pass_rates(exclude_flaky=verdict.flaky_excluded)
+    delta = _delta(base, cand)
+    rate = f"Pass rate: {_fmt(base)} -> {_fmt(cand)}"
     if delta is not None:
         rate += f" ({delta:+.2f})"
+    if verdict.flaky_excluded:
+        rate += " (flaky excluded)"
 
     lines = [
         MARKER,
@@ -512,19 +514,21 @@ def render_markdown(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta, m
 
 
 def render_json(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta) -> dict[str, Any]:
-    delta = _delta(cmp.pass_rate_baseline, cmp.pass_rate_candidate)
+    base, cand = cmp.pass_rates(exclude_flaky=verdict.flaky_excluded)
     failed = [c.name for c in verdict.criteria if not c.passed]
     return {
         "status": verdict.status,
         "verdict": {"passed": verdict.passed, "failed_criteria": failed},
         "pass_rate": {
-            "baseline": cmp.pass_rate_baseline,
-            "candidate": cmp.pass_rate_candidate,
-            "delta": delta,
+            "baseline": base,
+            "candidate": cand,
+            "delta": _delta(base, cand),
+            "flaky_excluded": verdict.flaky_excluded,
         },
         "pass_rule": cmp.pass_rule,
         "items_scored": cmp.items_scored,
         "items_unscored": cmp.items_unscored,
+        "has_pass_evidence": cmp.has_pass_evidence,
         "newly_failing": [asdict(o) for o in cmp.newly_failing],
         "newly_passing": [asdict(o) for o in cmp.newly_passing],
         "still_failing": [asdict(o) for o in cmp.still_failing],

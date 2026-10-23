@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from test_compare import _bad, _ok, row
 
 import run_eval
 from opik_access import ConfigError
@@ -67,21 +68,32 @@ def test_digest_hold_without_fail_flag_exits_0(
     assert run_eval.main(["digest", "--experiment", "cand"]) == 0
 
 
-def _stub_run(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+def _stub_run(monkeypatch: pytest.MonkeyPatch, task: Any = None) -> tuple[list[Any], dict[str, Any]]:
+    """Stub the Opik side of `run`: returns (tagged experiment ids, kwargs evaluate() received)."""
     marked: list[Any] = []
+    seen: dict[str, Any] = {}
     ds = type("DS", (), {"id": "ds"})()
     client = type("C", (), {"get_dataset": lambda self, n: ds})()
     monkeypatch.setattr(run_eval.opik_access, "make_client", lambda: client)
     monkeypatch.setattr(run_eval.opik_access, "server_version", lambda c: "9.9.9")
-    monkeypatch.setattr(run_eval.opik_access, "load_callable", lambda ref: lambda: None)
+    monkeypatch.setattr(
+        run_eval.opik_access, "load_callable", lambda ref: task if task and ref == "m:f" else (lambda: None)
+    )
     monkeypatch.setattr(run_eval.opik_access, "mark_baseline", lambda c, eid: marked.append(eid))
-    return marked
+    monkeypatch.setattr(run_eval.opik_access, "find_baseline", lambda c, d, exclude_id=None: None)
+
+    def fake_eval(**kwargs: Any) -> Any:
+        seen.update(kwargs)
+        return type("R", (), {"experiment_id": "e9"})()
+
+    monkeypatch.setattr(run_eval, "evaluate", fake_eval)
+    return marked, seen
 
 
 def test_run_task_crash_exits_2_with_label(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    marked = _stub_run(monkeypatch)
+    marked, _ = _stub_run(monkeypatch)
 
     def boom(**_k: Any) -> Any:
         raise KeyError("missing")
@@ -96,18 +108,11 @@ def test_run_task_crash_exits_2_with_label(
 def test_run_mark_baseline_tags_after_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    marked = _stub_run(monkeypatch)
-    seen: dict[str, Any] = {}
-
-    def fake_eval(**kwargs: Any) -> Any:
-        seen.update(kwargs)
-        return type("R", (), {"experiment_id": "e9"})()
-
-    monkeypatch.setattr(run_eval, "evaluate", fake_eval)
+    marked, seen = _stub_run(monkeypatch)
     monkeypatch.setattr(
         run_eval,
         "_build_digest",
-        lambda *a, **k: ("# d", {"status": "baseline_created", "items_scored": 12, "items_unscored": 0}),
+        lambda *a, **k: ("# d", {"status": "baseline_created", "has_pass_evidence": True}),
     )
     assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--mark-baseline"]) == 0
     assert "baseline" not in seen["experiment_tags"]
@@ -158,12 +163,11 @@ def test_run_without_credentials_exits_2_pointing_to_demo(
 def test_run_mark_baseline_skips_tag_when_nothing_scored(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    marked = _stub_run(monkeypatch)
-    monkeypatch.setattr(run_eval, "evaluate", lambda **_k: type("R", (), {"experiment_id": "e9"})())
+    marked, _ = _stub_run(monkeypatch)
     monkeypatch.setattr(
         run_eval,
         "_build_digest",
-        lambda *a, **k: ("# d", {"status": "insufficient_evidence", "items_scored": 3, "items_unscored": 3}),
+        lambda *a, **k: ("# d", {"status": "insufficient_evidence", "has_pass_evidence": False}),
     )
     assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--mark-baseline"]) == 0
     assert marked == []
@@ -171,53 +175,18 @@ def test_run_mark_baseline_skips_tag_when_nothing_scored(
 
 
 def test_run_task_does_not_receive_item_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    _stub_run(monkeypatch)
-
-    def load(ref: str) -> Any:
-        if ref == "m:f":
-            return lambda question: {"output": question}
-        return lambda: None
-
-    monkeypatch.setattr(run_eval.opik_access, "load_callable", load)
-    seen: dict[str, Any] = {}
-
-    def fake_eval(**kwargs: Any) -> Any:
-        seen.update(kwargs)
-        return type("R", (), {"experiment_id": "e9"})()
-
-    monkeypatch.setattr(run_eval, "evaluate", fake_eval)
+    _, seen = _stub_run(monkeypatch, task=lambda question: {"output": question})
     monkeypatch.setattr(run_eval, "_build_digest", lambda *a, **k: ("# d", {"status": "ok"}))
-    monkeypatch.setattr(run_eval.opik_access, "find_baseline", lambda c, d, exclude_id=None: None)
     assert run_eval.main(["run", "--dataset", "d", "--task", "m:f"]) == 0
     assert seen["task"]({"id": "item-1", "question": "q"}) == {"output": "q"}
 
 
 def test_build_digest_links_traces_to_candidate_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from types import SimpleNamespace
-
-    def item(exp: str, project: str, value: float, reason: str) -> SimpleNamespace:
-        return SimpleNamespace(
-            experiment_id=exp,
-            dataset_item_id="i1",
-            trace_id=f"t-{exp}",
-            project_id=project,
-            feedback_scores=[SimpleNamespace(name="scenario_pass", value=value, reason=reason)],
-        )
-
-    rows = [
-        SimpleNamespace(
-            id="i1",
-            data={"scenario_id": "s1"},
-            experiment_items=[
-                item("B", "proj-base", 1.0, "ok"),
-                item("C", "proj-cand", 0.0, "failed: a 0 < 1"),
-            ],
-        )
-    ]
+    rows = [row("i1", "s1", {"B": [_ok()], "C": [_bad("a")]}, projects={"B": "proj-base", "C": "proj-cand"})]
     monkeypatch.setattr(run_eval.opik_access, "fetch_compare_rows", lambda c, d, ids: rows)
     monkeypatch.setattr(run_eval.opik_access, "ui_base_and_workspace", lambda c: ("https://h/", "ws"))
     md, _ = run_eval._build_digest(
         None, "ds", "B", "base", "C", "cand", pass_threshold=None, policy_path=None, git={}, version=None
     )
-    assert "projects/proj-cand/traces?trace=t-C" in md
+    assert "projects/proj-cand/traces?trace=t-i1-C-0" in md
     assert "proj-base" not in md

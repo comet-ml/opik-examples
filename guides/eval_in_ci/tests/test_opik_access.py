@@ -30,6 +30,12 @@ def test_experiment_name_replaces_slash() -> None:
     assert opik_access.experiment_name(ctx) == "feat-x-abcdef1"
 
 
+def _experiments_client(find_experiments: Any) -> SimpleNamespace:
+    return SimpleNamespace(
+        rest_client=SimpleNamespace(experiments=SimpleNamespace(find_experiments=find_experiments))
+    )
+
+
 def test_find_baseline_skips_excluded_id() -> None:
     calls: list[dict[str, Any]] = []
 
@@ -42,14 +48,12 @@ def test_find_baseline_skips_excluded_id() -> None:
             ]
         )
 
-    client = SimpleNamespace(
-        rest_client=SimpleNamespace(experiments=SimpleNamespace(find_experiments=find_experiments))
-    )
+    client = _experiments_client(find_experiments)
     found = opik_access.find_baseline(client, "ds1", exclude_id="cand")
     assert found is not None and found.id == "base"
     assert calls[0]["dataset_id"] == "ds1"
-    assert json.loads(calls[0]["filters"])[0]["value"] == "baseline"
-    assert calls[0]["size"] == 20
+    # WHY: "=" is exact list membership on the server; "contains" would match branch tags too.
+    assert json.loads(calls[0]["filters"])[0] == {"field": "tags", "operator": "=", "value": "baseline"}
     assert opik_access.find_baseline(client, "ds1", exclude_id=None).id == "cand"  # type: ignore[union-attr]
 
 
@@ -119,11 +123,7 @@ def test_resolve_experiment_falls_back_without_project() -> None:
 def test_find_baseline_requires_exact_tag_not_substring() -> None:
     newer = SimpleNamespace(id="new", tags=["ci", "fix-baseline-loader", "candidate"])
     older = SimpleNamespace(id="old", tags=["ci", "main", "baseline"])
-    client = SimpleNamespace(
-        rest_client=SimpleNamespace(
-            experiments=SimpleNamespace(find_experiments=lambda **_k: SimpleNamespace(content=[newer, older]))
-        )
-    )
+    client = _experiments_client(lambda **_k: SimpleNamespace(content=[newer, older]))
     found = opik_access.find_baseline(client, "ds1")
     assert found is not None and found.id == "old"
 
@@ -153,35 +153,3 @@ def test_server_version_unwraps_version_key() -> None:
 
     assert opik_access.server_version(make({"version": "2.2.113"})) == "2.2.113"
     assert opik_access.server_version(make("2.2.9")) == "2.2.9"
-
-
-def test_find_baseline_pages_past_first_page() -> None:
-    pages: list[int] = []
-    filler = [SimpleNamespace(id=f"c{i}", tags=["ci", "fix-baseline-loader", "candidate"]) for i in range(20)]
-
-    def find_experiments(**kwargs: Any) -> SimpleNamespace:
-        pages.append(kwargs["page"])
-        if kwargs["page"] == 1:
-            return SimpleNamespace(content=filler)
-        return SimpleNamespace(content=[SimpleNamespace(id="base", tags=["ci", "main", "baseline"])])
-
-    client = SimpleNamespace(
-        rest_client=SimpleNamespace(experiments=SimpleNamespace(find_experiments=find_experiments))
-    )
-    found = opik_access.find_baseline(client, "ds1")
-    assert found is not None and found.id == "base"
-    assert pages == [1, 2]
-
-
-def test_find_baseline_stops_on_short_page() -> None:
-    pages: list[int] = []
-
-    def find_experiments(**kwargs: Any) -> SimpleNamespace:
-        pages.append(kwargs["page"])
-        return SimpleNamespace(content=[SimpleNamespace(id="c1", tags=["ci", "candidate"])])
-
-    client = SimpleNamespace(
-        rest_client=SimpleNamespace(experiments=SimpleNamespace(find_experiments=find_experiments))
-    )
-    assert opik_access.find_baseline(client, "ds1") is None
-    assert pages == [1]

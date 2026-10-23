@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -14,7 +15,6 @@ from typing import Any
 import opik
 from opik.evaluation.metrics import score_result
 
-from composite_metric import CompositePassMetric
 from example_task import DATASET_NAME, build_metric
 
 DEFAULT_MODEL = os.environ.get("OPIK_EXAMPLES_MODEL", "openai/gpt-4o-mini")
@@ -51,15 +51,10 @@ def _invalid_json_scores() -> list[score_result.ScoreResult]:
     return scores
 
 
-_METRIC: CompositePassMetric | None = None
-
-
-def _metric() -> CompositePassMetric:
+@functools.cache
+def _metric() -> Any:
     """Build the composite metric once; the optimizer scores every item of every trial."""
-    global _METRIC
-    if _METRIC is None:
-        _METRIC = build_metric(track=False)
-    return _METRIC
+    return build_metric(track=False)
 
 
 # WHY: the composite metric is the objective because "better prompt" means "more scenarios pass

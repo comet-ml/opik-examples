@@ -26,8 +26,10 @@ def row(
     item_id: str,
     label: str | None,
     runs: dict[str, list[list[dict[str, Any]]]],
+    projects: dict[str, str] | None = None,
 ) -> SimpleNamespace:
-    """runs maps experiment id -> list of runs, each run a list of score dicts."""
+    """runs maps experiment id -> list of runs, each run a list of score dicts; projects maps
+    experiment id -> project id."""
     items = []
     for exp_id, exp_runs in runs.items():
         for i, scores in enumerate(exp_runs):
@@ -36,6 +38,7 @@ def row(
                     experiment_id=exp_id,
                     dataset_item_id=item_id,
                     trace_id=f"t-{item_id}-{exp_id}-{i}",
+                    project_id=(projects or {}).get(exp_id),
                     feedback_scores=[SimpleNamespace(**s) for s in scores],
                 )
             )
@@ -305,6 +308,7 @@ def test_unscored_candidate_run_does_not_create_a_baseline() -> None:
     rows = [row(f"i{n}", f"s{n}", {"C": [[_score("other", 1.0)]]}) for n in range(3)]
     cmp = _classify(rows, baseline_id=None)
     assert cmp.items_unscored == 3
+    assert cmp.has_pass_evidence is False
     verdict = ec.evaluate_policy(cmp, ec.Policy(min_items=1), mark_baseline=True)
     assert verdict.status == "insufficient_evidence"
     scored = _classify([row("i9", "s9", {"C": [_ok()]})], baseline_id=None)
@@ -321,6 +325,9 @@ def test_flaky_exclude_drops_flaky_items_from_pass_rate() -> None:
     assert excluded.status == "ok", [c for c in excluded.criteria if not c.passed]
     rate = next(c for c in excluded.criteria if c.name == "pass_rate")
     assert rate.observed == "1.00"
+    md = ec.render_markdown(cmp, excluded, _meta())
+    assert "Pass rate: 1.00 -> 1.00 (+0.00) (flaky excluded)" in md
+    assert cmp.pass_rate_candidate == 0.9
     counted = ec.evaluate_policy(cmp, ec.Policy(min_items=1, flaky_policy="count"))
     assert counted.status == "hold"
 
