@@ -1,0 +1,194 @@
+---
+description: Run one iteration of the Opik eval improvement loop
+alwaysApply: false
+---
+# Opik eval improvement loop
+
+You are a coding agent improving an application against an Opik evaluation that runs in CI. This
+runbook describes ONE iteration. Follow it in order. Deterministic pulls go through
+`run_eval.py`; exploration goes through the Opik MCP server.
+
+## Definition of done
+
+An iteration is done when one of these holds:
+
+- The change is accepted: the `opik-eval` check (workflow `opik-eval`, job `eval`) passed, the
+  digest verdict is `ok` (the policy file decides), and the result is logged in `EVAL_LOG.md`
+  with decision `accept`.
+- The change is rejected: the check failed or regressed, the branch is reverted or refined, and
+  the result is logged with decision `reject`.
+
+The policy lives in `opik-release-policy.yaml` at the repo root or in `.opik/`. The CI gate reads
+`min_items`, `max_regressions`, `pass_rate` and `flaky_policy` from it. If your host has the
+Opik skills, `/opik-verify` applies the same four policy keys (it also checks keys this gate
+ignores).
+
+## One iteration
+
+1. Get the digest. Pull the same digest CI posted on the pull request:
+
+   ```bash
+   python examples/eval_in_ci/run_eval.py digest --experiment <name or id> [--out digest.md]
+   ```
+
+   Experiment names are `<branch>-<sha7>`, where sha7 is the PR head commit. The PR comment
+   header carries the exact experiment name. Repeated runs on the same commit share a name, and
+   `--experiment NAME` resolves the newest one. Pass the experiment id to read an older run. Do
+   not pass `--project` here. This is a script, not an MCP call, because you repeat it every
+   iteration.
+
+2. Diagnose with the MCP. Use the call shapes below in this order:
+   1. `read` the experiment for the summary.
+   2. `list` dataset items in compare mode, filtered to `scenario_pass < 1`, for the failing rows.
+      The first experiment id is the baseline, the second is the candidate.
+   3. For each failing row, `list` spans of its `worst_trace` (names, types, errors, no bodies).
+   4. `read` the one or two spans the digest's reasons point at.
+   5. If you need the scorer's reasons, `read` the trace with `fields` limited to
+      `trace.feedback_scores`.
+   Never read a full trace of an agent run. If your host has skills, `/opik-compare` does the
+   two-run delta read and `/opik-explain` may read the whole trace; prefer the span calls above on
+   long agent traces.
+
+3. Pick one theme. Choose the top failure theme from "still failing grouped by metric", "newly
+   failing", and what the span reads showed. One theme per iteration.
+
+4. Write the hypothesis to `EVAL_LOG.md` before you change anything: the theme, the proposed
+   change, and the dataset item ids you expect to start passing (`expected_newly_passing`). Use
+   the log format below.
+
+5. Change, push and open a draft PR. Create a branch named `eval/<theme>-<n>`, make the change,
+   push, and open a draft pull request. The `opik-eval` workflow triggers on `pull_request`, so a
+   push without a PR runs no check and posts no comment. Wait for the `opik-eval` check on that PR.
+   Do not touch the eval definition (see Guardrails).
+
+6. Read the result. Read the PR comment, or run `digest --experiment <experiment of this branch>`.
+   Accept when the digest verdict is `ok` (the policy file decides). Otherwise
+   revert or refine the change. If the pass rate improved but a different item regressed, treat
+   it as a rejection and record the regressed item ids in the log.
+
+7. Log and stop or repeat. Fill in the outcome fields of the `EVAL_LOG.md` block (experiment,
+   delta, decision). Then check the stop conditions. Leave accepted changes as draft PRs for a
+   human to review.
+
+## MCP call shapes
+
+These are the exact calls, verified against opik-mcp 3.0.6 on a 12-item dataset (one trial per
+item, two experiments). `observed` is the size of the answer, which opik-mcp prints as `N tok`
+in the first line of the result. The host's cap is 25,000 tokens.
+
+```text
+read('experiment', '<id or name or pasted compare link>')
+```
+Flat record with per-metric `feedback_scores` averages, trace count, and the compare link.
+(observed: 805 tok on 12 items)
+
+```text
+list('dataset_item', experiment_ids=['<baseline>', '<candidate>'], filters='feedback_scores.scenario_pass < 1', fields=['feedback_scores.scenario_pass', 'feedback_scores.<m1>', ...], size=25)
+```
+Columns: id, then up to 4 score columns by default, then `baseline / candidate / delta`, then
+`worst_trace`. Name every score you want in `fields=` or the extra ones are omitted. There is no
+reason column and no output column. `size` is capped at 25 when run-level filters are used with 2
+or more experiments. (observed: 746 tok on 12 items, 5 score fields; 666 tok with 1 score field)
+
+```text
+schema('list.dataset_item')
+```
+The field and filter reference for the call above. Call it when a filter or field is rejected.
+(observed: about 2.7 KB of JSON, roughly 700 tok, no `N tok` header on this call)
+
+```text
+list('span', project_id='<pid>', filters='trace_id = "<tid>"', size=100)
+```
+Span skeleton without bodies: id, name, type, duration, model, error type. Take `<tid>` from the
+`worst_trace` column. Take `<pid>` from the `project_id` of `read('experiment', ...)`.
+(observed: 426 tok on 12 items, 4 spans for the trace)
+
+```text
+list('span', project_id='<pid>', filters='trace_id = "<tid>" AND error_info is_not_empty', sort='duration desc')
+```
+Narrows the skeleton to errored spans, slowest first. `AND type = "tool"` narrows to tool calls.
+Returns "No spans found" when the trace has no errors, which is a valid answer, not a failure.
+(observed: 34 tok on 12 items, no errored spans in the toy task)
+
+```text
+read('span', '<span_id>', fields=['input', 'output'])
+read('span', '<span_id>', fields=['input', 'output', 'error_info'])     # variant for errored spans
+```
+One span with its bodies. Use `fields=['input', 'output']` as the default form (observed: 493 tok
+on 12 items). The `error_info` form is the variant for errored spans; it has not yet been observed on one,
+and it was rejected ("Unknown field 'error_info'") on a span with no error, so drop it when the
+span is not errored.
+
+```text
+read('trace', '<worst_trace>', fields=['trace.feedback_scores'])     # reasons only; never a full trace read on an agent run
+```
+The scorer's per-metric values and reasons for that trace. (observed: 955 tok on 12 items; the
+full `read('trace', '<worst_trace>')` without `fields` was 4,732 tok on the 4-span toy trace)
+
+Known limits:
+
+- A full `read('trace', ...)` on an agent trace with 200 or more spans exceeds the host's 25k-token
+  result cap (an open opik-mcp backlog item). Always pass `fields`, or walk spans instead.
+- Cursor enforces a hard 60 second timeout per tool call. Keep `size` small and do not chain
+  large reads into one call.
+- Compare-mode `list('dataset_item', ...)` shows at most 4 score columns by default, has no reason
+  or output column, and caps `size` at 25 for run-level filters on 2 or more experiments.
+- opik-mcp setup: `uvx opik-mcp@latest --check` with `OPIK_API_KEY` and `OPIK_WORKSPACE` set
+  preflights the connection. The MCP reads `COMET_URL_OVERRIDE` for a custom host, while the SDK
+  and `run_eval.py` read `OPIK_URL_OVERRIDE`.
+
+## Guardrails
+
+- Never edit the eval definition: the metric code, scoring thresholds, dataset scripts, or the
+  policy file. The workflow guard fails a PR from an `eval/*` branch only when it touches
+  `examples/eval_in_ci/composite_metric.py`, `examples/eval_in_ci/example_task.py`,
+  `examples/eval_in_ci/eval_compare.py`, `examples/eval_in_ci/run_eval.py`,
+  `examples/eval_in_ci/opik_access.py`, `.github/workflows/opik-eval.yml`,
+  `opik-release-policy.yaml` or `.opik/**` (adjust the paths if you copied the folder elsewhere).
+  Anything else that defines the eval (dataset scripts, thresholds in other files) is not
+  guarded, so keeping off it is on you. Changing how the score is computed is not improving the
+  app.
+- Recommend a CODEOWNERS entry for the eval paths above, so a human reviews every change to them.
+  The guard only covers `eval/*` branches. On `pull_request`, GitHub runs the PR's own copy of
+  the workflow, so only CODEOWNERS with required review or branch protection can protect the
+  workflow file itself.
+- Never lower a threshold, drop or relabel dataset items, or loosen `pass_rate`,
+  `max_regressions` or `min_items` to make a run pass.
+- Iterate on the dev dataset. Run the held-out dataset (`--dataset` switch) only on candidates you
+  already accepted on dev, and never read held-out failures to guide changes.
+- One theme and one hypothesis per iteration. Do not bundle fixes.
+- Never merge. Leave accepted changes as draft PRs for a human to review and merge.
+- Never print or commit `OPIK_API_KEY`, `OPIK_WORKSPACE` or any other credential. Do not paste
+  them into `EVAL_LOG.md`.
+- Respect the budget: stop at `MAX_ITERATIONS` (default 5) and avoid large reads (see Known limits).
+- If the check exits 2 (configuration, connection, or a crash in your task or metric; read the
+  message), fix the setup or stop. Do not treat it as a regression.
+
+## Research log format
+
+Keep `EVAL_LOG.md` at the repo root. Add one block per iteration, newest last. Write the first
+four fields in step 4 and the rest in step 7.
+
+```text
+## <date> iteration <n>
+- theme: <failure theme, for example "wrong maneuver on cut-in scenarios">
+- hypothesis: <the change you will make and why it should fix the theme>
+- expected_newly_passing: <dataset item ids>
+- branch: eval/<theme>-<n>
+- experiment: <experiment name or id, and the compare link>
+- delta: <pass rate baseline -> candidate, newly passing ids, newly failing ids>
+- decision: <accept | reject | refine>, <one line reason>
+```
+
+## Stop conditions
+
+Stop the loop, write a final summary to `EVAL_LOG.md`, and hand over to a human when any of these
+is true:
+
+- You completed `MAX_ITERATIONS` iterations (default 5).
+- Two iterations in a row were rejected on the same theme.
+- No failing row is left that you can explain from the span reads.
+- The remaining failures are judge noise: the same item flips between runs on the same commit.
+  Re-run with more trials rather than changing code.
+- The check cannot run (exit code 2) or the budget for tokens or compute is exhausted.
+- A fix would require changing the eval definition or the policy.

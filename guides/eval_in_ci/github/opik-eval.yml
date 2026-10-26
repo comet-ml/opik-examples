@@ -1,0 +1,112 @@
+# This template lives in guides/eval_in_ci/ of opik-examples. Copy it to .github/workflows/opik-eval.yml in your repo.
+# Paths below assume you copied the eval_in_ci folder to examples/eval_in_ci/.
+# Adjust them if you put it somewhere else.
+# Fork PRs get empty secrets and a read-only token, so the eval exits 2 there by design.
+name: opik-eval
+
+on:
+  pull_request:
+    # paths:
+    #   - "src/**"
+    #   - "examples/eval_in_ci/**"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: opik-eval-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            eval_paths:
+              - 'examples/eval_in_ci/composite_metric.py'
+              - 'examples/eval_in_ci/example_task.py'
+              - 'examples/eval_in_ci/eval_compare.py'
+              - 'examples/eval_in_ci/run_eval.py'
+              - 'examples/eval_in_ci/opik_access.py'
+              - '.github/workflows/opik-eval.yml'
+              - 'opik-release-policy.yaml'
+              - '.opik/**'
+      - name: Block eval definition changes on eval/* branches
+        # On push events github.head_ref is empty, so this guard passes.
+        if: startsWith(github.head_ref, 'eval/') && steps.filter.outputs.eval_paths == 'true'
+        run: |
+          echo "::error::eval/* branches may not change eval definitions"
+          exit 1
+
+  eval:
+    needs: guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Opik
+        run: pip install "opik==2.2.113" "pyyaml>=6"  # bump to the Opik SDK version your server supports
+      - name: Run evaluation
+        id: eval
+        continue-on-error: true
+        env:
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+          OPIK_WORKSPACE: ${{ secrets.OPIK_WORKSPACE }}
+          # An unset secret expands to "", which the SDK takes literally; default to Opik Cloud.
+          OPIK_URL_OVERRIDE: ${{ secrets.OPIK_URL_OVERRIDE || 'https://www.comet.com/opik/api' }}
+          # On pull_request, github.sha is the merge commit; name runs by the PR head.
+          OPIK_EVAL_GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        # Exit codes: 0 ok or baseline created, 1 policy failed, 2 config or connection error.
+        # The exit code is captured so the artifact and comment steps still run.
+        # --task must accept dataset fields as keyword arguments: task(**item).
+        run: |
+          set +e
+          python examples/eval_in_ci/run_eval.py run \
+            --dataset eval-in-ci-example \
+            --task example_task:scenario_agent \
+            ${{ github.event_name == 'push' && '--mark-baseline' || '--fail-on-regression' }} \
+            --out digest.md \
+            --json digest.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+      - name: Upload digest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opik-eval-digest
+          path: |
+            digest.md
+            digest.json
+          if-no-files-found: ignore
+      - name: Post sticky PR comment
+        if: always() && github.event_name == 'pull_request' && hashFiles('digest.md') != ''
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('digest.md', 'utf8');
+            const marker = '<!-- opik-eval -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+      - name: Fail the job if the eval failed
+        if: always()
+        env:
+          EVAL_EXIT_CODE: ${{ steps.eval.outputs.exit_code }}
+        run: exit "${EVAL_EXIT_CODE:-2}"

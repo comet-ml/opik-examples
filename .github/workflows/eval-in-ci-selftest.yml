@@ -1,0 +1,110 @@
+name: eval-in-ci selftest
+
+# Exercises guides/eval_in_ci's own gate (github/opik-eval.yml) inside this repo, which pr-test.yml
+# does not: it runs the unit tests, then run.sh with --mark-baseline or --fail-on-regression,
+# uploads the digest and posts the sticky PR comment. Paths and the workspace variable differ from
+# the template because the guide lives under guides/ here and the workspace is a repo variable.
+# A unit test keeps the comment script identical to the template's.
+#
+# To create or refresh the baseline: dispatch with mark_baseline=true (agent_version v2).
+# To see a hold: dispatch with agent_version=v1 against a v2 baseline.
+
+on:
+  pull_request:
+    paths:
+      - "guides/eval_in_ci/**"
+      - ".github/workflows/eval-in-ci-selftest.yml"
+  workflow_dispatch:
+    inputs:
+      mark_baseline:
+        description: "Tag this run as the baseline instead of comparing"
+        type: boolean
+        default: false
+      agent_version:
+        description: "Toy agent version to evaluate"
+        type: choice
+        options: [v1, v2]
+        default: v2
+
+concurrency:
+  group: eval-in-ci-selftest-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+    working-directory: guides/eval_in_ci
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+      OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: |
+          uv sync --group dev
+          uv run pytest -q
+
+      - name: Run evaluation
+        id: eval
+        continue-on-error: true
+        env:
+          OPIK_EVAL_GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AGENT_VERSION: ${{ inputs.agent_version || 'v2' }}
+          MODE_FLAG: ${{ inputs.mark_baseline == true && '--mark-baseline' || '--fail-on-regression' }}
+        # run.sh seeds the dataset and forwards these args to run_eval.py run.
+        # Exit codes: 0 ok or baseline created, 1 policy failed, 2 config or connection error.
+        run: |
+          set +e
+          bash run.sh "$MODE_FLAG" --out digest.md --json digest.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload digest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opik-eval-digest
+          path: |
+            guides/eval_in_ci/digest.md
+            guides/eval_in_ci/digest.json
+          if-no-files-found: ignore
+
+      - name: Post sticky PR comment
+        if: always() && github.event_name == 'pull_request' && hashFiles('guides/eval_in_ci/digest.md') != ''
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('guides/eval_in_ci/digest.md', 'utf8');
+            const marker = '<!-- opik-eval -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Fail the job if the eval failed
+        if: always()
+        env:
+          EVAL_EXIT_CODE: ${{ steps.eval.outputs.exit_code }}
+        run: exit "${EVAL_EXIT_CODE:-2}"
