@@ -1,0 +1,82 @@
+# This template lives in guides/eval_in_ci/ of opik-examples. Copy it to .github/workflows/opik-optimize.yml in your repo.
+# Paths below assume you copied the eval_in_ci folder to examples/eval_in_ci/.
+# Adjust them if you put it somewhere else.
+#
+# The optimizer never promotes anything: it rewrites prompts/system.txt and opens a draft PR, and the
+# opik-eval gate judges that PR like any other change.
+#
+# Why the explicit `gh workflow run opik-eval.yml --ref optimize/<n>` step: a PR opened with GITHUB_TOKEN
+# fires no pull_request event, so opik-eval would never run on it. The dispatch runs the gate on the branch.
+# Alternative: open the PR with a GitHub App token (actions/create-github-app-token); App-token PRs fire
+# pull_request normally, and the dispatch step can go.
+name: opik-optimize
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_trials:
+        description: "Optimizer trials"
+        type: string
+        default: "3"
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Install dependencies
+        working-directory: examples/eval_in_ci
+        run: uv sync --extra optimizer
+      - name: Optimize the prompt
+        id: optimize
+        working-directory: examples/eval_in_ci
+        env:
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+          OPIK_WORKSPACE: ${{ secrets.OPIK_WORKSPACE }}
+          # An unset secret expands to "", which the SDK takes literally; default to Opik Cloud.
+          OPIK_URL_OVERRIDE: ${{ secrets.OPIK_URL_OVERRIDE || 'https://www.comet.com/opik/api' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
+          MAX_TRIALS: ${{ inputs.max_trials }}
+        run: |
+          uv run python optimize_prompt.py \
+            --prompt-file prompts/system.txt \
+            --max-trials "$MAX_TRIALS" \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Open a draft PR for the gate
+        if: steps.optimize.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.run_number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          INITIAL_SCORE: ${{ steps.optimize.outputs.initial_score }}
+          BEST_SCORE: ${{ steps.optimize.outputs.best_score }}
+          RUN_LINK: ${{ steps.optimize.outputs.run_link }}
+        run: |
+          branch="optimize/${RUN_NUMBER}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add examples/eval_in_ci/prompts/system.txt
+          git commit -m "chore(prompt): optimizer candidate from run ${RUN_NUMBER}"
+          git push origin "$branch"
+          cat > pr-body.md <<EOF
+          Optimizer: initial ${INITIAL_SCORE} -> best ${BEST_SCORE}
+
+          Optimization run: ${RUN_LINK:-unavailable}
+          Workflow run: ${RUN_URL}
+
+          The opik-eval gate decides.
+          EOF
+          gh pr create --draft \
+            --head "$branch" \
+            --title "Optimizer candidate ${RUN_NUMBER}" \
+            --body-file pr-body.md
+          gh workflow run opik-eval.yml --ref "$branch"
