@@ -89,7 +89,6 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--policy", type=Path, help="Path to opik-release-policy.yaml")
     demo.add_argument("--out", type=Path, help="Write the markdown digest here")
     demo.add_argument("--json", type=Path, help="Write the JSON digest here")
-    demo.add_argument("--summary", type=Path, help="Append a failure note here (e.g. $GITHUB_STEP_SUMMARY)")
     return parser
 
 
@@ -277,10 +276,9 @@ def _run(args: argparse.Namespace) -> int:
             trial_count=args.trials,
             task_threads=4,
         )
-    except Exception:
-        print("Task or metric error during evaluation:", file=sys.stderr)
+    except Exception as exc:
         traceback.print_exc()
-        return 2
+        raise ConfigError(f"Task or metric error during evaluation: {_fmt_error(exc)}") from exc
     if args.mark_baseline and not args.baseline:
         # WHY: this run becomes the baseline, so there is nothing to compare against.
         baseline_id, baseline_name = None, None

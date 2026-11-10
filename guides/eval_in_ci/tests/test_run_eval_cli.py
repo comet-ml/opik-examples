@@ -16,7 +16,7 @@ def test_parser_run_requires_dataset_and_task() -> None:
     with pytest.raises(SystemExit) as exc:
         parser.parse_args(["run", "--dataset", "d"])
     assert exc.value.code == 2
-    args = parser.parse_args(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b", "--metric", "m:b"])
+    args = parser.parse_args(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b"])
     assert args.project is None
     assert args.label_key == "scenario_id"
     assert args.prompt_name == "scenario-planner"
@@ -93,7 +93,7 @@ def _stub_run(monkeypatch: pytest.MonkeyPatch, task: Any = None) -> tuple[list[A
 
 
 def test_run_task_crash_exits_2_with_label(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     marked, _ = _stub_run(monkeypatch)
 
@@ -101,9 +101,13 @@ def test_run_task_crash_exits_2_with_label(
         raise KeyError("missing")
 
     monkeypatch.setattr(run_eval, "evaluate", boom)
-    code = run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b", "--mark-baseline"])
+    summary = tmp_path / "s.md"
+    args = ["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b", "--mark-baseline"]
+    code = run_eval.main([*args, "--summary", str(summary)])
     assert code == 2
     assert "Task or metric error" in capsys.readouterr().err
+    text = summary.read_text(encoding="utf-8")
+    assert "Failed:" in text and "Task or metric error" in text
     assert marked == []
 
 
