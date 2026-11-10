@@ -67,7 +67,8 @@ gate ignores).
 6. Read the result. Read the PR comment, or run `digest --experiment <experiment of this branch>`.
    Accept when the digest verdict is `ok` (the policy file decides). Otherwise
    revert or refine the change. If the pass rate improved but a different item regressed, treat
-   it as a rejection and record the regressed item ids in the log.
+   it as a rejection and record the regressed item ids in the log. A `Test suite: k of n passed`
+   note with k < n is a hold; treat it like a regression.
 
 7. Log and stop or repeat. Fill in the outcome fields of the `EVAL_LOG.md` block (experiment,
    delta, decision). Then check the stop conditions. Leave accepted changes as draft PRs for a
@@ -132,17 +133,22 @@ Known limits:
   large reads into one call.
 - Compare-mode `list('dataset_item', ...)` shows at most 4 score columns by default, has no reason
   or output column, and caps `size` at 25 for run-level filters on 2 or more experiments.
-- MCP docs: https://www.comet.com/docs/opik/mcp-server , https://www.comet.com/docs/opik/mcp-server/use-cases , https://www.comet.com/docs/opik/mcp-server/advanced-setup
+- MCP docs:
+  - https://www.comet.com/docs/opik/mcp-server
+  - https://www.comet.com/docs/opik/mcp-server/use-cases
+  - https://www.comet.com/docs/opik/mcp-server/advanced-setup
 
 ## Guardrails
 
 - Never edit the eval definition: the metric, dataset and setup files `scenarios.py`,
   `setup_opik.py`, `composite_metric.py`, `eval_compare.py`, `run_eval.py` and `opik_access.py`
-  (under `examples/eval_in_ci/`), or the policy file. The workflow guard fails a PR from an
+  (under `examples/eval_in_ci/`), the workflow `.github/workflows/opik-eval.yml`, the policy file
+  `opik-release-policy.yaml` and `.opik/**`. The workflow guard fails a PR from an
   `eval/*` or `optimize/*` branch that touches any of them (adjust the paths if you copied the
   folder elsewhere). `planner.py` is the app and is not guarded. Changing how the score is
   computed is not improving the app.
-- Change `prompts/system.txt` (the prompt) or the app in `planner.py`; never the files listed
+- Change `examples/eval_in_ci/prompts/system.txt` (the prompt) or the app in
+  `examples/eval_in_ci/planner.py`; never the files listed
   above. Branches named `optimize/<n>` come from the optimizer workflow (`opik-optimize.yml`),
   which opens draft PRs that go through the same gate, and they follow the same rules.
 - Recommend a CODEOWNERS entry for the eval paths above, so a human reviews every change to them.
@@ -150,7 +156,7 @@ Known limits:
   PR's own copy of the workflow, so only CODEOWNERS with required review or branch protection can
   protect the workflow file itself.
 - Never lower a threshold, drop or relabel dataset items, or loosen `pass_rate`,
-  `max_regressions` or `min_items` to make a run pass.
+  `max_regressions`, `min_items` or `test_suite` to make a run pass.
 - Iterate on the dev dataset. Run the held-out dataset (`--dataset` switch) only on candidates you
   already accepted on dev, and never read held-out failures to guide changes.
 - One theme and one hypothesis per iteration. Do not bundle fixes.

@@ -25,6 +25,9 @@ def test_runbook_has_no_research_notes_or_stale_names() -> None:
         assert banned not in text, banned
     for needed in (
         "prompts/system.txt",
+        "examples/eval_in_ci/prompts/system.txt",
+        ".github/workflows/opik-eval.yml",
+        ".opik/**",
         "https://www.comet.com/docs/opik/mcp-server",
         "https://www.comet.com/docs/opik/mcp-server/use-cases",
         "https://www.comet.com/docs/opik/mcp-server/advanced-setup",
