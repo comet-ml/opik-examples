@@ -153,3 +153,42 @@ def test_server_version_unwraps_version_key() -> None:
 
     assert opik_access.server_version(make({"version": "2.2.113"})) == "2.2.113"
     assert opik_access.server_version(make("2.2.9")) == "2.2.9"
+
+
+def test_log_prompt_keys_on_text_only() -> None:
+    calls: list[dict[str, Any]] = []
+    client = SimpleNamespace(
+        create_prompt=lambda **kw: (
+            calls.append(kw)
+            or SimpleNamespace(name=kw["name"], version="v3", prompt=kw["prompt"], environments=[])
+        )
+    )
+    opik_access.log_prompt(client, "p", "text", change_description="ci abc1234 main")
+    assert calls[0]["metadata"] == {"source": "eval-in-ci"}
+    assert calls[0]["change_description"] == "ci abc1234 main"
+
+
+def test_assign_environment_merges_existing() -> None:
+    seen: list[tuple[Any, ...]] = []
+    client = SimpleNamespace(
+        set_prompt_environments=lambda name, envs, version: seen.append((name, envs, version))
+    )
+    prompt = SimpleNamespace(name="p", version="v2", environments=["dev"])
+    opik_access.assign_environment(client, prompt, "production")
+    assert seen == [("p", ["dev", "production"], "v2")]
+
+
+def test_get_production_prompt_none_when_missing() -> None:
+    client = SimpleNamespace(get_prompt=lambda name, **kw: None)
+    assert opik_access.get_production_prompt(client, "p") is None
+
+
+def test_get_production_prompt_reads_production_uncached() -> None:
+    calls: list[tuple[Any, ...]] = []
+    client = SimpleNamespace(get_prompt=lambda name, **kw: calls.append((name, kw)) or "found")
+    assert opik_access.get_production_prompt(client, "p") == "found"
+    assert calls == [("p", {"environment": "production", "no_cache": True})]
+
+
+def test_logs_url() -> None:
+    assert opik_access.logs_url("http://h/", "ws", "pid") == "http://h/opik/ws/projects/pid/logs"

@@ -18,6 +18,8 @@ from opik.config import OPIK_WORKSPACE_DEFAULT_NAME
 from opik.rest_api.types.dataset_item_compare import DatasetItemCompare
 from opik.rest_api.types.experiment_public import ExperimentPublic
 
+import config
+
 
 class ConfigError(RuntimeError):
     """Raised for setup problems the user can fix (env vars, refs, names)."""
@@ -209,3 +211,32 @@ def load_callable(ref: str) -> Callable[..., Any]:
     except AttributeError as exc:
         raise ConfigError(f"Module '{module_name}' has no attribute for '{ref}'.") from exc
     return target  # type: ignore[no-any-return]
+
+
+def assign_environment(client: Any, prompt: Any, environment: str) -> None:
+    """Add an environment to a prompt version, keeping the ones it already owns."""
+    # WHY: set_prompt_environments replaces the version's full set, so merge first.
+    envs = sorted(set(prompt.environments or []) | {environment})
+    client.set_prompt_environments(prompt.name, envs, version=prompt.version)
+
+
+def log_prompt(client: Any, name: str, text: str, *, change_description: str) -> Any:
+    """Log a prompt version; an unchanged text reuses the latest version."""
+    # WHY: the SDK returns the latest version when text and metadata match, so constant metadata
+    # is what makes an unchanged prompt reuse its version.
+    return client.create_prompt(
+        name=name,
+        prompt=text,
+        change_description=change_description,
+        metadata={"source": "eval-in-ci"},
+    )
+
+
+def get_production_prompt(client: Any, name: str) -> Any | None:
+    """Return the prompt version in the production environment, or None when there is none."""
+    return client.get_prompt(name, environment=config.ENV_PRODUCTION, no_cache=True)
+
+
+def logs_url(ui_base: str, workspace: str, project_id: str) -> str:
+    """Return the project's logs page URL."""
+    return f"{ui_base}opik/{workspace}/projects/{project_id}/logs"
