@@ -2,7 +2,7 @@
 
 You are a coding agent improving an application against an Opik evaluation that runs in CI. This
 runbook describes ONE iteration. Follow it in order. Deterministic pulls go through
-`run_eval.py`; exploration goes through the Opik MCP server.
+`run_eval.py`; exploration goes through the Opik MCP server when it is connected.
 
 ## Definition of done
 
@@ -22,10 +22,11 @@ gate ignores).
 
 ## One iteration
 
-1. Get the digest. Pull the same digest CI posted on the pull request:
+1. Get the digest. Pull the same digest CI posted on the pull request, from `examples/eval_in_ci`:
 
    ```bash
-   python examples/eval_in_ci/run_eval.py digest --experiment <name or id> [--out digest.md]
+   cd examples/eval_in_ci
+   uv run python run_eval.py digest --experiment <name or id> [--out digest.md]
    ```
 
    Experiment names are `<branch>-<sha7>`, where sha7 is the PR head commit. The PR comment
@@ -65,7 +66,8 @@ gate ignores).
    Accept when the digest verdict is `ok` (the policy file decides). Otherwise
    revert or refine the change. If the pass rate improved but a different item regressed, treat
    it as a rejection and record the regressed item ids in the log. A `Test suite: k of n passed`
-   note with k < n is a hold; treat it like a regression.
+   note with k < n is a hold unless the policy sets `test_suite: skip`; treat it like a
+   regression.
 
 7. Log and stop or repeat. Fill in the outcome fields of the `EVAL_LOG.md` block (experiment,
    delta, decision). Then check the stop conditions. Leave accepted changes as draft PRs for a
@@ -150,6 +152,8 @@ Known limits:
   `examples/eval_in_ci/planner.py`; never the files listed
   above. Branches named `optimize/<n>` come from the optimizer workflow (`opik-optimize.yml`),
   which opens draft PRs that go through the same gate, and they follow the same rules.
+- The eval task factory in `planner.py` receives the whole dataset item, including `expected`.
+  Returning the expected plan is cheating, not improving the app; reviewers will reject it.
 - Recommend a CODEOWNERS entry for the eval paths above, so a human reviews every change to them.
   The guard only covers `eval/*` and `optimize/*` branches. On `pull_request`, GitHub runs the
   PR's own copy of the workflow, so only CODEOWNERS with required review or branch protection can

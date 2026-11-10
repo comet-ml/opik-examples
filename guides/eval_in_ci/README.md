@@ -98,7 +98,7 @@ All of it lives in one project (`eval-in-ci-example` in the workflow template).
 | Opik page | What appears | When |
 |---|---|---|
 | Datasets | `scenario-planner`, 20 driving scenarios with the expected plan | First run (setup) |
-| Prompt library | Prompt `scenario-planner`: an unchanged `prompts/system.txt` text reuses the latest version, a different text logs a new one, with a change description `ci <sha7> <branch>` (plus `pr <n>` on PRs) | Every run |
+| Prompt library | Prompt `scenario-planner`: a `prompts/system.txt` text that already has a version reuses it (the `production` one first, then the newest match in the history), a new text logs a new version with a change description `ci <sha7> <branch>` (plus `pr <n>` on PRs) | Every run |
 | Experiments | `<branch>-<sha7>`, linked to that prompt version, tagged `ci`, the branch, and `candidate` on PRs or `baseline` on `main` | Every run |
 | Prompt library | The `production` environment on the version `main` last evaluated | Push to `main` |
 | Test suites | `scenario-planner-guardrails` (3 assertions on 8 scenarios) and a run `<branch>-<sha7>-suite` tagged `test-suite` | Every run |
@@ -163,14 +163,16 @@ runbook's guard paths assume that destination.
 
   ```bash
   uv sync --group dev
-  # without uv: pip install "opik>=2.2.113" "litellm>=1.70" pyyaml
+  # without uv: pip install "opik==2.2.143" "litellm>=1.70" pyyaml
   ```
 
 - An Opik workspace on Opik Cloud or your own host: a 2.2.x server recent enough for prompt
-  environments, test suites and online rules. Tested with Opik SDK 2.2.143. Match the `opik` SDK
-  version to your Opik server and pin it in `pyproject.toml` (`opik==<version>`); the workflow
-  installs whatever `pyproject.toml` says. Use a service-account key if your deployment has them (Admin dashboard > Service accounts), otherwise a
-  dedicated personal API key for CI.
+  environments, test suites and online rules.
+- The `opik` SDK pinned to a version that matches your server. `pyproject.toml` pins
+  `opik==2.2.143`, the version this guide is tested with; change the pin to your server's version.
+  The workflow installs whatever `pyproject.toml` says.
+- An Opik API key for CI: a service-account key if your deployment has them (Admin dashboard >
+  Service accounts), otherwise a dedicated personal API key.
 - A model provider key for the live path (Anthropic by default). The offline demo needs nothing.
 - For the online rule, an AI provider configured in the Opik workspace that matches
   `OPIK_ONLINE_JUDGE_MODEL`. The rule runs inside Opik, not in CI.
@@ -248,6 +250,9 @@ Pass extra flags through, for example `bash run.sh --fail-on-regression`.
      name after promotion; returns the number of requests sent). Drop the ones you do not need;
      `setup_opik:run_setup` creates this guide's dataset, suite and rule, not yours.
    - `--label-key` names the dataset field the digest shows for each item (default `scenario_id`).
+   - The gate counts an item as passing from one 0/1 score named by `--pass-score` (default
+     `scenario_pass`), which `CompositePassMetric` emits. A plain metric that returns another name
+     needs the flag, or a `CompositePassMetric` wrapped around it.
 5. Merge to `main` once. That run creates the first `baseline`-tagged experiment that later pull
    requests compare against, and gives the prompt version the `production` environment.
 
@@ -271,8 +276,9 @@ On a push to `main` the workflow passes `--mark-baseline` instead of `--fail-on-
 
 `run` flags: `--dataset`, `--task`, `--metric` (all three required), `--prompt-file`, `--prompt-name`
 (default `scenario-planner`), `--setup`, `--suite-task`, `--suite-name`, `--traffic`,
+`--suite-model` (the model that judges the test-suite assertions, default `OPIK_EXAMPLES_MODEL`),
 `--label-key`, `--trials` (default 1), `--mark-baseline`, `--pr`, `--baseline`,
-`--pass-threshold`, `--policy`, `--fail-on-regression`, `--out`, `--json`, `--summary` (append a
+`--pass-score` (default `scenario_pass`), `--pass-threshold`, `--policy`, `--fail-on-regression`, `--out`, `--json`, `--summary` (append a
 failure note, for example `$GITHUB_STEP_SUMMARY`) and an optional `--project`. On `run`,
 `--project` names the project the experiment is filed under and is the first place an experiment
 is looked up by name; on `digest` it is only that lookup hint. Without it the SDK uses
@@ -284,7 +290,8 @@ Compare a finished experiment without re-running it:
 uv run python run_eval.py digest --experiment <name or id>
 ```
 
-`digest` flags: `--experiment`, `--project`, `--label-key`, `--baseline`, `--pass-threshold`,
+`digest` flags: `--experiment`, `--project`, `--label-key`, `--baseline`, `--pass-score`,
+`--pass-threshold`,
 `--policy`, `--fail-on-regression`, `--out`, `--json`, `--summary`. `demo` flags:
 `--pass-threshold`, `--policy`, `--out`, `--json`.
 
@@ -293,7 +300,7 @@ uv run python run_eval.py digest --experiment <name or id>
 `digest.md` is Markdown whose first line is exactly `<!-- opik-eval -->`. The workflow uses that
 marker to update a single sticky comment on the pull request instead of adding a new one per push.
 Top to bottom: the experiment name, a `Warning:` line when `main` promoted a run with failed
-criteria, the baseline, the prompt version (`(unchanged)` when it is the one `production` already
+criteria or created no baseline, the baseline, the prompt version (`(unchanged)` when it is the one `production` already
 has), the verdict with any failed criteria, the pass rate against the baseline, items scored and
 the pass rule (`1 trial` or `all N trials`), notes (the policy used, test suite, promotion, traffic), the "Newly
 failing", "Newly passing", "Still failing" (grouped by metric), "Flaky" and "New items" lists, the
@@ -328,10 +335,10 @@ then fails the job with the original code in a final step that runs `if: always(
 5. dispatches `opik-eval.yml` on that branch, because a PR opened with `GITHUB_TOKEN` fires no
    `pull_request` event, so the gate would never run on it otherwise.
 
-The dispatched run shows up as a check on the branch with the digest in its job artifact; it posts
-no sticky comment, because that step runs only on `pull_request`. If you want the normal trigger
-and the comment, open the PR with a GitHub App token (`actions/create-github-app-token`) instead and
-drop the dispatch step.
+The dispatched run shows up as a check on the branch with the digest in its job artifact, and the
+comment step finds the branch's open PR and posts the sticky comment there (a dispatch on a branch
+without an open PR posts nothing). If you want the normal `pull_request` trigger, open the PR with a
+GitHub App token (`actions/create-github-app-token`) instead and drop the dispatch step.
 
 Requirements: the repository setting "Allow GitHub Actions to create and approve pull requests"
 (Settings > Actions > General), the workflow permissions `contents: write`, `pull-requests: write`
@@ -376,7 +383,9 @@ SDK's `OPIK_URL_OVERRIDE`.
 ### Cost
 
 A pull request run makes 20 model calls for the evaluation (one per scenario, `--trials 1`), and
-the test suite makes 16 (8 items x 2 runs) plus the judge calls for its assertions. A push to
+the test suite makes 16 (8 items x 2 runs) plus the judge calls for its assertions. Those judge
+calls run on the same model as the app by default (`--suite-model`, default
+`OPIK_EXAMPLES_MODEL`), so the default setup needs only the Anthropic key. A push to
 `main` adds 6 production calls and 6 online-rule judge calls. The optimizer is the expensive one:
 it scores several candidate prompts on the 20 scenarios per trial. With a small model such as
 Claude Haiku a gate run costs cents; check the optimizer's spend in the optimization run before
@@ -431,18 +440,26 @@ or the optimizer can find, and why the demo still has 8 items failing on `maneuv
 
 Merging is deploying: whatever `main` last evaluated is what `production` serves.
 
+Every run, pull requests included, runs the setup hook, which inserts any new scenarios into the
+shared `scenario-planner` dataset; setup is idempotent and never deletes items.
+
 - On a pull request, the baseline is the newest experiment on the same dataset with an exact
   `baseline` tag. Override it with `--baseline NAME_OR_ID`. The digest names the baseline on its
   own line; with no baseline it reports `no_baseline` (exit 0).
 - On a push to `main` the workflow passes `--mark-baseline`. After the run finishes, the experiment
-  gets the `baseline` tag, the logged prompt version gets the `production` environment, and the
-  traffic hook sends the 6 production requests. This happens even if the test suite failed or the
+  gets the `baseline` tag, the logged prompt version gets the `production` environment (the gate
+  registers the environment if the workspace does not have it yet), and the traffic hook sends the
+  6 production requests. Without `--prompt-file` nothing is promoted and the traffic hook is
+  skipped, with a note in the digest. This happens even if the test suite failed or the
   run regressed against the previous baseline: the merge already happened, so the digest starts
   with `Warning: promoted with failed criteria: ...` instead of blocking. The only run that is not
   tagged or promoted is one in which no item carries the pass score (`insufficient_evidence`): it
-  would become a baseline every later PR beats.
-- An unchanged prompt text reuses its existing version, and the prompt line says `(unchanged)`. On
-  `main` that means the promotion is a no-op.
+  would become a baseline every later PR beats. Its digest starts with
+  `Warning: baseline not created: no item carried the pass score '<name>'`.
+- A prompt text that already has a version reuses it: the `production` version when the text
+  matches, otherwise the newest matching version in the history. So with two open PRs the comment
+  names the version `main` will promote, not a duplicate. When it is the `production` version the
+  prompt line says `(unchanged)`, and on `main` the promotion is a no-op.
 - The production entry point (`answer` in `planner.py`) never pins a version; it asks for whatever
   `production` owns with `client.get_prompt("scenario-planner", environment="production")`.
   Promoting a new version is a library change, not a code change.

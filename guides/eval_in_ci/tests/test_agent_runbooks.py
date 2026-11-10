@@ -33,5 +33,10 @@ def test_runbook_has_no_research_notes_or_stale_names() -> None:
         "https://www.comet.com/docs/opik/mcp-server",
         "https://www.comet.com/docs/opik/mcp-server/use-cases",
         "https://www.comet.com/docs/opik/mcp-server/advanced-setup",
+        "exploration goes through the Opik MCP server when it is connected",
+        "uv run python run_eval.py digest --experiment",
+        "is a hold unless the policy sets `test_suite: skip`",
+        "Returning the expected plan is cheating",
     ):
         assert needed in text, needed
+    assert "python examples/eval_in_ci/run_eval.py" not in text
