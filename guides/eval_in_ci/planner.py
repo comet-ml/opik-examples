@@ -10,7 +10,7 @@ from typing import Any
 import opik
 
 from config import ENV_PRODUCTION, GEN_MODEL, TRAFFIC_TAG
-from scenarios import parse_plan
+from scenarios import PRODUCTION_REQUESTS, parse_plan
 
 
 @functools.cache
@@ -87,3 +87,8 @@ def simulate_traffic(
         answer(scenario, prompt_name, client=client, completion=completion)
     opik.flush_tracker()
     return len(requests)
+
+
+def simulate_traffic_hook(client: Any, prompt_name: str) -> int:
+    """The run_eval --traffic hook: send the built-in production requests."""
+    return simulate_traffic(client, prompt_name, PRODUCTION_REQUESTS)

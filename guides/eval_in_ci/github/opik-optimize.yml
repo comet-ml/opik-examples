@@ -38,9 +38,9 @@ jobs:
         working-directory: examples/eval_in_ci
         env:
           OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
-          OPIK_WORKSPACE: ${{ secrets.OPIK_WORKSPACE }}
-          # An unset secret expands to "", which the SDK takes literally; default to Opik Cloud.
-          OPIK_URL_OVERRIDE: ${{ secrets.OPIK_URL_OVERRIDE || 'https://www.comet.com/opik/api' }}
+          OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+          # An unset variable expands to "", which the SDK takes literally; default to Opik Cloud.
+          OPIK_URL_OVERRIDE: ${{ vars.OPIK_URL_OVERRIDE || 'https://www.comet.com/opik/api' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
           MAX_TRIALS: ${{ inputs.max_trials }}
@@ -65,6 +65,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
           git add examples/eval_in_ci/prompts/system.txt
+          git diff --cached --quiet && { echo "prompt already matches the repo"; exit 0; }
           git commit -m "chore(prompt): optimizer candidate from run ${RUN_NUMBER}"
           git push origin "$branch"
           cat > pr-body.md <<EOF
@@ -76,6 +77,7 @@ jobs:
           The opik-eval gate decides.
           EOF
           gh pr create --draft \
+            --base "$GITHUB_REF_NAME" \
             --head "$branch" \
             --title "Optimizer candidate ${RUN_NUMBER}" \
             --body-file pr-body.md

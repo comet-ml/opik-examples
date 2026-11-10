@@ -9,6 +9,7 @@ import pytest
 
 import planner
 from config import GEN_MODEL
+from scenarios import PRODUCTION_REQUESTS
 
 
 # WHY: the SDK caches the tracing switch on first use, so flip it at runtime rather than via env.
@@ -88,3 +89,11 @@ def test_simulate_traffic_counts_and_flushes(monkeypatch: pytest.MonkeyPatch) ->
     assert count == 3
     assert len(seen) == 3
     assert flushes == [1]
+
+
+def test_simulate_traffic_hook_sends_the_production_requests(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Any, str, list[str]]] = []
+    monkeypatch.setattr(planner, "simulate_traffic", lambda c, n, r: calls.append((c, n, list(r))) or len(r))
+    client = object()
+    assert planner.simulate_traffic_hook(client, "p") == len(PRODUCTION_REQUESTS)
+    assert calls == [(client, "p", list(PRODUCTION_REQUESTS))]
