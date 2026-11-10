@@ -13,8 +13,9 @@ from typing import Any
 
 from opik import evaluate
 
+import ci_output
+import config
 import eval_compare
-import example_task
 import opik_access
 from opik_access import ConfigError
 
@@ -23,7 +24,6 @@ DRY_RUN_HINT = (
     "Hint: no OPIK_API_KEY / OPIK_WORKSPACE in the environment. "
     'Set them, run "opik configure", or use "demo" for an offline run.'
 )
-DEFAULT_METRIC = "example_task:build_metric"
 PROJECT_HELP = (
     "Project hint for experiment lookup by name. Opik files experiments under "
     "the dataset's project; this value is tried first, then ignored."
@@ -46,6 +46,7 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     )
     p.add_argument("--out", type=Path, help="Write the markdown digest here")
     p.add_argument("--json", type=Path, help="Write the JSON digest here")
+    p.add_argument("--summary", type=Path, help="Append a failure note here (e.g. $GITHUB_STEP_SUMMARY)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -57,10 +58,15 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--project", help=PROJECT_HELP)
     run.add_argument("--task", required=True, help="Task as module:callable")
     run.add_argument(
-        "--metric",
-        default=DEFAULT_METRIC,
-        help="Zero-arg callable returning the metric (default: %(default)s)",
+        "--metric", required=True, help="Zero-arg callable returning the metric, as module:callable"
     )
+    run.add_argument("--prompt-file", type=Path, help="Prompt file to register as the candidate prompt")
+    run.add_argument("--prompt-name", default=config.PROMPT_NAME, help="Prompt name (default: %(default)s)")
+    run.add_argument("--setup", help="Optional module:callable run once before the evaluation")
+    run.add_argument("--suite-task", help="Optional module:callable task for the test suite")
+    run.add_argument("--traffic", help="Optional module:callable that generates simulated traffic")
+    run.add_argument("--suite-name", help="Test suite name (pairs with --suite-task)")
+    run.add_argument("--label-key", default="scenario_id", help="Dataset field used to label items")
     run.add_argument("--trials", type=int, default=1, help="Trials per item")
     run.add_argument(
         "--mark-baseline",
@@ -73,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     dig = sub.add_parser("digest", help="Digest an existing experiment")
     dig.add_argument("--experiment", required=True, help="Experiment name or id")
     dig.add_argument("--project", help=PROJECT_HELP)
+    dig.add_argument("--label-key", default="scenario_id", help="Dataset field used to label items")
     _add_common(dig)
 
     demo = sub.add_parser(
@@ -82,6 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--policy", type=Path, help="Path to opik-release-policy.yaml")
     demo.add_argument("--out", type=Path, help="Write the markdown digest here")
     demo.add_argument("--json", type=Path, help="Write the JSON digest here")
+    demo.add_argument("--summary", type=Path, help="Append a failure note here (e.g. $GITHUB_STEP_SUMMARY)")
     return parser
 
 
@@ -182,6 +190,8 @@ def _git_meta(ctx: opik_access.GitContext) -> dict[str, str]:
 
 
 def _demo(args: argparse.Namespace) -> int:
+    import example_task  # Task 5 rewrites this mode
+
     print(
         "Demo mode: no Opik connection; comparing AGENT_VERSION=v1 (baseline) with v2 (candidate) in-process."
     )
@@ -226,6 +236,8 @@ def _demo(args: argparse.Namespace) -> int:
 
 
 def _run(args: argparse.Namespace) -> int:
+    if bool(args.suite_task) != bool(args.suite_name):
+        raise ConfigError("--suite-task and --suite-name must be given together.")
     client = opik_access.make_client()
     version = opik_access.server_version(client)
     print(f"Opik server: {version}")
@@ -317,22 +329,25 @@ def _digest(args: argparse.Namespace) -> int:
     return _emit(args, md, payload)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def _dispatch(args: argparse.Namespace) -> int:
     try:
         if args.mode == "demo":
             return _demo(args)
         return _run(args) if args.mode == "run" else _digest(args)
-    except (ConfigError, eval_compare.PolicyError) as exc:
-        print(str(exc), file=sys.stderr)
-        if isinstance(exc, ConfigError) and DRY_RUN:
+    except ConfigError:
+        if DRY_RUN:
             print(DRY_RUN_HINT, file=sys.stderr)
-        return 2
-    except Exception as exc:
-        print(f"Run failed: {_fmt_error(exc)}", file=sys.stderr)
-        if os.environ.get("OPIK_EVAL_DEBUG") == "1":
-            traceback.print_exc()
-        return 2
+        raise
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    return ci_output.run_step(
+        lambda: _dispatch(args),
+        title=f"Opik eval: {args.mode}",
+        summary=getattr(args, "summary", None),
+        outcome=lambda: "Nothing was tagged or promoted.",
+    )
 
 
 if __name__ == "__main__":

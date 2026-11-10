@@ -16,10 +16,12 @@ def test_parser_run_requires_dataset_and_task() -> None:
     with pytest.raises(SystemExit) as exc:
         parser.parse_args(["run", "--dataset", "d"])
     assert exc.value.code == 2
-    args = parser.parse_args(["run", "--dataset", "d", "--task", "m:f"])
+    args = parser.parse_args(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b", "--metric", "m:b"])
     assert args.project is None
-    args = parser.parse_args(["run", "--dataset", "d", "--project", "p", "--task", "m:f"])
-    assert args.metric == "example_task:build_metric"
+    assert args.label_key == "scenario_id"
+    assert args.prompt_name == "scenario-planner"
+    args = parser.parse_args(["run", "--dataset", "d", "--project", "p", "--task", "m:f", "--metric", "m:b"])
+    assert args.metric == "m:b"
     assert args.trials == 1
     assert args.mark_baseline is False
 
@@ -31,7 +33,7 @@ def test_run_config_error_exits_2(
         raise ConfigError("Set OPIK_API_KEY and OPIK_WORKSPACE")
 
     monkeypatch.setattr(run_eval.opik_access, "make_client", boom)
-    code = run_eval.main(["run", "--dataset", "d", "--project", "p", "--task", "m:f"])
+    code = run_eval.main(["run", "--dataset", "d", "--project", "p", "--task", "m:f", "--metric", "m:b"])
     assert code == 2
     assert "OPIK_API_KEY" in capsys.readouterr().err
 
@@ -99,7 +101,7 @@ def test_run_task_crash_exits_2_with_label(
         raise KeyError("missing")
 
     monkeypatch.setattr(run_eval, "evaluate", boom)
-    code = run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--mark-baseline"])
+    code = run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b", "--mark-baseline"])
     assert code == 2
     assert "Task or metric error" in capsys.readouterr().err
     assert marked == []
@@ -114,7 +116,9 @@ def test_run_mark_baseline_tags_after_success(
         "_build_digest",
         lambda *a, **k: ("# d", {"status": "baseline_created", "has_pass_evidence": True}),
     )
-    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--mark-baseline"]) == 0
+    assert (
+        run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b", "--mark-baseline"]) == 0
+    )
     assert "baseline" not in seen["experiment_tags"]
     assert marked == ["e9"]
 
@@ -154,7 +158,7 @@ def test_run_without_credentials_exits_2_pointing_to_demo(
 
     monkeypatch.setattr(run_eval.opik_access, "make_client", boom)
     monkeypatch.setattr(run_eval, "DRY_RUN", True)
-    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f"]) == 2
+    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b"]) == 2
     err = capsys.readouterr().err
     assert "demo" in err
     assert "opik configure" in err
@@ -169,7 +173,9 @@ def test_run_mark_baseline_skips_tag_when_nothing_scored(
         "_build_digest",
         lambda *a, **k: ("# d", {"status": "insufficient_evidence", "has_pass_evidence": False}),
     )
-    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--mark-baseline"]) == 0
+    assert (
+        run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b", "--mark-baseline"]) == 0
+    )
     assert marked == []
     assert "not tagged" in capsys.readouterr().err
 
@@ -177,7 +183,7 @@ def test_run_mark_baseline_skips_tag_when_nothing_scored(
 def test_run_task_does_not_receive_item_id(monkeypatch: pytest.MonkeyPatch) -> None:
     _, seen = _stub_run(monkeypatch, task=lambda question: {"output": question})
     monkeypatch.setattr(run_eval, "_build_digest", lambda *a, **k: ("# d", {"status": "ok"}))
-    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f"]) == 0
+    assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b"]) == 0
     assert seen["task"]({"id": "item-1", "question": "q"}) == {"output": "q"}
 
 
@@ -190,3 +196,32 @@ def test_build_digest_links_traces_to_candidate_project(monkeypatch: pytest.Monk
     )
     assert "projects/proj-cand/traces?trace=t-i1-C-0" in md
     assert "proj-base" not in md
+
+
+def test_run_requires_metric() -> None:
+    with pytest.raises(SystemExit) as e:
+        run_eval.build_parser().parse_args(["run", "--dataset", "d", "--task", "m:t"])
+    assert e.value.code == 2
+
+
+def test_suite_flags_must_pair(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("OPIK_API_KEY", "k")
+    monkeypatch.setenv("OPIK_WORKSPACE", "w")
+    args = ["run", "--dataset", "d", "--task", "m:t", "--metric", "m:b"]
+    assert run_eval.main([*args, "--suite-task", "m:s"]) == 2
+    assert "--suite-name" in capsys.readouterr().err
+    assert run_eval.main([*args, "--suite-name", "n"]) == 2
+    assert "--suite-task" in capsys.readouterr().err
+
+
+def test_config_error_writes_summary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("OPIK_API_KEY", raising=False)
+    monkeypatch.delenv("OPIK_WORKSPACE", raising=False)
+
+    def boom() -> Any:
+        raise ConfigError("no creds")
+
+    monkeypatch.setattr(run_eval.opik_access, "make_client", boom)
+    summary = tmp_path / "s.md"
+    assert run_eval.main(["digest", "--experiment", "x", "--summary", str(summary)]) == 2
+    assert "Failed:" in summary.read_text(encoding="utf-8")
