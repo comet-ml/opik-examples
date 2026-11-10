@@ -28,6 +28,8 @@ def test_runbook_has_no_research_notes_or_stale_names() -> None:
         "examples/eval_in_ci/prompts/system.txt",
         ".github/workflows/opik-eval.yml",
         ".opik/**",
+        "examples/eval_in_ci/opik-release-policy.yaml",
+        "examples/eval_in_ci/.opik/**",
         "https://www.comet.com/docs/opik/mcp-server",
         "https://www.comet.com/docs/opik/mcp-server/use-cases",
         "https://www.comet.com/docs/opik/mcp-server/advanced-setup",

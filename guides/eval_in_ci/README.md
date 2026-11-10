@@ -31,6 +31,7 @@ Prompt: prompts/system.txt (demo, not logged)
 
 Pass rate: 0.00 -> 0.60 (+0.60)
 Items scored: 20 | Pass rule: 1 trial
+Policy: defaults
 
 ### Newly failing
 
@@ -97,7 +98,7 @@ All of it lives in one project (`eval-in-ci-example` in the workflow template).
 | Opik page | What appears | When |
 |---|---|---|
 | Datasets | `scenario-planner`, 20 driving scenarios with the expected plan | First run (setup) |
-| Prompt library | Prompt `scenario-planner`: one version per distinct `prompts/system.txt` text, with a change description `ci <sha7> <branch>` (plus `pr <n>` on PRs) | Every run |
+| Prompt library | Prompt `scenario-planner`: an unchanged `prompts/system.txt` text reuses the latest version, a different text logs a new one, with a change description `ci <sha7> <branch>` (plus `pr <n>` on PRs) | Every run |
 | Experiments | `<branch>-<sha7>`, linked to that prompt version, tagged `ci`, the branch, and `candidate` on PRs or `baseline` on `main` | Every run |
 | Prompt library | The `production` environment on the version `main` last evaluated | Push to `main` |
 | Test suites | `scenario-planner-guardrails` (3 assertions on 8 scenarios) and a run `<branch>-<sha7>-suite` tagged `test-suite` | Every run |
@@ -165,9 +166,10 @@ runbook's guard paths assume that destination.
   # without uv: pip install "opik>=2.2.113" "litellm>=1.70" pyyaml
   ```
 
-- An Opik workspace on Opik Cloud or your own host. Prompt environments, test suites and online
-  rules scoped to production traces need Opik 2.2.4 or later. Tested with Opik SDK 2.2.143. Use a
-  service-account key if your deployment has them (Admin dashboard > Service accounts), otherwise a
+- An Opik workspace on Opik Cloud or your own host: a 2.2.x server recent enough for prompt
+  environments, test suites and online rules. Tested with Opik SDK 2.2.143. Match the `opik` SDK
+  version to your Opik server and pin it in `pyproject.toml` (`opik==<version>`); the workflow
+  installs whatever `pyproject.toml` says. Use a service-account key if your deployment has them (Admin dashboard > Service accounts), otherwise a
   dedicated personal API key for CI.
 - A model provider key for the live path (Anthropic by default). The offline demo needs nothing.
 - For the online rule, an AI provider configured in the Opik workspace that matches
@@ -262,18 +264,19 @@ uv run python run_eval.py run --dataset scenario-planner --task planner:make_eva
   --metric scenarios:build_metric --prompt-file prompts/system.txt \
   --setup setup_opik:run_setup --suite-task planner:make_suite_task \
   --suite-name scenario-planner-guardrails --traffic planner:simulate_traffic_hook \
-  --fail-on-regression --out digest.md --json digest.json
+  --fail-on-regression --out digest.md --json digest.json --summary "$GITHUB_STEP_SUMMARY"
 ```
 
 On a push to `main` the workflow passes `--mark-baseline` instead of `--fail-on-regression`.
 
-`run` flags: `--dataset`, `--task`, `--metric` (both required), `--prompt-file`, `--prompt-name`
+`run` flags: `--dataset`, `--task`, `--metric` (all three required), `--prompt-file`, `--prompt-name`
 (default `scenario-planner`), `--setup`, `--suite-task`, `--suite-name`, `--traffic`,
 `--label-key`, `--trials` (default 1), `--mark-baseline`, `--pr`, `--baseline`,
 `--pass-threshold`, `--policy`, `--fail-on-regression`, `--out`, `--json`, `--summary` (append a
-failure note, for example `$GITHUB_STEP_SUMMARY`) and an optional `--project` lookup hint. Opik
-files experiments under the dataset's project, so `--project` only helps look an experiment up by
-name.
+failure note, for example `$GITHUB_STEP_SUMMARY`) and an optional `--project`. On `run`,
+`--project` names the project the experiment is filed under and is the first place an experiment
+is looked up by name; on `digest` it is only that lookup hint. Without it the SDK uses
+`OPIK_PROJECT_NAME`.
 
 Compare a finished experiment without re-running it:
 
@@ -292,7 +295,7 @@ marker to update a single sticky comment on the pull request instead of adding a
 Top to bottom: the experiment name, a `Warning:` line when `main` promoted a run with failed
 criteria, the baseline, the prompt version (`(unchanged)` when it is the one `production` already
 has), the verdict with any failed criteria, the pass rate against the baseline, items scored and
-the pass rule (`1 trial` or `all N trials`), notes (test suite, promotion, traffic), the "Newly
+the pass rule (`1 trial` or `all N trials`), notes (the policy used, test suite, promotion, traffic), the "Newly
 failing", "Newly passing", "Still failing" (grouped by metric), "Flaky" and "New items" lists, the
 per-metric means and the compare link. `digest.json` carries the same data for scripts.
 
@@ -390,8 +393,10 @@ the job on a non-zero code.
 - **Dataset not found.** `OPIK_WORKSPACE` or `OPIK_API_KEY` set in your shell overrides
   `~/.opik.config`. If they point at different workspaces, the dataset is not found. Check which
   workspace each one names.
-- **No experiment found.** Several runs on one commit share the name `<branch>-<sha7>`. Pass the
-  experiment id to `digest --experiment` instead.
+- **No experiment found.** Usually the wrong workspace (see the item above), or a name typed with
+  the branch as is: experiment names replace `/` in the branch with `-`, so `eval/brake-1` at
+  `abc1234` is `eval-brake-1-abc1234`. When several experiments share the exact name, the newest
+  wins; pass the experiment id to read an older one.
 - **Exit code 2.** A configuration, policy-file or connection problem, or a crash in your task or
   metric, not a regression. The job summary has the message. The agent runbook says to stop on it
   rather than treat it as a failed change.
@@ -441,8 +446,9 @@ Merging is deploying: whatever `main` last evaluated is what `production` serves
 - The production entry point (`answer` in `planner.py`) never pins a version; it asks for whatever
   `production` owns with `client.get_prompt("scenario-planner", environment="production")`.
   Promoting a new version is a library change, not a code change.
-- Experiment names are `<branch>-<sha7>`, where sha7 is the PR head commit. Repeated runs on one
-  commit share a name, and `digest --experiment NAME` resolves the newest.
+- Experiment names are `<branch>-<sha7>`, where `/` in the branch becomes `-` and sha7 is the PR
+  head commit. Repeated runs on one commit share a name, and `digest --experiment NAME` resolves
+  the newest.
 - `--trials N` (default 1) runs each item N times. An item passes only if all N trials pass, which
   matches the backend execution policy (`Pass rule: all N trials`). `--pass-threshold K` relaxes
   that to K of N, and the digest then prints `K of N trials (differs from UI)`.
@@ -464,8 +470,10 @@ off them.
 
 ### Policy file
 
-Put `opik-release-policy.yaml` at the repo root or in `.opik/`, or pass `--policy PATH`. The keys
-this gate reads:
+Put `opik-release-policy.yaml` at the repo root or in `.opik/`, or pass `--policy PATH`. The gate
+looks in its working directory first, then the repo root (the nearest directory above it with
+`.git`); the digest's `Policy:` line names which policy it used (`defaults` when none was found).
+The keys this gate reads:
 
 | Key | Meaning | Default |
 |---|---|---|
@@ -485,7 +493,9 @@ Unknown keys are an error (exit 2). The policy file is read with PyYAML, which t
   `examples/eval_in_ci/scenarios.py`, `examples/eval_in_ci/setup_opik.py`,
   `examples/eval_in_ci/eval_compare.py`, `examples/eval_in_ci/run_eval.py`,
   `examples/eval_in_ci/opik_access.py`, `.github/workflows/opik-eval.yml`,
-  `opik-release-policy.yaml` or `.opik/**`. `planner.py` (the app) and `prompts/` (what agents and
+  `opik-release-policy.yaml` or `.opik/**` at the repo root, or
+  `examples/eval_in_ci/opik-release-policy.yaml` or `examples/eval_in_ci/.opik/**` next to the gate.
+  `planner.py` (the app) and `prompts/` (what agents and
   the optimizer change) are deliberately not guarded.
 - The guard only covers those two branch prefixes. Add a CODEOWNERS entry for the eval paths so a
   human reviews every change to them. On `pull_request`, GitHub runs the PR's own copy of the

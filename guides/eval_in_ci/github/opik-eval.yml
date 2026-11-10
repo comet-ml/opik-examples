@@ -50,6 +50,8 @@ jobs:
               - '.github/workflows/opik-eval.yml'
               - 'opik-release-policy.yaml'
               - '.opik/**'
+              - 'examples/eval_in_ci/opik-release-policy.yaml'
+              - 'examples/eval_in_ci/.opik/**'
       - name: Block eval definition changes on eval/* and optimize/* branches
         # head_ref is empty on push and dispatch; ref_name is the branch then; on main it matches neither prefix.
         if: (startsWith(github.head_ref || github.ref_name, 'eval/') || startsWith(github.head_ref || github.ref_name, 'optimize/')) && steps.filter.outputs.eval_paths == 'true'

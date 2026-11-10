@@ -326,6 +326,17 @@ def test_policy_required_without_suite_task_exits_2(stub: StubClient, tmp_path: 
     assert stub.prompts_created == []
 
 
+def test_digest_names_policy_source(
+    stub: StubClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    main(_run_args(stub, out=tmp_path / "d.md"))
+    assert "Policy: defaults" in (tmp_path / "d.md").read_text()
+    (tmp_path / "p.yaml").write_text("min_items: 1\n")
+    main(_run_args(stub, policy=tmp_path / "p.yaml", out=tmp_path / "d.md"))
+    assert f"Policy: file:{tmp_path / 'p.yaml'}" in (tmp_path / "d.md").read_text()
+
+
 def test_label_key_names_rows(stub: StubClient, tmp_path: Path) -> None:
     stub.rows = _rows(candidate=_bad, n=1)
     stub.rows[0].data["question"] = "what now"

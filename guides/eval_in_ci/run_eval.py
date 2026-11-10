@@ -201,7 +201,7 @@ def _build_digest(
         version=version,
         label_key=label_key,
     )
-    return _render(c.cmp, c.verdict, c.meta)
+    return _render(c.cmp, c.verdict, replace(c.meta, notes=(f"Policy: {policy_source}",)))
 
 
 def _emit_files(args: argparse.Namespace, markdown: str, payload: dict[str, Any]) -> None:
@@ -290,6 +290,7 @@ def _demo(args: argparse.Namespace) -> int:
         git=_git_meta(opik_access.git_context()),
         mark_baseline=False,
         prompt_line="Prompt: prompts/system.txt (demo, not logged)",
+        notes=(f"Policy: {policy_source}",),
     )
     # WHY: the demo is illustrative, so the exit code ignores the policy verdict.
     _emit_files(args, *_render(cmp, verdict, meta))
@@ -400,7 +401,9 @@ def _run(args: argparse.Namespace) -> int:
         mark_baseline=args.mark_baseline,
         suite=suite,
     )
-    notes = [] if suite is None else [f"Test suite: {suite[0]} of {suite[1]} passed"]
+    notes = [f"Policy: {policy_source}"]
+    if suite is not None:
+        notes.append(f"Test suite: {suite[0]} of {suite[1]} passed")
     warning = None
     if c.verdict.status == "baseline_created":
         opik_access.mark_baseline(client, result.experiment_id)

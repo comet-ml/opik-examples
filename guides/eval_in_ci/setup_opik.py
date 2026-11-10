@@ -1,6 +1,6 @@
 """Idempotent Opik setup: environments, dataset, test suite and the online evaluation rule."""
 
-# WHY: the evaluate step runs this on every dispatch, so any run label works on a fresh workspace and
+# WHY: the gate runs this on every run, so any branch works on a fresh workspace and
 # a second run changes nothing.
 
 from collections.abc import Sequence
@@ -75,7 +75,7 @@ def ensure_test_suite(client: Any) -> Any:
     """Get or create the guardrail test suite and insert its items (deduplicated)."""
     suite = client.get_or_create_test_suite(
         name=TEST_SUITE_NAME,
-        description="Format and grounding checks a prompt must pass before staging",
+        description="Format and grounding checks a prompt must pass before production",
         global_assertions=list(GUARDRAIL_ASSERTIONS),
         global_execution_policy=SUITE_POLICY,
     )

@@ -285,10 +285,28 @@ class PolicyError(ValueError):
     pass
 
 
+def _repo_root(start: Path) -> Path | None:
+    """Nearest directory at or above start holding .git (a dir, or a file in a worktree)."""
+    for directory in (start, *start.parents):
+        if (directory / ".git").exists():
+            return directory
+    return None
+
+
+# WHY: CI runs from the guide folder, but the policy usually sits at the repo root; look in the
+# working directory first, then the repo root, and never above it.
+def _find_policy_file() -> Path | None:
+    candidates = [Path(p) for p in _POLICY_FILES]
+    root = _repo_root(Path.cwd().resolve())
+    if root is not None and root != Path.cwd().resolve():
+        candidates += [root / p for p in _POLICY_FILES]
+    return next((p for p in candidates if p.is_file()), None)
+
+
 def load_policy(path: Path | None) -> tuple[Policy, str]:
     """Load the release policy; return it with its source label."""
     if path is None:
-        found = next((Path(p) for p in _POLICY_FILES if Path(p).is_file()), None)
+        found = _find_policy_file()
         if found is None:
             return Policy(), "defaults"
         path = found

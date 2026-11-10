@@ -15,7 +15,8 @@ An iteration is done when one of these holds:
   the result is logged with decision `reject`.
 
 The policy lives in `opik-release-policy.yaml` at the repo root or in `.opik/`. The CI gate reads
-`min_items`, `max_regressions`, `pass_rate`, `flaky_policy` and `test_suite` from it. If your
+`min_items`, `max_regressions`, `pass_rate`, `flaky_policy` and `test_suite` from it, and the
+digest's `Policy:` line names the file it used (or `defaults`). If your
 host has the Opik skills, `/opik-verify` applies the same policy keys (it also checks keys this
 gate ignores).
 
@@ -139,7 +140,9 @@ Known limits:
 - Never edit the eval definition: the metric, dataset and setup files `scenarios.py`,
   `setup_opik.py`, `composite_metric.py`, `eval_compare.py`, `run_eval.py` and `opik_access.py`
   (under `examples/eval_in_ci/`), the workflow `.github/workflows/opik-eval.yml`, the policy file
-  `opik-release-policy.yaml` and `.opik/**`. The workflow guard fails a PR from an
+  `opik-release-policy.yaml` and `.opik/**` at the repo root, and
+  `examples/eval_in_ci/opik-release-policy.yaml` and `examples/eval_in_ci/.opik/**` next to the
+  gate. The workflow guard fails a PR from an
   `eval/*` or `optimize/*` branch that touches any of them (adjust the paths if you copied the
   folder elsewhere). `planner.py` is the app and is not guarded. Changing how the score is
   computed is not improving the app.

@@ -1,7 +1,7 @@
 """Driving-scenario dataset, production requests, plan parsing and the sub-metrics."""
 
 # WHY: every target value is stated in the input, so a perfect prompt can reach 100%; eight items use
-# maneuvers that prompts/strong.txt does not list, which is the headroom the optimizer can find.
+# maneuvers that prompts/system.txt does not list, which is the headroom the optimizer can find.
 
 import json
 from typing import Any

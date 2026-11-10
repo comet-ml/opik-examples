@@ -68,3 +68,12 @@ def test_sample_comment_present() -> None:
     assert fence, "no fenced block after 'What you get'"
     assert not re.search(r"^#", rest[: fence.start()], flags=re.MULTILINE), "fence is under another heading"
     assert fence.group(1) == "<!-- opik-eval -->"
+
+
+# WHY: these modules write descriptions clients see in Opik, so they must use the current names too.
+def test_no_stale_names_in_sources() -> None:
+    guide = Path(__file__).resolve().parents[1]
+    for module in ("setup_opik.py", "scenarios.py", "planner.py", "config.py"):
+        text = (guide / module).read_text(encoding="utf-8")
+        for stale in ("staging", "run label", "strong.txt"):
+            assert stale not in text, f"{module}: {stale}"

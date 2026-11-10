@@ -432,3 +432,43 @@ def test_means_table_omits_n_metrics_failed() -> None:
     verdict = ec.evaluate_policy(cmp, ec.Policy())
     assert "n_metrics_failed" not in ec.render_markdown(cmp, verdict, _meta())
     assert "n_metrics_failed" not in ec.render_json(cmp, verdict, _meta())["metric_means"]
+
+
+# WHY: the workflow runs from examples/eval_in_ci, so a policy at the repo root must still be found.
+def test_load_policy_finds_repo_root_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / ".git").write_text("gitdir: elsewhere\n")
+    work = tmp_path / "examples" / "eval_in_ci"
+    work.mkdir(parents=True)
+    monkeypatch.chdir(work)
+    (tmp_path / "opik-release-policy.yaml").write_text("min_items: 4\n")
+    policy, source = ec.load_policy(None)
+    assert policy.min_items == 4
+    assert source == f"file:{tmp_path / 'opik-release-policy.yaml'}"
+
+    (tmp_path / "opik-release-policy.yaml").unlink()
+    (tmp_path / ".opik").mkdir()
+    (tmp_path / ".opik" / "opik-release-policy.yaml").write_text("min_items: 5\n")
+    assert ec.load_policy(None)[0].min_items == 5
+
+
+def test_load_policy_cwd_file_beats_repo_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / ".git").mkdir()
+    work = tmp_path / "examples" / "eval_in_ci"
+    work.mkdir(parents=True)
+    monkeypatch.chdir(work)
+    (tmp_path / "opik-release-policy.yaml").write_text("min_items: 4\n")
+    (work / "opik-release-policy.yaml").write_text("min_items: 7\n")
+    policy, source = ec.load_policy(None)
+    assert policy.min_items == 7
+    assert source == "file:opik-release-policy.yaml"
+
+
+def test_load_policy_stops_at_repo_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A policy above the nearest .git belongs to another repo and is ignored.
+    (tmp_path / "opik-release-policy.yaml").write_text("min_items: 4\n")
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    work = repo / "examples"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    assert ec.load_policy(None) == (ec.Policy(), "defaults")

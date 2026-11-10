@@ -133,6 +133,8 @@ def test_template_guard_paths() -> None:
         ".github/workflows/opik-eval.yml",
         "opik-release-policy.yaml",
         ".opik/**",
+        "examples/eval_in_ci/opik-release-policy.yaml",
+        "examples/eval_in_ci/.opik/**",
     ]
     block = next(s for s in guard["steps"] if "if" in s)["if"]
     # WHY: head_ref is empty on workflow_dispatch, the event that runs the gate on optimize/<n>.
