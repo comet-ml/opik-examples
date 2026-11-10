@@ -19,6 +19,13 @@ RUN_SH = ROOT / "run.sh"
 needs_selftest = pytest.mark.skipif(not SELFTEST.is_file(), reason="selftest not next to this guide")
 
 MODE_PUSH_GATE = "${{ github.event_name == 'push' && '--mark-baseline' || '--fail-on-regression' }}"
+GATE_ACTIONS = {
+    "actions/checkout@v7",
+    "dorny/paths-filter@v4",
+    "astral-sh/setup-uv@v10",
+    "actions/upload-artifact@v7",
+    "actions/github-script@v9",
+}
 HOOK_FLAGS = ("--dataset", "--task", "--metric", "--prompt-file", "--setup", "--suite-task", "--suite-name")
 
 
@@ -68,17 +75,28 @@ def test_actions_pinned_to_majors(path: Path) -> None:
 
 def test_template_uses_uv_and_current_actions() -> None:
     uses = {s["uses"] for s in _steps(TEMPLATE) if "uses" in s}
-    assert uses == {
-        "actions/checkout@v7",
-        "dorny/paths-filter@v3",
-        "astral-sh/setup-uv@v7",
-        "actions/upload-artifact@v4",
-        "actions/github-script@v7",
-    }
-    setup_uv = next(s for s in _steps(TEMPLATE) if s.get("uses") == "astral-sh/setup-uv@v7")
+    assert uses == GATE_ACTIONS
+    setup_uv = next(s for s in _steps(TEMPLATE) if s.get("uses") == "astral-sh/setup-uv@v10")
     assert "version" not in setup_uv["with"]
     assert "pip install" not in "\n".join(s.get("run", "") for s in _steps(TEMPLATE))
     assert "Security-reviewed repos usually pin these to commit SHAs." in TEMPLATE.read_text(encoding="utf-8")
+
+
+@needs_selftest
+def test_selftest_uses_the_template_action_majors() -> None:
+    assert {s["uses"] for s in _steps(SELFTEST) if "uses" in s} == GATE_ACTIONS - {"dorny/paths-filter@v4"}
+
+
+def test_optimize_uses_current_action_majors() -> None:
+    assert {s["uses"] for s in _steps(OPTIMIZE) if "uses" in s} == {
+        "actions/checkout@v7",
+        "astral-sh/setup-uv@v10",
+    }
+    assert _step(OPTIMIZE, "Optimize the prompt")["env"]["OPIK_PROJECT_NAME"] == "eval-in-ci-example"
+
+
+def test_template_eval_job_has_timeout() -> None:
+    assert _load(TEMPLATE)["jobs"]["eval"]["timeout-minutes"] == 20
 
 
 def test_template_has_install_your_project_step() -> None:
@@ -121,7 +139,7 @@ def test_template_env_block() -> None:
 
 def test_template_guard_paths() -> None:
     guard = _load(TEMPLATE)["jobs"]["guard"]
-    filters = next(s for s in guard["steps"] if s.get("uses") == "dorny/paths-filter@v3")["with"]["filters"]
+    filters = next(s for s in guard["steps"] if s.get("uses") == "dorny/paths-filter@v4")["with"]["filters"]
     paths = yaml.safe_load(filters)["eval_paths"]
     assert paths == [
         "examples/eval_in_ci/composite_metric.py",
@@ -203,7 +221,20 @@ def test_sticky_comment_script_identical() -> None:
 
     assert script(SELFTEST) == script(TEMPLATE)
     assert "examples/eval_in_ci/digest.md" in _step(TEMPLATE, "Post sticky PR comment")["with"]["script"]
-    assert "github.event_name == 'pull_request'" in _step(SELFTEST, "Post sticky PR comment")["if"]
+
+
+@pytest.mark.parametrize("path", [TEMPLATE, SELFTEST], ids=["template", "selftest"])
+def test_sticky_comment_runs_on_dispatch_and_finds_the_pr(path: Path) -> None:
+    if not path.is_file():
+        pytest.skip("selftest not next to this guide")
+    step = _step(path, "Post sticky PR comment")
+    assert "github.event_name == 'pull_request'" in step["if"]
+    assert "github.event_name == 'workflow_dispatch'" in step["if"]
+    script = step["with"]["script"]
+    assert "github.rest.pulls.list" in script
+    assert "state: 'open'" in script
+    assert "head: `${owner}:${context.ref.replace('refs/heads/', '')}`" in script
+    assert "prs[0].number" in script
 
 
 def _run_sh_args(tmp_path: Path, *args: str) -> list[str]:

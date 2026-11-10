@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10
       - name: Install dependencies
         working-directory: examples/eval_in_ci
         run: uv sync --extra optimizer
@@ -43,6 +43,7 @@ jobs:
           OPIK_URL_OVERRIDE: ${{ vars.OPIK_URL_OVERRIDE || 'https://www.comet.com/opik/api' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
+          OPIK_PROJECT_NAME: eval-in-ci-example
           MAX_TRIALS: ${{ inputs.max_trials }}
         run: |
           uv run python optimize_prompt.py \

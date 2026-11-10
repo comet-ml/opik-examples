@@ -53,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
           python-version: "3.12"
@@ -78,7 +78,7 @@ jobs:
 
       - name: Upload digest
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opik-eval-digest
           path: |
@@ -87,16 +87,24 @@ jobs:
           if-no-files-found: ignore
 
       - name: Post sticky PR comment
-        if: always() && github.event_name == 'pull_request' && hashFiles('guides/eval_in_ci/digest.md') != ''
+        # On workflow_dispatch (the optimizer's optimize/<n> branch) the comment goes to the branch's open PR.
+        if: always() && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && hashFiles('guides/eval_in_ci/digest.md') != ''
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
             const body = fs.readFileSync('guides/eval_in_ci/digest.md', 'utf8');
             const marker = '<!-- opik-eval -->';
             const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
+            let issue_number = context.issue.number;
+            if (context.eventName === 'workflow_dispatch') {
+              const { data: prs } = await github.rest.pulls.list({
+                owner, repo, state: 'open', head: `${owner}:${context.ref.replace('refs/heads/', '')}`,
+              });
+              if (prs.length === 0) return;
+              issue_number = prs[0].number;
+            }
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
             const existing = comments.find(c => c.body && c.body.startsWith(marker));
             if (existing) {
