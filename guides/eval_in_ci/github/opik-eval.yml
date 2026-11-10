@@ -21,7 +21,8 @@ on:
 
 concurrency:
   group: opik-eval-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only PR runs cancel each other; a main run (baseline, promotion, traffic) always finishes.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -50,8 +51,8 @@ jobs:
               - 'opik-release-policy.yaml'
               - '.opik/**'
       - name: Block eval definition changes on eval/* and optimize/* branches
-        # On push events github.head_ref is empty, so this guard passes.
-        if: (startsWith(github.head_ref, 'eval/') || startsWith(github.head_ref, 'optimize/')) && steps.filter.outputs.eval_paths == 'true'
+        # head_ref is empty on push and dispatch; ref_name is the branch then; on main it matches neither prefix.
+        if: (startsWith(github.head_ref || github.ref_name, 'eval/') || startsWith(github.head_ref || github.ref_name, 'optimize/')) && steps.filter.outputs.eval_paths == 'true'
         run: |
           echo "::error::eval/* and optimize/* branches may not change eval definitions"
           exit 1
@@ -69,8 +70,10 @@ jobs:
       - name: Install dependencies
         working-directory: examples/eval_in_ci
         run: uv sync
+      # Installs your repo into the eval project's environment so --task can import it.
       # - name: Install your project
-      #   run: pip install -e .   # or: uv sync --project . ; whatever makes your --task importable
+      #   working-directory: examples/eval_in_ci
+      #   run: uv pip install -e ../..
       - name: Run evaluation
         id: eval
         continue-on-error: true

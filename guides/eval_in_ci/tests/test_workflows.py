@@ -1,6 +1,8 @@
 """Static checks on the gate template, the optimize workflow and the repo selftest (no GitHub calls)."""
 
+import os
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -82,7 +84,10 @@ def test_template_uses_uv_and_current_actions() -> None:
 def test_template_has_install_your_project_step() -> None:
     text = TEMPLATE.read_text(encoding="utf-8")
     assert re.search(r"^\s*# - name: Install your project$", text, re.M)
-    assert re.search(r"^\s*#   run: pip install -e \.", text, re.M)
+    assert re.search(r"^\s*#   working-directory: examples/eval_in_ci$", text, re.M)
+    assert re.search(r"^\s*#   run: uv pip install -e \.\./\.\.$", text, re.M)
+    assert "installs your repo into the eval project's environment so --task can import it" in text.lower()
+    assert "pip install -e ." not in text.replace("uv pip install -e ../..", "")
 
 
 def test_template_passes_metric_and_prompt_file() -> None:
@@ -118,13 +123,28 @@ def test_template_guard_paths() -> None:
     guard = _load(TEMPLATE)["jobs"]["guard"]
     filters = next(s for s in guard["steps"] if s.get("uses") == "dorny/paths-filter@v3")["with"]["filters"]
     paths = yaml.safe_load(filters)["eval_paths"]
-    assert "examples/eval_in_ci/setup_opik.py" in paths
-    assert "examples/eval_in_ci/scenarios.py" in paths
-    assert "examples/eval_in_ci/run_eval.py" in paths
-    assert not [p for p in paths if "planner" in p or "prompts" in p]
+    assert paths == [
+        "examples/eval_in_ci/composite_metric.py",
+        "examples/eval_in_ci/scenarios.py",
+        "examples/eval_in_ci/setup_opik.py",
+        "examples/eval_in_ci/eval_compare.py",
+        "examples/eval_in_ci/run_eval.py",
+        "examples/eval_in_ci/opik_access.py",
+        ".github/workflows/opik-eval.yml",
+        "opik-release-policy.yaml",
+        ".opik/**",
+    ]
     block = next(s for s in guard["steps"] if "if" in s)["if"]
-    assert "startsWith(github.head_ref, 'eval/')" in block
-    assert "startsWith(github.head_ref, 'optimize/')" in block
+    # WHY: head_ref is empty on workflow_dispatch, the event that runs the gate on optimize/<n>.
+    assert "startsWith(github.head_ref || github.ref_name, 'eval/')" in block
+    assert "startsWith(github.head_ref || github.ref_name, 'optimize/')" in block
+
+
+@pytest.mark.parametrize("path", [TEMPLATE, SELFTEST], ids=["template", "selftest"])
+def test_main_runs_are_never_cancelled(path: Path) -> None:
+    if not path.is_file():
+        pytest.skip("selftest not next to this guide")
+    assert _load(path)["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
 
 
 @pytest.mark.parametrize("path", [TEMPLATE, OPTIMIZE, SELFTEST], ids=["template", "optimize", "selftest"])
@@ -181,6 +201,27 @@ def test_sticky_comment_script_identical() -> None:
 
     assert script(SELFTEST) == script(TEMPLATE)
     assert "examples/eval_in_ci/digest.md" in _step(TEMPLATE, "Post sticky PR comment")["with"]["script"]
+    assert "github.event_name == 'pull_request'" in _step(SELFTEST, "Post sticky PR comment")["if"]
+
+
+def _run_sh_args(tmp_path: Path, *args: str) -> list[str]:
+    stub = tmp_path / "uv"
+    stub.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n', encoding="utf-8")
+    stub.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    env.update(OPIK_API_KEY="k", OPIK_WORKSPACE="w")
+    out = subprocess.run(
+        ["bash", str(RUN_SH), *args], cwd=ROOT, env=env, capture_output=True, text=True, check=True
+    ).stdout
+    # WHY: the stub prints one arg per line for each uv call; the last call is the eval.
+    calls = out.split("run\npython\nrun_eval.py\n")
+    return calls[-1].splitlines()
+
+
+def test_run_sh_drops_only_an_empty_first_arg(tmp_path: Path) -> None:
+    assert _run_sh_args(tmp_path, "", "--out", "d.md")[-2:] == ["--out", "d.md"]
+    assert _run_sh_args(tmp_path, "--out", "d.md", "")[-3:] == ["--out", "d.md", ""]
+    assert _run_sh_args(tmp_path, "--mark-baseline")[-1] == "--mark-baseline"
 
 
 def test_optimize_is_dispatch_only() -> None:

@@ -23,7 +23,8 @@ on:
 
 concurrency:
   group: eval-in-ci-selftest-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only PR runs cancel each other; a main run (baseline, promotion, traffic) always finishes.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
