@@ -103,7 +103,7 @@ def test_classify_flags_newly_failing_passing_still_failing() -> None:
     assert cmp.items_scored == 4
     assert cmp.pass_rate_baseline == 0.5
     assert cmp.pass_rate_candidate == 0.5
-    assert cmp.pass_rule == "all 1 trials"
+    assert cmp.pass_rule == "1 trial"
     assert cmp.metric_means[PASS] == (0.5, 0.5)
 
 
@@ -339,3 +339,96 @@ def test_still_failing_more_counts_items_not_metric_rows() -> None:
     md = ec.render_markdown(cmp, ec.evaluate_policy(cmp, ec.Policy()), _meta())
     assert "+5 more" in md
     assert "+35 more" not in md
+
+
+def test_all_unscored_items_give_no_evidence() -> None:
+    runs = [ec.ItemRun("c", "i1", None, "i1", (ec.RunScore(PASS, 0.0, "failed: a unscored; b unscored"),))]
+    cmp = ec.classify(runs, baseline_id=None, candidate_id="c")
+    assert cmp.items_unscored == 1 and cmp.has_pass_evidence is False
+
+
+def _cmp_with_baseline(*, passing: bool = False, regressed: bool = False) -> ec.Comparison:
+    """Ten items against a baseline; `regressed` flips one pass to fail and one fail to pass."""
+    rows = [row(f"i{n}", f"s{n}", {"B": [_ok()], "C": [_ok()]}) for n in range(10)]
+    if regressed:
+        rows[0] = row("i0", "s0", {"B": [_ok()], "C": [_bad()]})
+        rows[1] = row("i1", "s1", {"B": [_bad()], "C": [_ok()]})
+    assert passing != regressed
+    return _classify(rows)
+
+
+def test_suite_failure_is_hold_on_pr() -> None:
+    cmp = _cmp_with_baseline(passing=True)
+    v = ec.evaluate_policy(cmp, ec.Policy(), suite=(6, 8))
+    assert v.status == "hold" and "test_suite" in [c.name for c in v.criteria if not c.passed]
+    assert v.suite == (6, 8)
+    suite = next(c for c in v.criteria if c.name == "test_suite")
+    assert (suite.threshold, suite.observed) == ("all items pass", "6 of 8")
+
+
+def test_suite_skipped_when_not_configured() -> None:
+    v = ec.evaluate_policy(_cmp_with_baseline(passing=True), ec.Policy())
+    assert "test_suite" not in [c.name for c in v.criteria]
+    assert v.status == "ok" and v.suite is None
+    skipped = ec.evaluate_policy(_cmp_with_baseline(passing=True), ec.Policy(test_suite="skip"), suite=(6, 8))
+    assert "test_suite" not in [c.name for c in skipped.criteria]
+    assert skipped.status == "ok"
+
+
+def test_mark_baseline_promotes_despite_failures() -> None:
+    cmp = _cmp_with_baseline(regressed=True)
+    v = ec.evaluate_policy(cmp, ec.Policy(), mark_baseline=True, suite=(6, 8))
+    assert v.status == "baseline_created" and v.passed is True
+    assert {c.name for c in v.criteria if not c.passed} == {"max_regressions", "test_suite"}
+
+
+def test_policy_test_suite_values(tmp_path: Path) -> None:
+    (tmp_path / "p.yaml").write_text("test_suite: sometimes\n")
+    with pytest.raises(ec.PolicyError):
+        ec.load_policy(tmp_path / "p.yaml")
+    (tmp_path / "ok.yaml").write_text("test_suite: required\n")
+    assert ec.load_policy(tmp_path / "ok.yaml")[0].test_suite == "required"
+    assert ec.Policy().test_suite == "if_configured"
+
+
+def test_markdown_marker_first_even_with_warning() -> None:
+    cmp = _cmp_with_baseline(passing=True)
+    verdict = ec.evaluate_policy(cmp, ec.Policy())
+    md = ec.render_markdown(cmp, verdict, _meta(warning="Warning: promoted with failed criteria: test_suite"))
+    lines = md.splitlines()
+    assert lines[0] == ec.MARKER and lines[1].startswith("## ") and lines[2].startswith("Warning:")
+    assert ec.render_json(cmp, verdict, _meta(warning="W"))["warning"] == "W"
+
+
+def test_markdown_prompt_and_notes_lines() -> None:
+    cmp = _cmp_with_baseline(passing=True)
+    verdict = ec.evaluate_policy(cmp, ec.Policy(), suite=(8, 8))
+    meta = _meta(prompt_line="Prompt: scenario-planner v3 (unchanged)", notes=("Test suite: 8 of 8 passed",))
+    md = ec.render_markdown(cmp, verdict, meta)
+    assert "Prompt: scenario-planner v3 (unchanged)" in md and "Test suite: 8 of 8 passed" in md
+    lines = md.splitlines()
+    assert lines.index("Prompt: scenario-planner v3 (unchanged)") == lines.index("Baseline: base (B)") + 1
+    assert (
+        lines.index("Test suite: 8 of 8 passed")
+        == next(i for i, line in enumerate(lines) if line.startswith("Items scored:")) + 1
+    )
+    data = ec.render_json(cmp, verdict, meta)
+    assert data["prompt"] == "Prompt: scenario-planner v3 (unchanged)"
+    assert data["suite"] == [8, 8]
+    assert data["warning"] is None
+
+
+def test_pass_rule_wording() -> None:
+    one_trial = _classify([row("i1", "s1", {"B": [_ok()], "C": [_ok()]})])
+    three_trials = _classify([row("i1", "s1", {"B": [_ok()] * 3, "C": [_ok()] * 3})])
+    assert one_trial.pass_rule == "1 trial"
+    assert three_trials.pass_rule == "all 3 trials"
+
+
+def test_means_table_omits_n_metrics_failed() -> None:
+    scores = [*_ok(), _score("n_metrics_failed", 0.0)]
+    cmp = _classify([row("i1", "s1", {"B": [scores], "C": [scores]})])
+    assert "n_metrics_failed" in cmp.metric_means
+    verdict = ec.evaluate_policy(cmp, ec.Policy())
+    assert "n_metrics_failed" not in ec.render_markdown(cmp, verdict, _meta())
+    assert "n_metrics_failed" not in ec.render_json(cmp, verdict, _meta())["metric_means"]

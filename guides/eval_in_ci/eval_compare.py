@@ -11,12 +11,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from composite_metric import DEFAULT_PASS_NAME, failing_metrics_from_reason
+from composite_metric import DEFAULT_PASS_NAME, N_METRICS_FAILED, failing_metrics_from_reason, is_all_unscored
 
 MARKER = "<!-- opik-eval -->"
 _UNSCORED = "unscored"
 _NO_REASON = "failed (no reason)"
 _NOT_BELOW = "not_below_baseline"
+_TEST_SUITE_MODES = ("required", "if_configured", "skip")
 _POLICY_FILES = ("opik-release-policy.yaml", ".opik/opik-release-policy.yaml")
 _POLICY_KEYS = frozenset(
     {
@@ -29,6 +30,7 @@ _POLICY_KEYS = frozenset(
         "cost_per_item_max_increase",
         "flaky_policy",
         "judge_validated",
+        "test_suite",
     }
 )
 
@@ -82,7 +84,7 @@ class Comparison:
 
     @property
     def has_pass_evidence(self) -> bool:
-        """At least one candidate item carried the pass score."""
+        """At least one candidate item carried a real (not all-unscored) pass score."""
         return self.items_scored > self.items_unscored
 
     # WHY: under flaky_policy "exclude" a flaky item must not count as a failure in the pass rate
@@ -154,6 +156,13 @@ def _worst_run(runs: Sequence[ItemRun], pass_name: str) -> ItemRun:
     return min(runs, key=key)
 
 
+def _unscored(run: ItemRun, pass_name: str) -> bool:
+    for s in run.scores:
+        if s.name == pass_name:
+            return is_all_unscored(s.reason)
+    return True
+
+
 def _failing_metrics(run: ItemRun, pass_name: str) -> tuple[str, ...]:
     for s in run.scores:
         if s.name == pass_name:
@@ -209,7 +218,7 @@ def classify(
             cmp.items_scored += 1
             cmp.candidate_passed += bool(c_ok)
             trial_counts[len(c_runs)] += 1
-            if all(_pass_value(r, pass_name) is None for r in c_runs):
+            if all(_unscored(r, pass_name) for r in c_runs):
                 cmp.items_unscored += 1
 
         worst = _worst_run(c_runs, pass_name) if c_runs else None
@@ -254,7 +263,7 @@ def classify(
 
     n_trials = trial_counts.most_common(1)[0][0] if trial_counts else 0
     if pass_threshold is None:
-        cmp.pass_rule = f"all {n_trials} trials"
+        cmp.pass_rule = "1 trial" if n_trials == 1 else f"all {n_trials} trials"
     else:
         cmp.pass_rule = f"{pass_threshold} of {n_trials} trials (differs from UI)"
     return cmp
@@ -266,6 +275,10 @@ class Policy:
     max_regressions: int = 0
     pass_rate: str | float = _NOT_BELOW
     flaky_policy: str = "exclude"
+    test_suite: str = "if_configured"
+
+
+SuiteResult = tuple[int, int]
 
 
 class PolicyError(ValueError):
@@ -304,6 +317,9 @@ def load_policy(path: Path | None) -> tuple[Policy, str]:
     flaky_policy = raw.get("flaky_policy", defaults.flaky_policy)
     if flaky_policy not in ("exclude", "count"):
         raise PolicyError("flaky_policy must be 'exclude' or 'count'")
+    test_suite = raw.get("test_suite", defaults.test_suite)
+    if test_suite not in _TEST_SUITE_MODES:
+        raise PolicyError(f"test_suite must be one of {', '.join(_TEST_SUITE_MODES)}")
     for key in ("min_items", "max_regressions"):
         value = raw.get(key, getattr(defaults, key))
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -314,6 +330,7 @@ def load_policy(path: Path | None) -> tuple[Policy, str]:
             max_regressions=raw.get("max_regressions", defaults.max_regressions),
             pass_rate=pass_rate,
             flaky_policy=flaky_policy,
+            test_suite=test_suite,
         ),
         f"file:{path}",
     )
@@ -333,9 +350,16 @@ class PolicyVerdict:
     criteria: list[Criterion]
     status: str
     flaky_excluded: bool = False
+    suite: SuiteResult | None = None
 
 
-def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = False) -> PolicyVerdict:
+def evaluate_policy(
+    cmp: Comparison,
+    policy: Policy,
+    *,
+    mark_baseline: bool = False,
+    suite: SuiteResult | None = None,
+) -> PolicyVerdict:
     """Apply the policy; hold beats insufficient_evidence."""
     has_baseline = cmp.baseline_id is not None
     exclude_flaky = policy.flaky_policy == "exclude" and bool(cmp.flaky)
@@ -374,24 +398,34 @@ def evaluate_policy(cmp: Comparison, policy: Policy, *, mark_baseline: bool = Fa
         criteria.append(Criterion("max_regressions", f"<= {policy.max_regressions}", "n/a", True))
         criteria.append(Criterion("pass_rate", str(policy.pass_rate), "n/a", True))
     criteria.append(Criterion("flaky_policy", policy.flaky_policy, str(len(cmp.flaky)), True))
+    if suite is not None and policy.test_suite != "skip":
+        s_passed, s_total = suite
+        criteria.append(
+            Criterion("test_suite", "all items pass", f"{s_passed} of {s_total}", s_passed == s_total)
+        )
 
     by_name = {c.name: c for c in criteria}
-    if not has_baseline:
-        if not mark_baseline:
-            status = "no_baseline"
-        elif cmp.has_pass_evidence:
-            status = "baseline_created"
-        else:
-            # WHY: a run whose items all lack the pass score must never become the baseline.
-            status = "insufficient_evidence"
-    elif not by_name["max_regressions"].passed or not by_name["pass_rate"].passed:
+    held = any(not c.passed for c in criteria if c.name in ("max_regressions", "pass_rate", "test_suite"))
+    # WHY: on main the run is promoted even with failed criteria (the caller warns); only a run
+    # whose items all lack a real pass score is refused as a baseline.
+    if mark_baseline:
+        status = "baseline_created" if cmp.has_pass_evidence else "insufficient_evidence"
+    elif not has_baseline:
+        status = "no_baseline"
+    elif held:
         status = "hold"
     elif not by_name["min_items"].passed:
         status = "insufficient_evidence"
     else:
         status = "ok"
     passed = status in ("ok", "baseline_created", "no_baseline")
-    return PolicyVerdict(passed=passed, criteria=criteria, status=status, flaky_excluded=exclude_flaky)
+    return PolicyVerdict(
+        passed=passed,
+        criteria=criteria,
+        status=status,
+        flaky_excluded=exclude_flaky,
+        suite=suite,
+    )
 
 
 @dataclass(frozen=True)
@@ -404,6 +438,9 @@ class DigestMeta:
     server_version: str | None
     git: dict[str, str]
     mark_baseline: bool | None = None
+    prompt_line: str | None = None
+    notes: tuple[str, ...] = ()
+    warning: str | None = None
 
 
 def _baseline_line(cmp: Comparison, meta: DigestMeta) -> str:
@@ -482,16 +519,19 @@ def render_markdown(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta, m
     if verdict.flaky_excluded:
         rate += " (flaky excluded)"
 
-    lines = [
-        MARKER,
-        f"## Opik eval: {meta.candidate_name}",
-        "",
-        _baseline_line(cmp, meta),
+    lines = [MARKER, f"## Opik eval: {meta.candidate_name}"]
+    if meta.warning:
+        lines.append(meta.warning)
+    lines += ["", _baseline_line(cmp, meta)]
+    if meta.prompt_line:
+        lines.append(meta.prompt_line)
+    lines += [
         "",
         verdict_line,
         "",
         rate,
         f"Items scored: {cmp.items_scored} | Pass rule: {cmp.pass_rule}",
+        *meta.notes,
     ]
     lines += _section("Newly failing", cmp.newly_failing, meta, max_rows)
     lines += _section("Newly passing", cmp.newly_passing, meta, max_rows)
@@ -506,6 +546,8 @@ def render_markdown(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta, m
         "|---|---|---|---|",
     ]
     for name, (base, cand) in cmp.metric_means.items():
+        if name == N_METRICS_FAILED:
+            continue
         d = _delta(base, cand)
         lines.append(f"| {name} | {_fmt(base)} | {_fmt(cand)} | {'n/a' if d is None else f'{d:+.2f}'} |")
     lines += ["", "### Compare", ""]
@@ -534,9 +576,16 @@ def render_json(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta) -> di
         "still_failing": [asdict(o) for o in cmp.still_failing],
         "new_items": [asdict(o) for o in cmp.new_items],
         "flaky": [asdict(o) for o in cmp.flaky],
-        "metric_means": {name: {"baseline": b, "candidate": c} for name, (b, c) in cmp.metric_means.items()},
+        "metric_means": {
+            name: {"baseline": b, "candidate": c}
+            for name, (b, c) in cmp.metric_means.items()
+            if name != N_METRICS_FAILED
+        },
         "criteria": [asdict(c) for c in verdict.criteria],
         "compare_url": meta.compare_url,
+        "prompt": meta.prompt_line,
+        "suite": list(verdict.suite) if verdict.suite else None,
+        "warning": meta.warning,
         "meta": {
             "baseline_name": meta.baseline_name,
             "candidate_name": meta.candidate_name,

@@ -1,8 +1,9 @@
 from typing import Any
 
+import pytest
 from opik.evaluation.metrics import BaseMetric, score_result
 
-from composite_metric import CompositePassMetric, failing_metrics_from_reason
+from composite_metric import CompositePassMetric, failing_metrics_from_reason, is_all_unscored
 
 
 class Const(BaseMetric):
@@ -107,3 +108,16 @@ def test_nan_submetric_value_is_unscored_failure() -> None:
     assert out["scenario_pass"].value == 0.0
     assert out["scenario_pass"].reason == "failed: a unscored"
     assert out["n_metrics_failed"].value == 1.0
+
+
+@pytest.mark.parametrize(
+    "reason,expected",
+    [
+        ("failed: a unscored; b missing", True),
+        ("failed: a unscored; b 0.00 < 1.00", False),
+        ("all thresholds met", False),
+        (None, False),
+    ],
+)
+def test_is_all_unscored(reason: str | None, expected: bool) -> None:
+    assert is_all_unscored(reason) is expected

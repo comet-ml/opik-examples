@@ -86,3 +86,10 @@ def failing_metrics_from_reason(reason: str | None) -> tuple[str, ...]:
         if match:
             names.append(match.group("name"))
     return tuple(names)
+
+
+def is_all_unscored(reason: str | None) -> bool:
+    """True when a composite reason lists only unscored or missing metrics."""
+    if not reason or not reason.startswith(_FAILED_PREFIX):
+        return False
+    return all(_KEYWORD_RE.match(part) for part in reason[len(_FAILED_PREFIX) :].split("; "))
