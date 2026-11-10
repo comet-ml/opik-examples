@@ -21,7 +21,7 @@ def test_host_wrappers_match_runbook_body() -> None:
 
 def test_runbook_has_no_research_notes_or_stale_names() -> None:
     text = _body(AGENT / "opik-eval-loop.md")
-    for banned in ("backlog", "not yet been observed", "error_info", "example_task", "scenario_agent"):
+    for banned in ("backlog", "not yet been observed", "'error_info']", "example_task", "scenario_agent"):
         assert banned not in text, banned
     for needed in (
         "prompts/system.txt",

@@ -103,10 +103,11 @@ Span skeleton without bodies: id, name, type, duration, model, error type. Take 
 (observed: 426 tok on 12 items, 4 spans for the trace)
 
 ```text
-list('span', project_id='<pid>', filters='trace_id = "<tid>" AND type = "tool"', sort='duration desc')
+list('span', project_id='<pid>', filters='trace_id = "<tid>" AND error_info is_not_empty', sort='duration desc')
 ```
-Narrows the skeleton to tool calls, slowest first. Returns "No spans found" when the trace has
-none, which is a valid answer, not a failure.
+Narrows the skeleton to errored spans, slowest first. `AND type = "tool"` narrows to tool calls.
+Returns "No spans found" when the trace has no errors, which is a valid answer, not a failure.
+(observed: 34 tok on 12 items, no errored spans in the toy task)
 
 ```text
 read('span', '<span_id>', fields=['input', 'output'])
