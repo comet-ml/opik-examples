@@ -2,266 +2,386 @@
 
 ## What this does
 
-This guide is a small, working reference for two things: a GitHub Actions gate that runs an Opik
-evaluation on every pull request and compares it to a tagged baseline, and a runbook that lets a
-coding agent (Cursor or Claude Code) improve your app against that gate, one hypothesis per
-iteration. The example task is a deterministic toy, so everything runs without an LLM provider key.
+This guide is a small, working reference for one evaluation gate in GitHub Actions. On every pull
+request it runs an Opik evaluation of your app, runs a test suite, compares the result item by item
+with a tagged baseline, applies a policy file, and posts one sticky comment that names the prompt
+version under test. On a push to `main` the same run becomes the new baseline, the prompt version
+gets the `production` environment, and a few simulated production requests are scored by an online
+rule. Two things feed changes into that gate: a coding agent (Cursor or Claude Code) following a
+runbook, and a manual optimizer workflow that opens a draft PR with a better prompt. Neither one
+promotes anything; the gate and a human merge decide.
+
+The app under test is a small LLM planner (`planner.py`) that turns a driving scenario into a JSON
+plan, scored on 20 scenarios. Swap in your own app, dataset and metric; the gate does not change.
+
+### What you get
+
+A sticky comment on each pull request. This sample comes from the offline demo
+(`uv run python run_eval.py demo`), which scores sample outputs of a weak prompt (the baseline)
+against `prompts/system.txt` (the candidate) without calling a model:
+
+```markdown
+<!-- opik-eval -->
+## Opik eval: local-system
+
+Baseline: local-weak (local-weak)
+Prompt: prompts/system.txt (demo, not logged)
+
+**Verdict:** ok
+
+Pass rate: 0.00 -> 0.60 (+0.60)
+Items scored: 20 | Pass rule: 1 trial
+
+### Newly failing
+
+none
+
+### Newly passing
+
+- s01: passed
+- s02: passed
+- s03: passed
+- s04: passed
+- s05: passed
+- s06: passed
+- s07: passed
+- s08: passed
+- s09: passed
+- s10: passed
+- s11: passed
+- s12: passed
+
+### Still failing
+
+- **maneuver_correct**
+  - s13
+  - s14
+  - s15
+  - s16
+  - s17
+  - s18
+  - s19
+  - s20
+
+### Flaky
+
+none
+
+### New items
+
+none
+
+### Per-metric means
+
+| metric | baseline | candidate | delta |
+|---|---|---|---|
+| actors_correct | 0.00 | 1.00 | +1.00 |
+| maneuver_correct | 0.00 | 0.60 | +0.60 |
+| parameters_correct | 0.00 | 1.00 | +1.00 |
+| scenario_pass | 0.00 | 0.60 | +0.60 |
+
+### Compare
+
+none
+```
+
+In a live run the header names the experiment (`<branch>-<sha7>`), the prompt line reads
+`Prompt: scenario-planner <version>`, the notes add `Test suite: k of n passed`, every failing item
+links to its worst trace, and "Compare" links to the experiment compare view in Opik. On `main` the
+notes also say which version was promoted to `production` and link to Logs.
+
+### What you will see in Opik
+
+All of it lives in one project (`eval-in-ci-example` in the workflow template).
+
+| Opik page | What appears | When |
+|---|---|---|
+| Datasets | `scenario-planner`, 20 driving scenarios with the expected plan | First run (setup) |
+| Prompt library | Prompt `scenario-planner`: one version per distinct `prompts/system.txt` text, with a change description `ci <sha7> <branch>` (plus `pr <n>` on PRs) | Every run |
+| Experiments | `<branch>-<sha7>`, linked to that prompt version, tagged `ci`, the branch, and `candidate` on PRs or `baseline` on `main` | Every run |
+| Prompt library | The `production` environment on the version `main` last evaluated | Push to `main` |
+| Test suites | `scenario-planner-guardrails` (3 assertions on 8 scenarios) and a run `<branch>-<sha7>-suite` tagged `test-suite` | Every run |
+| Logs | 6 traces tagged `simulated-traffic`, each with a `plan_consistent` score from the online rule `scenario-plan-consistency` | Push to `main` |
 
 ```mermaid
 flowchart LR
-  subgraph agent["Coding agent (Cursor / Claude Code)"]
-    a1["Read digest"] --> a2["Pick failure theme"]
-    a2 --> a3["Hypothesis to EVAL_LOG.md"]
-    a3 --> a4["Branch and change"]
-    a4 --> a5["Push draft PR"]
+  subgraph change["Ways to propose a change"]
+    a1["Coding agent: eval/theme-n branch"]
+    a2["Optimizer workflow: optimize/n branch"]
   end
-  subgraph ci["CI (GitHub Actions)"]
-    c1["opik-eval.yml"] --> c2["run_eval.py run"]
-    c2 --> c3["opik.evaluate with CompositePassMetric"]
-    c3 --> c4["Find tagged baseline"]
-    c4 --> c5["Item compare"]
-    c5 --> c6["Digest and policy gate"]
-    c6 --> c7["Sticky PR comment"]
-    c8["Push to main"] --> c9["Mark baseline"]
+  subgraph pr["Pull request: opik-eval.yml"]
+    p1["Log prompt version"] --> p2["Evaluate dataset"]
+    p2 --> p3["Run test suite"]
+    p3 --> p4["Compare with baseline, apply policy"]
+    p4 --> p5["Sticky PR comment"]
   end
-  subgraph opik["Opik"]
-    o1["Dataset"]
-    o2["Experiments baseline and candidate"]
-    o3["Traces and spans"]
+  subgraph main["Push to main: opik-eval.yml"]
+    m1["Same run"] --> m2["Tag baseline"]
+    m2 --> m3["Promote prompt to production"]
+    m3 --> m4["Send 6 production requests"]
   end
-  a5 --> c1
-  c3 -->|evaluate| o1
-  c3 --> o2
-  c4 -->|read baseline| o2
-  c9 -->|tag baseline| o2
-  c7 -->|accept or reject| a1
-  a5 --> hr["Human review"]
-  o2 -.->|read experiment| a1
-  o2 -.->|list dataset item compare mode| a2
-  o3 -.->|list span and read span| a2
+  a1 --> p1
+  a2 -->|"draft PR + dispatch"| p1
+  p5 --> hr["Human review and merge"]
+  hr --> m1
+  m4 --> o1["Online rule scores in Logs"]
+  p5 -.->|"digest and MCP reads"| a1
 ```
 
 ### What is in the folder
 
 The source lives at
 [`guides/eval_in_ci`](https://github.com/comet-ml/opik-examples/tree/main/guides/eval_in_ci) in
-opik-examples. Copy the folder to `examples/eval_in_ci/` in your repo and the workflow to
-`.github/workflows/opik-eval.yml`; the paths in the workflow and the runbook assume those
-destinations. If you put them elsewhere, adjust the paths in the workflow and in the runbook's
-guard paths.
+opik-examples. Copy the folder to `examples/eval_in_ci/` in your repo; the workflows and the
+runbook's guard paths assume that destination.
 
 | File | Purpose |
 |---|---|
-| `run_eval.py` | CLI with three modes: `run` (evaluate, then compare to baseline), `digest` (compare a finished experiment) and `demo` (offline) |
+| `run_eval.py` | CLI with three modes: `run` (evaluate, test suite, compare, promote on `main`), `digest` (compare a finished experiment) and `demo` (offline) |
 | `eval_compare.py` | Item compare, policy verdict, digest rendering (no network) |
-| `opik_access.py` | SDK and REST layer: baseline lookup, experiment lookup, compare rows, URLs |
+| `opik_access.py` | SDK and REST layer: baseline lookup, prompt logging and environments, compare rows, URLs |
 | `composite_metric.py` | `CompositePassMetric`: one pass/fail per item from several sub-metrics |
-| `example_task.py` | Toy task (`scenario_agent`), sub-metrics, `build_metric`, and dataset seeding |
-| `optimize_prompt.py` | Optional prompt optimizer, run by hand |
-| `github/opik-eval.yml` | The GitHub Actions workflow |
+| `planner.py` | The app: the eval task, the test-suite task, the production entry point and the traffic hook |
+| `scenarios.py` | The 20 scenarios, the 6 production requests, plan parsing, sub-metrics and `build_metric` |
+| `setup_opik.py` | Idempotent setup: `production` environment, dataset, test suite, online rule |
+| `config.py` | Names and models shared by every step |
+| `optimize_prompt.py` | The optimizer step: rewrites `prompts/system.txt` |
+| `ci_output.py` | Job summary, step outputs and exit code 2 on any failure |
+| `prompts/system.txt` | The prompt under test; `prompts/weak.txt` is the demo baseline |
+| `github/opik-eval.yml` | The gate workflow template |
+| `github/opik-optimize.yml` | The manual optimizer workflow template |
 | `agent/opik-eval-loop.md` | The coding-agent runbook; `agent/cursor/` and `agent/claude/` carry the same text (a test keeps them identical) |
-| `run.sh` | Entry point for CI smoke runs: the offline demo, or a live run when credentials are set |
+| `run.sh` | Entry point for smoke runs: the offline demo, or a live run when credentials are set |
 | `pyproject.toml` | Dependencies (`uv sync --group dev`; the optimizer is an optional extra) |
 | `.env.example` | Variable names for local runs |
-| `tests/` | Unit tests, no network: `uv run pytest` from this folder, or `pytest examples/eval_in_ci/tests` from your repo root |
+| `tests/` | Unit tests, no network: `uv run pytest` from this folder |
 
 ## Prerequisites
 
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/). Install the dependencies (the optimizer is an
-  optional extra):
+- Python 3.12 or 3.13 and [uv](https://docs.astral.sh/uv/). From this folder:
 
   ```bash
   uv sync --group dev
+  # without uv: pip install "opik>=2.2.113" "litellm>=1.70" pyyaml
   ```
 
-- An Opik workspace. Create a service-account key if your deployment has them (Admin dashboard >
-  Service accounts), otherwise a dedicated personal API key for CI.
-- Two repository secrets: `OPIK_API_KEY` and `OPIK_WORKSPACE`. On a custom host also set
-  `OPIK_URL_OVERRIDE` to `https://<host>/opik/api`; when it is unset the workflow defaults to
-  `https://www.comet.com/opik/api`.
+- An Opik workspace on Opik Cloud or your own host. Prompt environments, test suites and online
+  rules scoped to production traces need Opik 2.2.4 or later. Tested with Opik SDK 2.2.143. Use a
+  service-account key if your deployment has them (Admin dashboard > Service accounts), otherwise a
+  dedicated personal API key for CI.
+- A model provider key for the live path (Anthropic by default). The offline demo needs nothing.
+- For the online rule, an AI provider configured in the Opik workspace that matches
+  `OPIK_ONLINE_JUDGE_MODEL`. The rule runs inside Opik, not in CI.
 
-Tested with Opik SDK 2.2.113 against Opik server 2.2.x.
+In GitHub, keys go in repository secrets and everything else in repository variables
+(Settings > Secrets and variables > Actions):
 
-| Variable | Required | Used by |
-|---|---|---|
-| `OPIK_API_KEY` | yes | CLI, workflow, MCP |
-| `OPIK_WORKSPACE` | yes | CLI, workflow, MCP |
-| `OPIK_URL_OVERRIDE` | custom host only | CLI, workflow; `https://<host>/opik/api`; workflow defaults to Opik Cloud |
-| `COMET_URL_OVERRIDE` | MCP only | MCP; `https://<host>` on a custom host |
-| `OPENAI_API_KEY` | optimizer only | `optimize_prompt.py` |
-| `OPIK_EXAMPLES_MODEL` | optimizer only | `optimize_prompt.py`; default `openai/gpt-4o-mini` |
-| `AGENT_VERSION` | toy task only | `example_task.py`; `v1` by default, `v2` to show a regression |
-| `OPIK_EVAL_GIT_SHA` | set by the workflow | experiment names; the PR head sha |
-| `OPIK_EVAL_DEBUG` | no | CLI; print tracebacks on unexpected errors |
+| Name | Kind | Required | Notes |
+|---|---|---|---|
+| `OPIK_API_KEY` | secret | yes | Opik API key |
+| `ANTHROPIC_API_KEY` | secret | live path | Key for the default model; or `OPENAI_API_KEY` with an `openai/...` model |
+| `OPENAI_API_KEY` | secret | if you use OpenAI | Read by the gate workflow; add it to the optimizer workflow's env if you use it there |
+| `OPIK_WORKSPACE` | variable | yes | The path segment after `/opik/` in the UI URL |
+| `OPIK_URL_OVERRIDE` | variable | custom host only | `https://<host>/opik/api`; the workflows default to Opik Cloud (`https://www.comet.com/opik/api`) |
+| `OPIK_EXAMPLES_MODEL` | variable | no | LiteLLM model name for the app and the optimizer; default `anthropic/claude-haiku-4-5-20251001` |
+| `OPIK_ONLINE_JUDGE_MODEL` | variable | no | Model of the online rule; default `anthropic/claude-haiku-4-5-20251001`; must match an AI provider configured in the workspace |
 
-The Opik MCP server reads a different URL variable than the SDK: `COMET_URL_OVERRIDE=https://<host>`
-instead of `OPIK_URL_OVERRIDE=https://<host>/opik/api`. `OPIK_WORKSPACE` is the path segment after
-`/opik/` in the UI URL. `.env.example` lists the variables for local runs; you can also run
-`opik configure`. The offline demo needs none of them.
+Two more variables matter outside GitHub: `OPIK_PROJECT_NAME` (the workflow sets
+`eval-in-ci-example`; `run.sh` defaults to `eval-in-ci-smoke`; `.env.example` uses
+`eval-in-ci-local`) and `OPIK_EVAL_GIT_SHA` (set by the workflow to the PR head commit, used in
+experiment names). For local runs copy `.env.example` to `.env`, fill it in and export it (the
+scripts do not read `.env` themselves).
 
 ## Running it
 
-### Offline demo
+Run every command from this folder (`guides/eval_in_ci` here, `examples/eval_in_ci` after copying
+it).
 
-Run from this folder (`guides/eval_in_ci` here, `examples/eval_in_ci` after copying it).
+### Offline demo, no credentials
 
 ```bash
 bash run.sh
 # or: uv run python run_eval.py demo
 ```
 
-No credentials and no Opik server. The demo compares the toy task at `AGENT_VERSION=v1` (the baseline)
-with `v2` (the candidate) in-process and prints a digest with three kinds of content: the verdict
-and pass rate (`0.75 -> 0.83`), the item lists (newly failing, newly passing, still failing), and
-the per-metric means table. `AGENT_VERSION=v2` is what makes the toy both regress (`s05` starts
-failing) and improve (`s03` and `s07` start passing). The last line explains that the demo exit
-code is always 0; in CI use `run --fail-on-regression` so a hold fails the job. `run` and `digest`
-deliberately exit 2 without credentials instead of falling back to the demo: in CI that keeps a fork
-pull request from showing a green eval that never ran.
+No Opik server and no model calls. Without `OPIK_API_KEY` and `OPIK_WORKSPACE`, `run.sh` runs the
+demo, which prints the digest shown in "What you get" and exits 0. The last line explains that the
+demo exit code is always 0; in CI the gate uses `run --fail-on-regression` so a hold fails the job.
+`run` and `digest` deliberately exit 2 without credentials instead of falling back to the demo: in
+CI that keeps a fork pull request from showing a green eval that never ran.
+
+### Live run from your machine
+
+```bash
+cp .env.example .env   # then fill in the keys and the workspace
+set -a; source .env; set +a
+bash run.sh
+```
+
+With credentials, `run.sh` runs the same command as the workflow, without a gate flag: setup
+(environment, dataset, test suite, online rule), the evaluation, the test suite and the digest.
+Pass extra flags through, for example `bash run.sh --fail-on-regression`.
 
 ### 10-minute setup for CI
 
-1. Add the secrets from Prerequisites.
-2. Copy `github/opik-eval.yml` to `.github/workflows/opik-eval.yml`. The workflow installs
-   `opik==2.2.113`; bump it to the SDK version your server supports.
-3. In the workflow, point `--task` at your task and `--dataset` at your dataset. The task is
-   called as `task(**item)`, so it must accept the dataset fields as keyword arguments (or
-   `**kwargs`); the item `id` is not passed. To try the toy first, seed its dataset once (without
-   `OPIK_API_KEY` and `OPIK_WORKSPACE` in the shell the script only prints what it would insert):
+1. Add the secrets and variables from Prerequisites.
+2. Copy this folder to `examples/eval_in_ci/` and `github/opik-eval.yml` to
+   `.github/workflows/opik-eval.yml`. The paths in the workflow assume that folder.
+3. Install your project. Uncomment the "Install your project" step in the workflow and point it at
+   your repo (`uv pip install -e ../..` from `examples/eval_in_ci` installs the repo root into the
+   eval environment), so `--task` can import your code.
+4. Point the flags of the "Run evaluation" step at your code:
+   - `--task module:callable` is a factory. It is called with the prompt text (or `None` without
+     `--prompt-file`) and returns the per-item task, which takes the dataset item dict and returns
+     a dict for the metric. See `make_eval_task` in `planner.py`.
+   - `--metric module:callable` is a zero-argument factory that returns the metric. To gate on
+     several scores at once, return a `CompositePassMetric` as `scenarios.build_metric` does.
+   - `--dataset` is your Opik dataset name.
+   - `--prompt-file` is the prompt file your app uses. Each run logs it as a prompt version and
+     links the experiment to it.
+   - Optional: `--setup module:callable` (called once with the Opik client; if it returns an object
+     with a `dataset` attribute, that dataset is used), `--suite-task` with `--suite-name` (same
+     factory shape as `--task`; the task must return `input` and `output`, the two fields the
+     assertion judge reads), and `--traffic module:callable` (called with the client and the prompt
+     name after promotion; returns the number of requests sent). Drop the ones you do not need;
+     `setup_opik:run_setup` creates this guide's dataset, suite and rule, not yours.
+   - `--label-key` names the dataset field the digest shows for each item (default `scenario_id`).
+5. Merge to `main` once. That run creates the first `baseline`-tagged experiment that later pull
+   requests compare against, and gives the prompt version the `production` environment.
 
-   ```bash
-   pip install "opik==2.2.113"
-   python examples/eval_in_ci/example_task.py
-   ```
-
-4. Merge to `main` once. The push run uses `--mark-baseline`, which creates the first
-   `baseline`-tagged experiment that later pull requests compare against.
-
-To see a regression on the live toy, set `AGENT_VERSION: v2` in the eval step env on a PR.
+On `pull_request`, uncomment `paths:` in the workflow to run the gate only when your app or the
+eval changes. The workflow template pins actions by major version; security-reviewed repos usually
+pin them to commit SHAs.
 
 ### The run and digest commands
 
-Local run, with the same flags the workflow uses:
+The command the workflow runs:
 
 ```bash
-uv run python run_eval.py run \
-  --dataset eval-in-ci-example \
-  --task example_task:scenario_agent \
-  --fail-on-regression \
-  --out digest.md --json digest.json
+uv run python run_eval.py run --dataset scenario-planner --task planner:make_eval_task \
+  --metric scenarios:build_metric --prompt-file prompts/system.txt \
+  --setup setup_opik:run_setup --suite-task planner:make_suite_task \
+  --suite-name scenario-planner-guardrails --traffic planner:simulate_traffic_hook \
+  --fail-on-regression --out digest.md --json digest.json
 ```
 
-`run` flags: `--dataset`, `--task module:callable`, `--metric` (default
-`example_task:build_metric`), `--trials`, `--mark-baseline`, `--pr`, `--baseline`,
-`--pass-threshold`, `--policy`, `--fail-on-regression`, `--out`, `--json`, and an optional
-`--project` lookup hint. Opik files experiments under the dataset's project, so `--project` only
-helps look an experiment up by name.
+On a push to `main` the workflow passes `--mark-baseline` instead of `--fail-on-regression`.
 
-Compare a finished experiment without re-running it with
-`uv run python run_eval.py digest --experiment <name or id>`. `digest` flags: `--experiment`,
-`--baseline`, `--pass-threshold`, `--policy`, `--fail-on-regression`, `--out`, `--json`, and an
-optional `--project` lookup hint (same as for `run`).
+`run` flags: `--dataset`, `--task`, `--metric` (both required), `--prompt-file`, `--prompt-name`
+(default `scenario-planner`), `--setup`, `--suite-task`, `--suite-name`, `--traffic`,
+`--label-key`, `--trials` (default 1), `--mark-baseline`, `--pr`, `--baseline`,
+`--pass-threshold`, `--policy`, `--fail-on-regression`, `--out`, `--json`, `--summary` (append a
+failure note, for example `$GITHUB_STEP_SUMMARY`) and an optional `--project` lookup hint. Opik
+files experiments under the dataset's project, so `--project` only helps look an experiment up by
+name.
 
-`demo` flags: `--pass-threshold`, `--policy`, `--out`, `--json`.
+Compare a finished experiment without re-running it:
+
+```bash
+uv run python run_eval.py digest --experiment <name or id>
+```
+
+`digest` flags: `--experiment`, `--project`, `--label-key`, `--baseline`, `--pass-threshold`,
+`--policy`, `--fail-on-regression`, `--out`, `--json`, `--summary`. `demo` flags:
+`--pass-threshold`, `--policy`, `--out`, `--json`.
 
 ### Reading the digest
 
 `digest.md` is Markdown whose first line is exactly `<!-- opik-eval -->`. The workflow uses that
 marker to update a single sticky comment on the pull request instead of adding a new one per push.
-It shows the verdict, pass rate against the baseline, "Newly failing" and "Newly passing" items,
-"Still failing" grouped by metric, per-metric means and a compare link, with a link to the worst
-trace of each failing item. `digest.json` carries the same data for scripts.
+Top to bottom: the experiment name, a `Warning:` line when `main` promoted a run with failed
+criteria, the baseline, the prompt version (`(unchanged)` when it is the one `production` already
+has), the verdict with any failed criteria, the pass rate against the baseline, items scored and
+the pass rule (`1 trial` or `all N trials`), notes (test suite, promotion, traffic), the "Newly
+failing", "Newly passing", "Still failing" (grouped by metric), "Flaky" and "New items" lists, the
+per-metric means and the compare link. `digest.json` carries the same data for scripts.
+
+Verdicts: `ok`, `hold` (a regression, a lower pass rate or a failed test suite),
+`insufficient_evidence` (too few scored items), `no_baseline` (no `baseline`-tagged experiment
+yet) and `baseline_created` (a `main` run).
 
 The exit code is the contract:
 
 | Code | Meaning |
 |---|---|
-| 0 | OK, or a baseline was created |
-| 1 | Policy verdict hold or insufficient_evidence (only with `--fail-on-regression`) |
-| 2 | Configuration or connection error, invalid policy file, or a crash in your task or metric |
+| 0 | `ok`, `baseline_created` or `no_baseline` (and any verdict without `--fail-on-regression`) |
+| 1 | `hold` or `insufficient_evidence`, only with `--fail-on-regression` |
+| 2 | Configuration or connection error, invalid policy file, or a crash in your task, metric or test suite; the error is also appended to the job summary, with what was already done before it |
 
 The workflow captures the code, still uploads `digest.md` and `digest.json`, posts the comment, and
 then fails the job with the original code in a final step that runs `if: always()`.
 
-### Close the loop with a coding agent
+### Optimizer: a prompt PR on demand
 
-`agent/opik-eval-loop.md` is the runbook. One iteration: pull the digest, diagnose with the Opik
-MCP, pick one theme, write the hypothesis to `EVAL_LOG.md`, push an `eval/<theme>-<n>` branch and a
-draft PR, read the CI result, accept or reject, log it. Install it as a Cursor rule
-(`agent/cursor/opik-eval-loop.mdc`) or a Claude Code skill (`agent/claude/opik-eval-loop/`).
+`github/opik-optimize.yml` is a manual workflow (Actions > opik-optimize > Run workflow, input
+`max_trials`, default 3). Copy it to `.github/workflows/opik-optimize.yml`. It:
 
-Deterministic pulls use `run_eval.py digest`; exploration goes through the Opik MCP server.
+1. starts from the prompt version that has the `production` environment, or from
+   `prompts/system.txt` when there is none;
+2. runs Opik's `MetaPromptOptimizer` on the `scenario-planner` dataset with the composite metric as
+   the objective, so a better prompt means more items passing every threshold;
+3. writes the best prompt to `prompts/system.txt`, and nothing else;
+4. pushes it to an `optimize/<run number>` branch and opens a draft PR;
+5. dispatches `opik-eval.yml` on that branch, because a PR opened with `GITHUB_TOKEN` fires no
+   `pull_request` event, so the gate would never run on it otherwise.
 
-#### MCP setup (Cursor)
+The dispatched run shows up as a check on the branch with the digest in its job artifact; it posts
+no sticky comment, because that step runs only on `pull_request`. If you want the normal trigger
+and the comment, open the PR with a GitHub App token (`actions/create-github-app-token`) instead and
+drop the dispatch step.
 
-The Opik MCP server is `opik-mcp`, run with `uvx`; the variable names are in the Prerequisites
-table. In Cursor's `mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "opik-mcp": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": ["opik-mcp@latest"],
-      "env": {
-        "COMET_URL_OVERRIDE": "https://<host>",
-        "OPIK_WORKSPACE": "<workspace>",
-        "OPIK_API_KEY": "<key>"
-      }
-    }
-  }
-}
-```
-
-Check the setup before opening Cursor, with the same three variables in your shell:
-
-```bash
-COMET_URL_OVERRIDE=https://<host> OPIK_WORKSPACE=<workspace> OPIK_API_KEY=<key> \
-  uvx opik-mcp@latest --check
-```
-
-On comet.com the simpler option is the hosted server at `https://www.comet.com/opik/api/v1/mcp`
-with browser sign-in and no key in a config file.
-
-#### What changed in the MCP since the TypeScript server
-
-- Five tools (`read`, `list`, `write`, `schema`, `read_skill`) instead of one tool per entity.
-- Skills are served over `read_skill`.
-- Every read and list answer prints its token size.
-- Reads are layered: `list` for rows, `fields=` to pick columns, `read` for one full record.
-- Experiments have a compare mode: `list('dataset_item', experiment_ids=[...])`.
-- Command-line flags are no longer read. Old configs that pass `--apiKey`, `--apiUrl` or
-  `--workspace` to `npx -y opik-mcp` now fail with a 401.
-- The TypeScript server stops serving requests on 2026-11-15.
-
-One open limit: a full `read('trace')` on an agent trace with 200+ spans is about 38k tokens, over
-the 25k host cap. List the spans of the trace and read only the one or two the digest points at.
-The runbook already follows this order.
-
-### Quick win: optimize the prompt
-
-`optimize_prompt.py` runs Opik's `MetaPromptOptimizer` on the same dataset, using the composite
-metric as the objective, so a better prompt means more items passing every threshold. It is a local
-helper and is not run in CI. It needs a provider key for the chosen model, for example
-`OPENAI_API_KEY` for the default.
+Requirements: the repository setting "Allow GitHub Actions to create and approve pull requests"
+(Settings > Actions > General), the workflow permissions `contents: write`, `pull-requests: write`
+and `actions: write`, and the dataset, which the gate's setup creates on its first run. When the
+optimizer's best prompt equals the starting one, or matches the file already in the repo, no PR is
+opened. To run the optimizer locally:
 
 ```bash
 uv sync --extra optimizer
 uv run python optimize_prompt.py --max-trials 3
 ```
 
-Flags: `--dataset`, `--model` (default `$OPIK_EXAMPLES_MODEL`, else `openai/gpt-4o-mini`),
-`--max-trials` (default 5) and `--prompt-file`.
+Flags: `--prompt-file` (default `prompts/system.txt`), `--prompt-name`, `--max-trials` (default 3),
+`--summary`, `--github-output`, `--json`. Without credentials it prints what it would do and
+exits 0.
 
-Observed on the toy dataset after seeding `DEFAULT_SYSTEM_PROMPT` in `optimize_prompt.py` with the
-actor naming rule and a partial maneuver list: 3 trials, `scenario_pass` 0.17 to 0.25. The toy ceiling is about 5 of 12
-scenarios, because seven targets carry a `gap_m` value the input never states. In a real task,
-state every target value in the input.
+### Close the loop with a coding agent
+
+`agent/opik-eval-loop.md` is the runbook for one iteration: pull the digest, diagnose the failing
+items (with the Opik MCP if it is connected, otherwise from the digest's trace links), pick one
+theme, write the hypothesis to `EVAL_LOG.md`, push an `eval/<theme>-<n>` branch and a draft PR, read
+the gate's result, accept or reject, and log it. Install it as a Cursor rule
+(`agent/cursor/opik-eval-loop.mdc`, into `.cursor/rules/`) or a Claude Code skill
+(`agent/claude/opik-eval-loop/`, into `.claude/skills/`). Optimizer PRs on `optimize/<n>` branches
+follow the same rules.
+
+### Debug with the Opik MCP
+
+CI never needs the Opik MCP server. It is the quickest way for a person or a coding agent to open
+the failing items and spans the digest points at: the experiment, the compare rows filtered to
+failing items, the spans of the worst trace, and the one or two span bodies that explain a
+failure. The runbook lists the exact calls and their sizes.
+
+- Setup and tools: https://www.comet.com/docs/opik/mcp-server
+- What to ask it: https://www.comet.com/docs/opik/mcp-server/use-cases
+- Custom host or self-hosted Opik, including the Cursor `mcp.json`:
+  https://www.comet.com/docs/opik/mcp-server/advanced-setup
+
+On a custom host the MCP server reads `COMET_URL_OVERRIDE=https://<host>` (no `/opik/api`), not the
+SDK's `OPIK_URL_OVERRIDE`.
+
+### Cost
+
+A pull request run makes 20 model calls for the evaluation (one per scenario, `--trials 1`), and
+the test suite makes 16 (8 items x 2 runs) plus the judge calls for its assertions. A push to
+`main` adds 6 production calls and 6 online-rule judge calls. The optimizer is the expensive one:
+it scores several candidate prompts on the 20 scenarios per trial. With a small model such as
+Claude Haiku a gate run costs cents; check the optimizer's spend in the optimization run before
+raising `max_trials`.
 
 ### Other CI systems
 
-`run_eval.py` only needs Python, the three environment variables and the exit code. Port the
+`run_eval.py` only needs Python, the environment variables above and the exit code. Port the
 workflow by running the same command, uploading `digest.md`, posting it as a comment, and failing
 the job on a non-zero code.
 
@@ -272,10 +392,19 @@ the job on a non-zero code.
   workspace each one names.
 - **No experiment found.** Several runs on one commit share the name `<branch>-<sha7>`. Pass the
   experiment id to `digest --experiment` instead.
-- **Exit code 2.** A configuration, policy-file or connection problem, not a regression. Fix the
-  setup. The agent runbook says to stop on it rather than treat it as a failed change.
+- **Exit code 2.** A configuration, policy-file or connection problem, or a crash in your task or
+  metric, not a regression. The job summary has the message. The agent runbook says to stop on it
+  rather than treat it as a failed change.
 - **Fork pull requests exit 2 by design.** GitHub gives fork PRs empty secrets and a read-only
   token, so the eval cannot reach Opik.
+- **Online scores never appear in Logs.** The judge model in `OPIK_ONLINE_JUDGE_MODEL` does not
+  match an AI provider configured in the workspace. Fix the variable, then delete the rule
+  `scenario-plan-consistency` in Opik so the next run's setup recreates it (setup never edits an
+  existing rule).
+- **The optimize workflow opened no PR.** Either the prompt did not change (the job summary says
+  `Prompt file: unchanged`), or `gh pr create` failed because the repository does not allow GitHub
+  Actions to create pull requests. Turn on "Allow GitHub Actions to create and approve pull
+  requests" in Settings > Actions > General.
 
 ## How it works
 
@@ -283,30 +412,55 @@ the job on a non-zero code.
 
 An agent run usually has several things that must all be right. `CompositePassMetric` in
 `composite_metric.py` takes several sub-metrics, each with a threshold, and reports one
-`scenario_pass` score per item: 1 only when every sub-metric passes. The toy has three:
-`actors_correct`, `maneuver_correct` and `parameters_correct`. The gate then reasons about
-"items passing", which is easier to read and to act on than an average of unrelated scores. The
-sub-metric scores stay on the experiment, so the digest can group failures by metric.
+`scenario_pass` score per item: 1 only when every sub-metric passes. The planner has three:
+`actors_correct`, `maneuver_correct` and `parameters_correct`. The gate then reasons about "items
+passing", which is easier to read and to act on than an average of unrelated scores. The
+sub-metric scores stay on the experiment, so the digest can group failures by metric. The
+optimizer uses the same metric as its objective.
 
-To use your own metrics, write a zero-argument function that returns your metric and pass it as
-`--metric module:callable`.
+`prompts/system.txt` lists 7 maneuvers; 8 of the 20 scenarios need one it does not list
+(`emergency_brake`, `yield`, `turn_left`, `turn_right`, `u_turn`). That is the headroom the agent
+or the optimizer can find, and why the demo still has 8 items failing on `maneuver_correct`.
 
-### How baselines work
+### How baselines and promotion work
 
-- On a push to `main` the workflow passes `--mark-baseline`. The experiment gets the `baseline`
-  tag after the run finishes successfully, so a crashed run never becomes the baseline. A run in
-  which no item carries the pass score is not tagged either; its digest reports
-  `insufficient_evidence`. Otherwise the digest reports `baseline_created`; no comparison is made.
+Merging is deploying: whatever `main` last evaluated is what `production` serves.
+
 - On a pull request, the baseline is the newest experiment on the same dataset with an exact
   `baseline` tag. Override it with `--baseline NAME_OR_ID`. The digest names the baseline on its
-  second line; with no baseline it reports `no_baseline` (exit 0).
-- Experiment names are `<branch>-<sha7>`, where sha7 is the PR head commit (the workflow passes
-  it as `OPIK_EVAL_GIT_SHA`). The PR comment header carries the exact experiment name. Repeated
-  runs on one commit share a name, and `digest --experiment NAME` resolves the newest. Pass the
-  experiment id to read an older run.
+  own line; with no baseline it reports `no_baseline` (exit 0).
+- On a push to `main` the workflow passes `--mark-baseline`. After the run finishes, the experiment
+  gets the `baseline` tag, the logged prompt version gets the `production` environment, and the
+  traffic hook sends the 6 production requests. This happens even if the test suite failed or the
+  run regressed against the previous baseline: the merge already happened, so the digest starts
+  with `Warning: promoted with failed criteria: ...` instead of blocking. The only run that is not
+  tagged or promoted is one in which no item carries the pass score (`insufficient_evidence`): it
+  would become a baseline every later PR beats.
+- An unchanged prompt text reuses its existing version, and the prompt line says `(unchanged)`. On
+  `main` that means the promotion is a no-op.
+- The production entry point (`answer` in `planner.py`) never pins a version; it asks for whatever
+  `production` owns with `client.get_prompt("scenario-planner", environment="production")`.
+  Promoting a new version is a library change, not a code change.
+- Experiment names are `<branch>-<sha7>`, where sha7 is the PR head commit. Repeated runs on one
+  commit share a name, and `digest --experiment NAME` resolves the newest.
 - `--trials N` (default 1) runs each item N times. An item passes only if all N trials pass, which
-  matches the backend execution policy. `--pass-threshold K` relaxes that to K of N, and the
-  digest then prints "K of N trials (differs from UI)".
+  matches the backend execution policy (`Pass rule: all N trials`). `--pass-threshold K` relaxes
+  that to K of N, and the digest then prints `K of N trials (differs from UI)`.
+
+### The test suite and the online rule
+
+The test suite `scenario-planner-guardrails` holds 8 scenarios and three assertions an LLM judge
+checks: the output is a single JSON object with exactly the three keys, the actors list starts with
+ego, and every number in the parameters appears in the input. Each item runs twice and passes when
+at least one run passes, so one noisy judge call does not block a PR. The digest's
+`Test suite: k of n passed` becomes the `test_suite` criterion.
+
+The Logs view lists only traces your app logs through the SDK; traces written by `evaluate()`
+appear under Experiments. That is why a `main` run answers 6 requests through the production entry
+point after promotion. Those traces carry the tag `simulated-traffic`, and the online rule
+`scenario-plan-consistency` (production scope, filtered on that tag) scores each one with
+`plan_consistent`. The optimizer's own model calls also land in Logs; the tag filter keeps the rule
+off them.
 
 ### Policy file
 
@@ -315,46 +469,58 @@ this gate reads:
 
 | Key | Meaning | Default |
 |---|---|---|
-| `min_items` | Fewer items than this gives `insufficient_evidence` | 10 |
+| `min_items` | Fewer scored items than this gives `insufficient_evidence` | 10 |
 | `max_regressions` | Items that passed in the baseline and fail now | 0 |
 | `pass_rate` | `not_below_baseline`, or a number from 0 to 1 | `not_below_baseline` |
 | `flaky_policy` | `exclude` or `count` flaky items | `exclude` |
+| `test_suite` | `if_configured` (a criterion when `--suite-task` is given), `required` (exit 2 without a suite task) or `skip` (the suite runs but does not gate) | `if_configured` |
 
-Other `opik-verify` keys are accepted and ignored. Unknown keys are an error (exit 2). The policy
-file is read with PyYAML, which `pyproject.toml` and the workflow's `pip install` both declare.
+Unknown keys are an error (exit 2). The policy file is read with PyYAML, which the `dev` group in
+`pyproject.toml` declares and `uv sync` installs.
 
 ### Guardrails
 
-- The agent never edits the eval definition. The workflow guard fails a PR from an `eval/*` branch
-  that touches `examples/eval_in_ci/composite_metric.py`, `examples/eval_in_ci/example_task.py`,
+- The agent never edits the eval definition. The workflow's guard job fails a run on an `eval/*`
+  or `optimize/*` branch that touches `examples/eval_in_ci/composite_metric.py`,
+  `examples/eval_in_ci/scenarios.py`, `examples/eval_in_ci/setup_opik.py`,
   `examples/eval_in_ci/eval_compare.py`, `examples/eval_in_ci/run_eval.py`,
   `examples/eval_in_ci/opik_access.py`, `.github/workflows/opik-eval.yml`,
-  `opik-release-policy.yaml` or `.opik/**`.
-- The guard only covers `eval/*` branches. Add a CODEOWNERS entry for those paths so a human
-  reviews every change to them. On `pull_request`, GitHub runs the PR's own copy of the workflow,
-  so only CODEOWNERS with required review or branch protection can protect the workflow file
-  itself.
+  `opik-release-policy.yaml` or `.opik/**`. `planner.py` (the app) and `prompts/` (what agents and
+  the optimizer change) are deliberately not guarded.
+- The guard only covers those two branch prefixes. Add a CODEOWNERS entry for the eval paths so a
+  human reviews every change to them. On `pull_request`, GitHub runs the PR's own copy of the
+  workflow, so only CODEOWNERS with required review or branch protection can protect the workflow
+  file itself.
 - The agent never lowers a threshold, drops dataset items or loosens the policy to pass a run.
 - Iterate on a dev dataset. Run a held-out dataset only on candidates already accepted on dev.
 - The agent never merges. Accepted changes stay draft PRs for a human.
 - The agent stops at `MAX_ITERATIONS` (default 5).
 
+### This repo's own CI
+
+In opik-examples, `.github/workflows/eval-in-ci-selftest.yml` exercises this gate. Pull requests
+touching the guide run the unit tests and `run.sh` in the `eval-in-ci-smoke` project without a gate
+flag, so model noise never blocks an unrelated PR. A push to `main` runs `run.sh --mark-baseline`
+in the showcase project `eval-in-ci-example`, which is where the sample comment and the Logs scores
+come from. The templates in `github/` are not live workflows in this repo.
+
 ### Crawl, walk, run
 
 1. Crawl: the CI gate with a baseline, run by humans. Merge when the digest is green.
-2. Walk: the coding-agent loop on `eval/*` branches, with a human reviewing every draft PR.
+2. Walk: the coding-agent loop on `eval/*` branches and optimizer PRs on `optimize/*` branches, with
+   a human reviewing every draft PR.
 3. Run: an unattended driver (for example a scheduled `claude -p` or a Cursor background agent)
    that runs the loop overnight. This is not built here.
 
 ```mermaid
 flowchart LR
-  prod[Production acceptance] --> ds[Dataset grows]
+  prod[Production traffic and online scores] --> ds[Dataset grows]
   ds --> obj[Better objective]
   obj --> loop[Loop improves]
   loop --> prod
 ```
 
-Real traffic and acceptance decisions become new dataset items, which sharpen the objective, which
+Real traffic and its online scores become new dataset items, which sharpen the objective, which
 makes the loop's changes better.
 
 ### FAQ
@@ -366,8 +532,10 @@ makes the loop's changes better.
 items. Keep a held-out dataset, run it only on accepted candidates, and set `min_items` so thin
 runs report `insufficient_evidence` instead of passing.
 
-**Test Suites.** If you want pass/fail per item defined natively in Opik, Test Suites are the
-built-in path. This kit keeps the pass rule in code so the gate does not depend on them.
+**Test Suites.** The dataset gate keeps its pass rule in code (`CompositePassMetric`), so it works
+on any Opik version with experiments. The test suite adds pass/fail checks defined natively in
+Opik, judged by an LLM. Use either or both; `test_suite: skip` in the policy runs the suite without
+letting it gate.
 
 **Nesting an out-of-process agent trace.** If your agent runs in another process, pass the trace
 context through so its spans land under the experiment trace. In the task:
@@ -376,9 +544,12 @@ context through so its spans land under the experiment trace. In the task:
 from opik import opik_context
 
 
-def my_task(question, **_):
-    headers = opik_context.get_distributed_trace_headers()
-    return call_remote_agent(question, headers)  # send headers with the request
+def make_task(system_prompt):
+    def task(item):
+        headers = opik_context.get_distributed_trace_headers()
+        return call_remote_agent(item["input"], headers)  # send headers with the request
+
+    return task
 ```
 
 In the remote process, accept them on the `@track`-decorated entry point:
@@ -399,3 +570,10 @@ opik.flush_tracker()
 Two caveats: the remote process must use the same project name as the dataset's project, and it
 must call `opik.flush_tracker()` before exiting or spans can be lost. Details:
 `/tracing/advanced/log_distributed_traces` in the Opik docs.
+
+**My agent is instrumented with OpenTelemetry, not the SDK.** The gate still works: the score comes
+from what your task returns. The link from an experiment item to its trace, though, comes from the
+Opik SDK context that `evaluate()` opens around each task call. OTel spans exported to Opik land in
+the project, but they nest under the experiment item's trace only if that trace context is
+propagated into your OTel spans; otherwise they show up as separate traces, and the digest's trace
+links show only the SDK side. Verify this against your setup before relying on the trace links.
