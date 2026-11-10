@@ -17,9 +17,9 @@ import ci_output
 import config
 import eval_compare
 import opik_access
+from composite_metric import DEFAULT_PASS_NAME
 from opik_access import ConfigError
 
-DRY_RUN: bool = not (os.environ.get("OPIK_API_KEY") and os.environ.get("OPIK_WORKSPACE"))
 DRY_RUN_HINT = (
     "Hint: no OPIK_API_KEY / OPIK_WORKSPACE in the environment. "
     'Set them, run "opik configure", or use "demo" for an offline run.'
@@ -42,6 +42,11 @@ def _add_common(p: argparse.ArgumentParser) -> None:
         type=int,
         default=None,
         help="Trials that must pass for an item to count as passing",
+    )
+    p.add_argument(
+        "--pass-score",
+        default=DEFAULT_PASS_NAME,
+        help="0/1 score the gate counts as an item passing (default: %(default)s)",
     )
     p.add_argument("--policy", type=Path, help="Path to opik-release-policy.yaml")
     p.add_argument(
@@ -71,6 +76,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--suite-task", help="Optional module:callable task for the test suite")
     run.add_argument("--traffic", help="Optional module:callable that generates simulated traffic")
     run.add_argument("--suite-name", help="Test suite name (pairs with --suite-task)")
+    run.add_argument(
+        "--suite-model",
+        default=config.GEN_MODEL,
+        help="LiteLLM model that judges the test-suite assertions (default: %(default)s)",
+    )
     run.add_argument("--label-key", default="scenario_id", help="Dataset field used to label items")
     run.add_argument("--trials", type=int, default=1, help="Trials per item")
     run.add_argument(
@@ -126,6 +136,7 @@ def _compare(
     git: dict[str, str],
     version: str | None,
     label_key: str = "scenario_id",
+    pass_name: str = DEFAULT_PASS_NAME,
     mark_baseline: bool = False,
     suite: eval_compare.SuiteResult | None = None,
 ) -> _Compared:
@@ -137,6 +148,7 @@ def _compare(
         runs,
         baseline_id=baseline_id,
         candidate_id=candidate_id,
+        pass_name=pass_name,
         pass_threshold=pass_threshold,
     )
     verdict = eval_compare.evaluate_policy(cmp, policy, mark_baseline=mark_baseline, suite=suite)
@@ -184,6 +196,7 @@ def _build_digest(
     git: dict[str, str],
     version: str | None,
     label_key: str = "scenario_id",
+    pass_name: str = DEFAULT_PASS_NAME,
 ) -> tuple[str, dict[str, Any]]:
     """Fetch rows, classify, apply policy, and render markdown plus JSON."""
     policy, policy_source = eval_compare.load_policy(policy_path)
@@ -200,6 +213,7 @@ def _build_digest(
         git=git,
         version=version,
         label_key=label_key,
+        pass_name=pass_name,
     )
     return _render(c.cmp, c.verdict, replace(c.meta, notes=(f"Policy: {policy_source}",)))
 
@@ -363,19 +377,18 @@ def _run(args: argparse.Namespace) -> int:
 
     suite = None
     if suite_factory is not None:
+        test_suite = opik_access.get_test_suite(client, args.suite_name)
         try:
-            test_suite = client.get_test_suite(args.suite_name)
-        except Exception as exc:
-            raise ConfigError(
-                f"Test suite '{args.suite_name}' not found or unreadable: {_fmt_error(exc)}"
-            ) from exc
-        try:
+            # WHY: without model= the SDK judges assertions with an OpenAI default model, and
+            # generate_report would drop a JSON report file in the working directory.
             suite_result = run_tests(
                 test_suite,
                 suite_factory(text),
                 experiment_name=f"{name}-suite",
                 prompts=prompts,
                 experiment_tags=[*tags, "test-suite"],
+                model=args.suite_model,
+                generate_report=False,
             )
         except Exception as exc:
             raise TaskError(f"Task or assertion error during the test suite: {_fmt_error(exc)}") from exc
@@ -398,6 +411,7 @@ def _run(args: argparse.Namespace) -> int:
         git=_git_meta(ctx),
         version=version,
         label_key=args.label_key,
+        pass_name=args.pass_score,
         mark_baseline=args.mark_baseline,
         suite=suite,
     )
@@ -409,10 +423,15 @@ def _run(args: argparse.Namespace) -> int:
         opik_access.mark_baseline(client, result.experiment_id)
         args.done.append(f"Tagged {name} as the baseline")
         if prompt is not None:
+            opik_access.ensure_environments(client, [config.ENV_PRODUCTION])
             opik_access.assign_environment(client, prompt, config.ENV_PRODUCTION)
             notes.append(f"Promoted to production: {prompt.name} {prompt.version}")
             args.done.append(notes[-1])
-        if traffic is not None:
+        if traffic is not None and prompt is None:
+            # WHY: the traffic hook serves whatever production owns; without a tracked prompt it
+            # would score a version this run never evaluated.
+            notes.append("Traffic not sent: no prompt was tracked (--prompt-file)")
+        elif traffic is not None:
             n = traffic(client, args.prompt_name)
             line = f"Sent {n} production requests; online rule scores them in Logs"
             project_id = getattr(setup, "project_id", None) or c.project_id
@@ -425,6 +444,7 @@ def _run(args: argparse.Namespace) -> int:
     elif args.mark_baseline:
         # WHY: a run with no scored items would become a baseline every later PR beats.
         print("Baseline not tagged: no item carried the pass score.", file=sys.stderr)
+        warning = f"Warning: baseline not created: no item carried the pass score '{args.pass_score}'"
     meta = replace(c.meta, prompt_line=prompt_line, notes=tuple(notes), warning=warning)
     return _emit(args, *_render(c.cmp, c.verdict, meta))
 
@@ -447,6 +467,7 @@ def _digest(args: argparse.Namespace) -> int:
         git={},
         version=version,
         label_key=args.label_key,
+        pass_name=args.pass_score,
     )
     return _emit(args, md, payload)
 
@@ -457,7 +478,7 @@ def _dispatch(args: argparse.Namespace) -> int:
             return _demo(args)
         return _run(args) if args.mode == "run" else _digest(args)
     except ConfigError:
-        if DRY_RUN:
+        if config.DRY_RUN:
             print(DRY_RUN_HINT, file=sys.stderr)
         raise
 

@@ -87,6 +87,9 @@ class StubClient:
         self.dataset = SimpleNamespace(id="ds")
         self.baseline: Any = SimpleNamespace(id="B", name="base", tags=["baseline"])
         self.production: Any = None
+        self.history: list[Any] = []
+        self.environments: list[str] = ["production"]
+        self.environments_created: list[str] = []
         self.suite_result = SimpleNamespace(items_passed=8, items_total=8)
         self.tags_added: list[tuple[str, list[str]]] = []
         self.environments_set: list[tuple[str, list[str], str]] = []
@@ -116,6 +119,16 @@ class StubClient:
 
     def get_prompt(self, name: str, **_k: Any) -> Any:
         return self.production
+
+    def get_prompt_history(self, name: str) -> list[Any]:
+        return self.history
+
+    def get_environments(self) -> list[Any]:
+        return [SimpleNamespace(name=n) for n in self.environments]
+
+    def create_environment(self, name: str, **_k: Any) -> None:
+        self.environments.append(name)
+        self.environments_created.append(name)
 
     def set_prompt_environments(self, name: str, environments: list[str], version: str) -> None:
         self.environments_set.append((name, environments, version))
@@ -171,6 +184,7 @@ def _run_args(
     traffic: bool | str = False,
     fail_on_regression: bool = False,
     policy: Path | None = None,
+    extra: tuple[str, ...] = (),
     setup: bool = False,
     label_key: str | None = None,
     summary: Path | None = None,
@@ -200,7 +214,7 @@ def _run_args(
         args += ["--label-key", label_key]
     if summary:
         args += ["--summary", str(summary)]
-    return args
+    return args + list(extra)
 
 
 def test_run_logs_prompt_and_names_version_in_digest(stub: StubClient, tmp_path: Path) -> None:
@@ -213,9 +227,12 @@ def test_run_logs_prompt_and_names_version_in_digest(stub: StubClient, tmp_path:
 
 
 def test_run_marks_unchanged_prompt(stub: StubClient, tmp_path: Path) -> None:
-    stub.production = SimpleNamespace(name="scenario-planner", version="v1")
+    stub.production = SimpleNamespace(
+        name="scenario-planner", version="v1", prompt="You plan driving scenarios.\n", environments=[]
+    )
     main(_run_args(stub, out=tmp_path / "d.md"))
     assert "Prompt: scenario-planner v1 (unchanged)" in (tmp_path / "d.md").read_text()
+    assert stub.prompts_created == []
 
 
 def test_run_without_prompt_file_says_not_tracked(stub: StubClient, tmp_path: Path) -> None:
@@ -354,7 +371,7 @@ def test_run_task_crash_exits_2_without_dry_run_hint(
         raise KeyError("missing")
 
     monkeypatch.setattr(run_eval, "evaluate", boom)
-    monkeypatch.setattr(run_eval, "DRY_RUN", True)
+    monkeypatch.setattr(run_eval.config, "DRY_RUN", True)
     summary = tmp_path / "s.md"
     assert main([*_run_args(stub, mark_baseline=True), "--summary", str(summary)]) == 2
     err = capsys.readouterr().err
@@ -403,7 +420,7 @@ def test_run_without_credentials_exits_2_pointing_to_demo(
         raise ConfigError("Set OPIK_API_KEY and OPIK_WORKSPACE")
 
     monkeypatch.setattr(run_eval.opik_access, "make_client", boom)
-    monkeypatch.setattr(run_eval, "DRY_RUN", True)
+    monkeypatch.setattr(run_eval.config, "DRY_RUN", True)
     assert run_eval.main(["run", "--dataset", "d", "--task", "m:f", "--metric", "m:b"]) == 2
     err = capsys.readouterr().err
     assert "demo" in err
@@ -448,3 +465,62 @@ def test_config_error_writes_summary(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     summary = tmp_path / "s.md"
     assert run_eval.main(["digest", "--experiment", "x", "--summary", str(summary)]) == 2
     assert "Failed:" in summary.read_text(encoding="utf-8")
+
+
+def test_suite_judge_uses_suite_model_and_writes_no_report(stub: StubClient) -> None:
+    main(_run_args(stub, suite=True))
+    [call] = stub.run_tests_calls
+    assert call["model"] == run_eval.config.GEN_MODEL
+    assert call["generate_report"] is False
+    main(_run_args(stub, suite=True, extra=("--suite-model", "openai/gpt-4o-mini")))
+    assert stub.run_tests_calls[-1]["model"] == "openai/gpt-4o-mini"
+
+
+def test_missing_suite_is_a_config_error(stub: StubClient, capsys: pytest.CaptureFixture[str]) -> None:
+    stub.get_test_suite = lambda name: None  # type: ignore[method-assign]
+    assert main(_run_args(stub, suite=True)) == 2
+    assert "Test suite 'guardrails'" in capsys.readouterr().err
+
+
+def test_mark_baseline_without_setup_creates_production_environment(stub: StubClient) -> None:
+    stub.environments = []
+    main(_run_args(stub, mark_baseline=True))
+    assert stub.environments_created == ["production"]
+    assert stub.environments_set == [("scenario-planner", ["production"], "v1")]
+
+
+def test_pass_score_flag_names_the_gate_score(stub: StubClient, tmp_path: Path) -> None:
+    def custom() -> list[dict[str, Any]]:
+        return [{"name": "my_pass", "value": 1.0, "reason": None}]
+
+    stub.rows = [row(f"i{i}", f"s{i}", {CANDIDATE: [custom()]}) for i in range(10)]
+    stub.baseline = None
+    main(_run_args(stub, mark_baseline=True, extra=("--pass-score", "my_pass"), out=tmp_path / "d.md"))
+    assert stub.tags_added == [("exp-1", ["baseline"])]
+    stub.tags_added.clear()
+    main(_run_args(stub, mark_baseline=True, out=tmp_path / "d.md"))
+    assert stub.tags_added == []
+
+
+def test_mark_baseline_without_evidence_warns_in_digest(
+    stub_all_unscored: StubClient, tmp_path: Path
+) -> None:
+    main(_run_args(stub_all_unscored, mark_baseline=True, out=tmp_path / "d.md"))
+    lines = (tmp_path / "d.md").read_text().splitlines()
+    assert lines[2] == "Warning: baseline not created: no item carried the pass score 'scenario_pass'"
+
+
+def test_digest_accepts_pass_score(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+    _stub_digest(monkeypatch, "ok")
+    monkeypatch.setattr(
+        run_eval, "_build_digest", lambda *a, **k: seen.update(k) or ("# d", {"status": "ok"})
+    )
+    assert run_eval.main(["digest", "--experiment", "cand", "--pass-score", "my_pass"]) == 0
+    assert seen["pass_name"] == "my_pass"
+
+
+def test_traffic_skipped_without_tracked_prompt(stub: StubClient, tmp_path: Path) -> None:
+    main(_run_args(stub, prompt_file=None, traffic=True, mark_baseline=True, out=tmp_path / "d.md"))
+    assert stub.traffic_calls == 0
+    assert "Traffic not sent: no prompt was tracked (--prompt-file)" in (tmp_path / "d.md").read_text()

@@ -472,3 +472,18 @@ def test_load_policy_stops_at_repo_root(tmp_path: Path, monkeypatch: pytest.Monk
     work.mkdir()
     monkeypatch.chdir(work)
     assert ec.load_policy(None) == (ec.Policy(), "defaults")
+
+
+def test_mixed_unscored_and_real_trials_count_as_evidence() -> None:
+    unscored = [_score(PASS, 0.0, "failed: a unscored; b unscored")]
+    cmp = _classify([row("i1", "s1", {"C": [unscored, _bad("a")]})], baseline_id=None)
+    assert cmp.items_scored == 1 and cmp.items_unscored == 0
+    assert cmp.has_pass_evidence is True
+
+
+def test_mark_baseline_with_existing_baseline_and_no_evidence() -> None:
+    rows = [row(f"i{n}", f"s{n}", {"B": [_ok()], "C": [[_score("other", 1.0)]]}) for n in range(3)]
+    cmp = _classify(rows)
+    assert cmp.has_pass_evidence is False
+    verdict = ec.evaluate_policy(cmp, ec.Policy(min_items=1), mark_baseline=True)
+    assert verdict.status == "insufficient_evidence"

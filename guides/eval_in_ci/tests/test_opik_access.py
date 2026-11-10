@@ -155,17 +155,62 @@ def test_server_version_unwraps_version_key() -> None:
     assert opik_access.server_version(make("2.2.9")) == "2.2.9"
 
 
-def test_log_prompt_keys_on_text_only() -> None:
+def _prompt(version: str, text: str) -> SimpleNamespace:
+    return SimpleNamespace(name="p", version=version, prompt=text, environments=[])
+
+
+def _prompt_client(production: Any, history: list[Any]) -> tuple[SimpleNamespace, list[dict[str, Any]]]:
     calls: list[dict[str, Any]] = []
     client = SimpleNamespace(
-        create_prompt=lambda **kw: (
-            calls.append(kw)
-            or SimpleNamespace(name=kw["name"], version="v3", prompt=kw["prompt"], environments=[])
-        )
+        get_prompt=lambda name, **kw: production,
+        get_prompt_history=lambda name: history,
+        create_prompt=lambda **kw: calls.append(kw) or _prompt("v9", kw["prompt"]),
     )
-    opik_access.log_prompt(client, "p", "text", change_description="ci abc1234 main")
+    return client, calls
+
+
+def test_log_prompt_reuses_production_when_latest_differs() -> None:
+    production = _prompt("v2", "text")
+    client, calls = _prompt_client(production, [_prompt("v3", "other"), production])
+    assert opik_access.log_prompt(client, "p", "text", change_description="ci") is production
+    assert calls == []
+
+
+def test_log_prompt_reuses_newest_matching_history_version() -> None:
+    history = [_prompt("v2", "text"), _prompt("v10", "text"), _prompt("v11", "other")]
+    client, calls = _prompt_client(_prompt("v1", "old"), history)
+    assert opik_access.log_prompt(client, "p", "text", change_description="ci").version == "v10"
+    assert calls == []
+
+
+def test_log_prompt_creates_new_version_for_new_text() -> None:
+    client, calls = _prompt_client(None, [_prompt("v1", "old")])
+    assert opik_access.log_prompt(client, "p", "text", change_description="ci abc1234 main").version == "v9"
     assert calls[0]["metadata"] == {"source": "eval-in-ci"}
     assert calls[0]["change_description"] == "ci abc1234 main"
+    assert calls[0]["prompt"] == "text"
+
+
+def test_get_test_suite_wraps_errors() -> None:
+    suite = object()
+    assert opik_access.get_test_suite(SimpleNamespace(get_test_suite=lambda name: suite), "s") is suite
+
+    def missing(name: str) -> Any:
+        raise RuntimeError("404")
+
+    for client in (SimpleNamespace(get_test_suite=missing), SimpleNamespace(get_test_suite=lambda n: None)):
+        with pytest.raises(ConfigError, match="Test suite 's'"):
+            opik_access.get_test_suite(client, "s")
+
+
+def test_ensure_environments_creates_only_missing() -> None:
+    created: list[str] = []
+    client = SimpleNamespace(
+        get_environments=lambda: [SimpleNamespace(name="dev")],
+        create_environment=lambda name, **_k: created.append(name),
+    )
+    assert opik_access.ensure_environments(client, ["dev", "production"]) == ["production"]
+    assert created == ["production"]
 
 
 def test_assign_environment_merges_existing() -> None:

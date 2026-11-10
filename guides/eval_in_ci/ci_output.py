@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from eval_compare import PolicyError
 from opik_access import ConfigError
 
 
@@ -33,7 +34,7 @@ def run_step(step: Callable[[], int], *, title: str, summary: Path | None, outco
     """Run a step; on error print it, add it to the summary with the outcome line, and return 2."""
     try:
         return step()
-    except (ConfigError, ValueError, OSError) as exc:
+    except (ConfigError, PolicyError) as exc:
         message = str(exc)
     except Exception as exc:
         traceback.print_exc()

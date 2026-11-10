@@ -220,10 +220,21 @@ def assign_environment(client: Any, prompt: Any, environment: str) -> None:
     client.set_prompt_environments(prompt.name, envs, version=prompt.version)
 
 
+def _version_number(prompt: Any) -> int:
+    digits = str(prompt.version or "").lstrip("v")
+    return int(digits) if digits.isdigit() else -1
+
+
+# WHY: create_prompt only dedups against the latest version, so with two open PRs a text that main
+# already promoted would get a fresh version; match production and the history first.
 def log_prompt(client: Any, name: str, text: str, *, change_description: str) -> Any:
-    """Log a prompt version; an unchanged text reuses the latest version."""
-    # WHY: the SDK returns the latest version when text and metadata match, so constant metadata
-    # is what makes an unchanged prompt reuse its version.
+    """Return the version holding this text (production first, then history), or log a new one."""
+    production = get_production_prompt(client, name)
+    if production is not None and production.prompt == text:
+        return production
+    matches = [p for p in client.get_prompt_history(name) or [] if p.prompt == text]
+    if matches:
+        return max(matches, key=_version_number)
     return client.create_prompt(
         name=name,
         prompt=text,
@@ -235,6 +246,26 @@ def log_prompt(client: Any, name: str, text: str, *, change_description: str) ->
 def get_production_prompt(client: Any, name: str) -> Any | None:
     """Return the prompt version in the production environment, or None when there is none."""
     return client.get_prompt(name, environment=config.ENV_PRODUCTION, no_cache=True)
+
+
+def get_test_suite(client: Any, name: str) -> Any:
+    """Return the named test suite; raise ConfigError when it is missing or unreadable."""
+    try:
+        suite = client.get_test_suite(name)
+    except Exception as exc:
+        raise ConfigError(f"Test suite '{name}' not found or unreadable: {exc}") from exc
+    if suite is None:
+        raise ConfigError(f"Test suite '{name}' not found.")
+    return suite
+
+
+def ensure_environments(client: Any, names: Sequence[str]) -> list[str]:
+    """Register the environments that do not exist yet; return the ones created."""
+    existing = {env.name for env in client.get_environments()}
+    created = [name for name in names if name not in existing]
+    for name in created:
+        client.create_environment(name=name, description=f"{name} prompts for the eval-in-CI guide")
+    return created
 
 
 def logs_url(ui_base: str, workspace: str, project_id: str) -> str:

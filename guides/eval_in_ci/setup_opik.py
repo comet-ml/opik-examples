@@ -3,7 +3,6 @@
 # WHY: the gate runs this on every run, so any branch works on a fresh workspace and
 # a second run changes nothing.
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,6 +18,7 @@ from config import (
     TEST_SUITE_NAME,
     TRAFFIC_TAG,
 )
+from opik_access import ensure_environments
 from scenarios import SCENARIOS
 
 GUARDRAIL_ASSERTIONS: tuple[str, ...] = (
@@ -51,15 +51,6 @@ class SetupReport:
     dataset: Any
     project_id: str
     created: list[str]
-
-
-def ensure_environments(client: Any, names: Sequence[str]) -> list[str]:
-    """Register the environments that do not exist yet; return the ones created."""
-    existing = {env.name for env in client.get_environments()}
-    created = [name for name in names if name not in existing]
-    for name in created:
-        client.create_environment(name=name, description=f"{name} prompts for the eval-in-CI guide")
-    return created
 
 
 def ensure_dataset(client: Any) -> Any:
@@ -121,6 +112,7 @@ def build_rule_payload(project_id: str, model: str) -> dict[str, Any]:
 
 # WHY: the SDK type stores the output schema as `schema_`; the alias only applies when serialising.
 def build_rule_request(payload: dict[str, Any]) -> AutomationRuleEvaluatorWrite_LlmAsJudge:
+    """Turn the rule payload into the SDK request model."""
     code = dict(payload["code"])
     code["schema_"] = code.pop("schema")
     return AutomationRuleEvaluatorWrite_LlmAsJudge.model_validate({**payload, "code": code})
@@ -137,6 +129,7 @@ def ensure_online_rule(client: Any, project_id: str, model: str) -> bool:
 
 
 def run_setup(client: Any) -> SetupReport:
+    """Create whatever the guide needs in Opik and return the dataset and project id."""
     created = ensure_environments(client, [ENV_PRODUCTION])
     dataset = ensure_dataset(client)
     ensure_test_suite(client)

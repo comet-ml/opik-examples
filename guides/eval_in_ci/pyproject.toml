@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Run Opik evaluations in CI with a PR gate, promote the prompt on merge, and let the optimizer and a coding agent propose changes."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
-dependencies = ["opik>=2.2.113", "litellm>=1.70"]
+dependencies = ["opik==2.2.143", "litellm>=1.70"]
 
 [project.optional-dependencies]
 optimizer = ["opik-optimizer>=3.2"]
