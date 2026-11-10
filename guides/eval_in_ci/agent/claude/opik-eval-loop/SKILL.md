@@ -19,9 +19,9 @@ An iteration is done when one of these holds:
   the result is logged with decision `reject`.
 
 The policy lives in `opik-release-policy.yaml` at the repo root or in `.opik/`. The CI gate reads
-`min_items`, `max_regressions`, `pass_rate` and `flaky_policy` from it. If your host has the
-Opik skills, `/opik-verify` applies the same four policy keys (it also checks keys this gate
-ignores).
+`min_items`, `max_regressions`, `pass_rate`, `flaky_policy` and `test_suite` from it. If your
+host has the Opik skills, `/opik-verify` applies the same policy keys (it also checks keys this
+gate ignores).
 
 ## One iteration
 
@@ -37,7 +37,10 @@ ignores).
    not pass `--project` here. This is a script, not an MCP call, because you repeat it every
    iteration.
 
-2. Diagnose with the MCP. Use the call shapes below in this order:
+2. Diagnose. If the Opik MCP is connected, diagnose with it; otherwise open the digest's trace
+   links in the browser and read the failing spans there. The digest also carries a
+   `Prompt: <name> <version>` line and a `Test suite: k of n passed` note. With the MCP, use the
+   call shapes below in this order:
    1. `read` the experiment for the summary.
    2. `list` dataset items in compare mode, filtered to `scenario_pass < 1`, for the failing rows.
       The first experiment id is the baseline, the second is the candidate.
@@ -104,20 +107,15 @@ Span skeleton without bodies: id, name, type, duration, model, error type. Take 
 (observed: 426 tok on 12 items, 4 spans for the trace)
 
 ```text
-list('span', project_id='<pid>', filters='trace_id = "<tid>" AND error_info is_not_empty', sort='duration desc')
+list('span', project_id='<pid>', filters='trace_id = "<tid>" AND type = "tool"', sort='duration desc')
 ```
-Narrows the skeleton to errored spans, slowest first. `AND type = "tool"` narrows to tool calls.
-Returns "No spans found" when the trace has no errors, which is a valid answer, not a failure.
-(observed: 34 tok on 12 items, no errored spans in the toy task)
+Narrows the skeleton to tool calls, slowest first. Returns "No spans found" when the trace has
+none, which is a valid answer, not a failure.
 
 ```text
 read('span', '<span_id>', fields=['input', 'output'])
-read('span', '<span_id>', fields=['input', 'output', 'error_info'])     # variant for errored spans
 ```
-One span with its bodies. Use `fields=['input', 'output']` as the default form (observed: 493 tok
-on 12 items). The `error_info` form is the variant for errored spans; it has not yet been observed on one,
-and it was rejected ("Unknown field 'error_info'") on a span with no error, so drop it when the
-span is not errored.
+One span with its bodies. (observed: 493 tok on 12 items)
 
 ```text
 read('trace', '<worst_trace>', fields=['trace.feedback_scores'])     # reasons only; never a full trace read on an agent run
@@ -128,30 +126,28 @@ full `read('trace', '<worst_trace>')` without `fields` was 4,732 tok on the 4-sp
 Known limits:
 
 - A full `read('trace', ...)` on an agent trace with 200 or more spans exceeds the host's 25k-token
-  result cap (an open opik-mcp backlog item). Always pass `fields`, or walk spans instead.
+  result cap. Always pass `fields`, or walk spans instead.
 - Cursor enforces a hard 60 second timeout per tool call. Keep `size` small and do not chain
   large reads into one call.
 - Compare-mode `list('dataset_item', ...)` shows at most 4 score columns by default, has no reason
   or output column, and caps `size` at 25 for run-level filters on 2 or more experiments.
-- opik-mcp setup: `uvx opik-mcp@latest --check` with `OPIK_API_KEY` and `OPIK_WORKSPACE` set
-  preflights the connection. The MCP reads `COMET_URL_OVERRIDE` for a custom host, while the SDK
-  and `run_eval.py` read `OPIK_URL_OVERRIDE`.
+- MCP docs: https://www.comet.com/docs/opik/mcp-server , https://www.comet.com/docs/opik/mcp-server/use-cases , https://www.comet.com/docs/opik/mcp-server/advanced-setup
 
 ## Guardrails
 
-- Never edit the eval definition: the metric code, scoring thresholds, dataset scripts, or the
-  policy file. The workflow guard fails a PR from an `eval/*` branch only when it touches
-  `examples/eval_in_ci/composite_metric.py`, `examples/eval_in_ci/example_task.py`,
-  `examples/eval_in_ci/eval_compare.py`, `examples/eval_in_ci/run_eval.py`,
-  `examples/eval_in_ci/opik_access.py`, `.github/workflows/opik-eval.yml`,
-  `opik-release-policy.yaml` or `.opik/**` (adjust the paths if you copied the folder elsewhere).
-  Anything else that defines the eval (dataset scripts, thresholds in other files) is not
-  guarded, so keeping off it is on you. Changing how the score is computed is not improving the
-  app.
+- Never edit the eval definition: the metric, dataset and setup files `scenarios.py`,
+  `setup_opik.py`, `composite_metric.py`, `eval_compare.py`, `run_eval.py` and `opik_access.py`
+  (under `examples/eval_in_ci/`), or the policy file. The workflow guard fails a PR from an
+  `eval/*` or `optimize/*` branch that touches any of them (adjust the paths if you copied the
+  folder elsewhere). `planner.py` is the app and is not guarded. Changing how the score is
+  computed is not improving the app.
+- Change `prompts/system.txt` (the prompt) or the app in `planner.py`; never the files listed
+  above. Branches named `optimize/<n>` come from the optimizer workflow (`opik-optimize.yml`),
+  which opens draft PRs that go through the same gate, and they follow the same rules.
 - Recommend a CODEOWNERS entry for the eval paths above, so a human reviews every change to them.
-  The guard only covers `eval/*` branches. On `pull_request`, GitHub runs the PR's own copy of
-  the workflow, so only CODEOWNERS with required review or branch protection can protect the
-  workflow file itself.
+  The guard only covers `eval/*` and `optimize/*` branches. On `pull_request`, GitHub runs the
+  PR's own copy of the workflow, so only CODEOWNERS with required review or branch protection can
+  protect the workflow file itself.
 - Never lower a threshold, drop or relabel dataset items, or loosen `pass_rate`,
   `max_regressions` or `min_items` to make a run pass.
 - Iterate on the dev dataset. Run the held-out dataset (`--dataset` switch) only on candidates you

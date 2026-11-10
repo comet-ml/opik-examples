@@ -17,3 +17,16 @@ def test_host_wrappers_match_runbook_body() -> None:
     runbook = _body(AGENT / "opik-eval-loop.md")
     assert _body(AGENT / "cursor" / "opik-eval-loop.mdc") == runbook
     assert _body(AGENT / "claude" / "opik-eval-loop" / "SKILL.md") == runbook
+
+
+def test_runbook_has_no_research_notes_or_stale_names() -> None:
+    text = _body(AGENT / "opik-eval-loop.md")
+    for banned in ("backlog", "not yet been observed", "error_info", "example_task", "scenario_agent"):
+        assert banned not in text, banned
+    for needed in (
+        "prompts/system.txt",
+        "https://www.comet.com/docs/opik/mcp-server",
+        "https://www.comet.com/docs/opik/mcp-server/use-cases",
+        "https://www.comet.com/docs/opik/mcp-server/advanced-setup",
+    ):
+        assert needed in text, needed
