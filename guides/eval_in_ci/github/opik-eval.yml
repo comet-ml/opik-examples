@@ -66,7 +66,8 @@ jobs:
     steps:
       # Security-reviewed repos usually pin these to commit SHAs.
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv publishes no newer floating major tag; v7 is the current floating tag.
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
           enable-cache: true

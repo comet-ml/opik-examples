@@ -22,7 +22,7 @@ MODE_PUSH_GATE = "${{ github.event_name == 'push' && '--mark-baseline' || '--fai
 GATE_ACTIONS = {
     "actions/checkout@v7",
     "dorny/paths-filter@v4",
-    "astral-sh/setup-uv@v10",
+    "astral-sh/setup-uv@v7",
     "actions/upload-artifact@v7",
     "actions/github-script@v9",
 }
@@ -76,7 +76,7 @@ def test_actions_pinned_to_majors(path: Path) -> None:
 def test_template_uses_uv_and_current_actions() -> None:
     uses = {s["uses"] for s in _steps(TEMPLATE) if "uses" in s}
     assert uses == GATE_ACTIONS
-    setup_uv = next(s for s in _steps(TEMPLATE) if s.get("uses") == "astral-sh/setup-uv@v10")
+    setup_uv = next(s for s in _steps(TEMPLATE) if s.get("uses") == "astral-sh/setup-uv@v7")
     assert "version" not in setup_uv["with"]
     assert "pip install" not in "\n".join(s.get("run", "") for s in _steps(TEMPLATE))
     assert "Security-reviewed repos usually pin these to commit SHAs." in TEMPLATE.read_text(encoding="utf-8")
@@ -90,7 +90,7 @@ def test_selftest_uses_the_template_action_majors() -> None:
 def test_optimize_uses_current_action_majors() -> None:
     assert {s["uses"] for s in _steps(OPTIMIZE) if "uses" in s} == {
         "actions/checkout@v7",
-        "astral-sh/setup-uv@v10",
+        "astral-sh/setup-uv@v7",
     }
     assert _step(OPTIMIZE, "Optimize the prompt")["env"]["OPIK_PROJECT_NAME"] == "eval-in-ci-example"
 
