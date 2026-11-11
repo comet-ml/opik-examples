@@ -314,6 +314,9 @@ def test_unscored_candidate_run_does_not_create_a_baseline() -> None:
     scored = _classify([row("i9", "s9", {"C": [_ok()]})], baseline_id=None)
     assert scored.items_unscored == 0
     assert ec.evaluate_policy(scored, ec.Policy(min_items=1), mark_baseline=True).status == "baseline_created"
+    md = ec.render_markdown(cmp, verdict, _meta(baseline_name=None, mark_baseline=True))
+    assert "Baseline: this run" not in md
+    assert "Baseline: none - this run was not tagged (no item carried the pass score)" in md
 
 
 def test_flaky_exclude_drops_flaky_items_from_pass_rate() -> None:

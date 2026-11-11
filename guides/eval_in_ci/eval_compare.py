@@ -461,11 +461,13 @@ class DigestMeta:
     warning: str | None = None
 
 
-def _baseline_line(cmp: Comparison, meta: DigestMeta) -> str:
+def _baseline_line(cmp: Comparison, meta: DigestMeta, status: str) -> str:
     if cmp.baseline_id is not None:
         return f"Baseline: {meta.baseline_name} ({cmp.baseline_id})"
-    if meta.mark_baseline:
+    if meta.mark_baseline and status == "baseline_created":
         return f"Baseline: this run ({meta.candidate_name})"
+    if meta.mark_baseline:
+        return "Baseline: none - this run was not tagged (no item carried the pass score)"
     return "Baseline: none found - merge to main with --mark-baseline to create one"
 
 
@@ -540,7 +542,7 @@ def render_markdown(cmp: Comparison, verdict: PolicyVerdict, meta: DigestMeta, m
     lines = [MARKER, f"## Opik eval: {meta.candidate_name}"]
     if meta.warning:
         lines.append(meta.warning)
-    lines += ["", _baseline_line(cmp, meta)]
+    lines += ["", _baseline_line(cmp, meta, verdict.status)]
     if meta.prompt_line:
         lines.append(meta.prompt_line)
     lines += [
