@@ -13,6 +13,8 @@ from opik_access import ConfigError, GitContext
 def test_git_context_prefers_head_ref_and_parses_pr(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # WHY: CI jobs export OPIK_EVAL_GIT_SHA, which git_context prefers over GITHUB_SHA.
+    monkeypatch.delenv("OPIK_EVAL_GIT_SHA", raising=False)
     monkeypatch.setenv("GITHUB_HEAD_REF", "feat/x")
     monkeypatch.setenv("GITHUB_REF_NAME", "42/merge")
     monkeypatch.setenv("GITHUB_SHA", "abcdef1234")

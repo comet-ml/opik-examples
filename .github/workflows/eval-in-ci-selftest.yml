@@ -49,7 +49,6 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPIK_PROJECT_NAME: ${{ github.event_name == 'push' && 'eval-in-ci-example' || 'eval-in-ci-smoke' }}
-      OPIK_EVAL_GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v7
 
@@ -67,6 +66,8 @@ jobs:
         id: eval
         continue-on-error: true
         env:
+          # On pull_request github.sha is the merge commit; name runs by the PR head.
+          OPIK_EVAL_GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           # Empty on pull requests: no gate flag, so the smoke run reports a hold without failing.
           MODE_FLAG: ${{ github.event_name == 'push' && '--mark-baseline' || '' }}
         # run.sh drops empty args and forwards the rest to run_eval.py run.
