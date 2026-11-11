@@ -16,22 +16,28 @@ plan, scored on 20 scenarios. Swap in your own app, dataset and metric; the gate
 
 ### What you get
 
-A sticky comment on each pull request. This sample comes from the offline demo
-(`uv run python run_eval.py demo`), which scores sample outputs of a weak prompt (the baseline)
-against `prompts/system.txt` (the candidate) without calling a model:
+A sticky comment on each pull request. This sample is the digest of a real main-run (the push to
+`main` that tags the baseline, promotes the prompt to `production` and sends simulated traffic),
+from the verification run against Opik Cloud. It compares the new prompt with the previous main
+baseline. The offline demo (`uv run python run_eval.py demo`) prints the same layout without
+calling a model: it scores sample outputs of a weak prompt (the baseline) against
+`prompts/system.txt` (the candidate).
 
 ```markdown
 <!-- opik-eval -->
-## Opik eval: local-system
+## Opik eval: main-87ef097
 
-Baseline: local-weak (local-weak)
-Prompt: prompts/system.txt (demo, not logged)
+Baseline: main-b73dfb3 (01a1cc97-5a3d-7d3f-8f06-910bc2368488)
+Prompt: scenario-planner v3
 
-**Verdict:** ok
+**Verdict:** baseline_created
 
-Pass rate: 0.00 -> 0.60 (+0.60)
+Pass rate: 0.50 -> 0.55 (+0.05)
 Items scored: 20 | Pass rule: 1 trial
 Policy: defaults
+Test suite: 8 of 8 passed
+Promoted to production: scenario-planner v3
+Sent 6 production requests; online rule scores them in Logs: https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/logs
 
 ### Newly failing
 
@@ -39,30 +45,20 @@ none
 
 ### Newly passing
 
-- s01: passed
-- s02: passed
-- s03: passed
-- s04: passed
-- s05: passed
-- s06: passed
-- s07: passed
-- s08: passed
-- s09: passed
-- s10: passed
-- s11: passed
-- s12: passed
+- s06: passed ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-f52b-7676-95f8-bfa7267fe7cc))
 
 ### Still failing
 
 - **maneuver_correct**
-  - s13
-  - s14
-  - s15
-  - s16
-  - s17
-  - s18
-  - s19
-  - s20
+  - s20 ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-e5cb-7ad4-b3bf-059ed1fa3483))
+  - s19 ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-e5ce-71dd-b952-19ac321c7400))
+  - s18 ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-e5d0-79b5-95f1-a97bd77d29c5))
+  - s17 ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-e5d2-763b-abfa-7537a1b025fc))
+  - s16 ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-ee3e-7d5a-b355-3213fab111c6))
+  - s15 ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-eec9-73cc-a2c6-923b7586abcf))
+  - s14 ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-eed1-7453-88c6-04b74294e030))
+  - s13 ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-ef1e-7f16-b425-9ffd6edf22f0))
+  - s12 ([trace](https://www.comet.com/opik/opik-examples/projects/01a1cc97-4277-7261-9f0b-8c668a72e308/traces?trace=01a1cc9b-f177-7de7-8e07-9b2725b72121))
 
 ### Flaky
 
@@ -76,20 +72,21 @@ none
 
 | metric | baseline | candidate | delta |
 |---|---|---|---|
-| actors_correct | 0.00 | 1.00 | +1.00 |
-| maneuver_correct | 0.00 | 0.60 | +0.60 |
-| parameters_correct | 0.00 | 1.00 | +1.00 |
-| scenario_pass | 0.00 | 0.60 | +0.60 |
+| maneuver_correct | 0.55 | 0.55 | +0.00 |
+| scenario_pass | 0.50 | 0.55 | +0.05 |
+| parameters_correct | 0.95 | 1.00 | +0.05 |
+| actors_correct | 1.00 | 1.00 | +0.00 |
 
 ### Compare
 
-none
+[Open in Opik](https://www.comet.com/opik/opik-examples/experiments/01a1cc97-4261-71a5-a266-d4d9072a3883/compare?experiments=%5B%2201a1cc97-5a3d-7d3f-8f06-910bc2368488%22%2C%20%2201a1cc9b-e3fb-74a7-bfb0-fe8206043cf6%22%5D)
 ```
 
-In a live run the header names the experiment (`<branch>-<sha7>`), the prompt line reads
-`Prompt: scenario-planner <version>`, the notes add `Test suite: k of n passed`, every failing item
-links to its worst trace, and "Compare" links to the experiment compare view in Opik. On `main` the
-notes also say which version was promoted to `production` and link to Logs.
+On a pull request the comment has the same layout: the header names the experiment
+(`<branch>-<sha7>`), the prompt line reads `Prompt: scenario-planner <version>` (with
+`(unchanged)` when it matches `production`), and the verdict is `ok` or `hold` instead of
+`baseline_created`. Only `main` promotes the prompt and sends traffic. Every failing item links to
+its worst trace, and "Compare" opens the experiment compare view in Opik.
 
 ### What you will see in Opik
 
@@ -188,7 +185,7 @@ In GitHub, keys go in repository secrets and everything else in repository varia
 | `OPIK_WORKSPACE` | variable | yes | The path segment after `/opik/` in the UI URL |
 | `OPIK_URL_OVERRIDE` | variable | custom host only | `https://<host>/opik/api`; the workflows default to Opik Cloud (`https://www.comet.com/opik/api`) |
 | `OPIK_EXAMPLES_MODEL` | variable | no | LiteLLM model name for the app and the optimizer; default `anthropic/claude-haiku-4-5-20251001` |
-| `OPIK_ONLINE_JUDGE_MODEL` | variable | no | Model of the online rule; default `anthropic/claude-haiku-4-5-20251001`; must match an AI provider configured in the workspace |
+| `OPIK_ONLINE_JUDGE_MODEL` | variable | no | Model of the online rule; default `claude-haiku-4-5-20251001`; must match an AI provider configured in the workspace, by its bare model name (no `anthropic/` prefix) |
 
 Two more variables matter outside GitHub: `OPIK_PROJECT_NAME` (the workflow sets
 `eval-in-ci-example`; `run.sh` defaults to `eval-in-ci-smoke`; `.env.example` uses
@@ -209,7 +206,8 @@ bash run.sh
 ```
 
 No Opik server and no model calls. Without `OPIK_API_KEY` and `OPIK_WORKSPACE`, `run.sh` runs the
-demo, which prints the digest shown in "What you get" and exits 0. The last line explains that the
+demo, which prints a digest in the layout shown in "What you get" (weak prompt against
+`prompts/system.txt`) and exits 0. The last line explains that the
 demo exit code is always 0; in CI the gate uses `run --fail-on-regression` so a hold fails the job.
 `run` and `digest` deliberately exit 2 without credentials instead of falling back to the demo: in
 CI that keeps a fork pull request from showing a green eval that never ran.

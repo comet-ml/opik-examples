@@ -5,8 +5,9 @@ from pathlib import Path
 
 # WHY: an unset GitHub Actions variable arrives as "", so every setting falls back with `or`.
 GEN_MODEL = os.environ.get("OPIK_EXAMPLES_MODEL") or "anthropic/claude-haiku-4-5-20251001"
-# WHY: the online rule runs inside Opik, so its model must match an AI provider set up in the workspace.
-JUDGE_MODEL = os.environ.get("OPIK_ONLINE_JUDGE_MODEL") or "anthropic/claude-haiku-4-5-20251001"
+# WHY: the online rule runs inside Opik, which routes it to a workspace AI provider by the bare model
+# name (no litellm "anthropic/" prefix), so the name must match a model that provider serves.
+JUDGE_MODEL = os.environ.get("OPIK_ONLINE_JUDGE_MODEL") or "claude-haiku-4-5-20251001"
 PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME") or "eval-in-ci-example"
 # WHY: the SDK clients read OPIK_PROJECT_NAME themselves (default "Default Project"); export the resolved
 # name so the prompt, dataset, experiments, traces, online rule and links all use one project.
