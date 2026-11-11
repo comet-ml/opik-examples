@@ -79,7 +79,8 @@ Every example is a `uv` project: its `pyproject.toml` is the single source of tr
   - Never `git commit` or `git push` on `main`/`master`. Cut a feature branch (`<user>/<topic>`, e.g. `fschlz/feature/...`), push there, open a PR, and let a human merge.
   - Commits follow **Conventional Commits**: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`.
   - Never `gh pr merge`, `gh pr close`, or `gh pr review --approve` — author/reviewer actions only. Blocked in [`.claude/settings.json`](.claude/settings.json).
-  - No AI-attribution footers in commit messages or PR bodies.
+  - AI-attribution footers (for example `Co-Authored-By: <model>` in a commit message, or a
+    "Generated with" line at the end of a PR body) are allowed.
   - **Update READMEs before opening a PR.** Refresh the example's own `README.md`, and when you add, rename, or remove an example, update the bucket index (e.g. [`use-cases/README.md`](use-cases/README.md)) and the root [`README.md`](README.md) table.
 
 ## Opik SDK reference
