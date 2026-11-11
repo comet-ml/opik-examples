@@ -35,6 +35,12 @@ def test_system_prompt_leaves_headroom() -> None:
     assert len(unlisted) >= 8
 
 
+# WHY: the guardrail suite asserts every parameter appears in the input; without this sentence the
+# model writes speed_mps 0 for a stopping scenario and the production prompt fails its own suite.
+def test_system_prompt_keeps_stated_speed_when_stopping() -> None:
+    assert "even when the ego stops" in _prompt("system.txt")
+
+
 # WHY: the optimizer's ChatPrompt formats message templates, so a brace would be read as a variable.
 @pytest.mark.parametrize("name", ["weak.txt", "system.txt"])
 def test_prompts_have_no_braces(name: str) -> None:

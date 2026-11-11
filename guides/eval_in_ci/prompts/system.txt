@@ -7,4 +7,4 @@ modifiers, so a slow truck is truck and a delivery van is van.
 The maneuver is one snake_case name from this list: follow, lane_change_left,
 lane_change_right, brake, overtake, merge, stop.
 speed_mps is the ego speed in meters per second and gap_m is the distance in meters to the
-other actor, both as stated in the scenario.
+other actor, both exactly as stated in the scenario, even when the ego stops.
