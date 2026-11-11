@@ -438,6 +438,37 @@ def test_build_digest_links_traces_to_candidate_project(monkeypatch: pytest.Monk
     assert "proj-base" not in md
 
 
+# WHY: Opik 2.2.143 returns compare rows without a project id on the experiment items.
+def test_build_digest_links_traces_via_experiment_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [row("i1", "s1", {"B": [_ok()], "C": [_bad("a")]})]
+    monkeypatch.setattr(run_eval.opik_access, "fetch_compare_rows", lambda c, d, ids: rows)
+    monkeypatch.setattr(run_eval.opik_access, "ui_base_and_workspace", lambda c: ("https://h/", "ws"))
+    experiments = {"B": "proj-base", "C": "proj-exp"}
+    client = SimpleNamespace(
+        rest_client=SimpleNamespace(
+            experiments=SimpleNamespace(
+                get_experiment_by_id=lambda id: SimpleNamespace(id=id, project_id=experiments[id])
+            )
+        )
+    )
+    md, _ = run_eval._build_digest(
+        client, "ds", "B", "base", "C", "cand", pass_threshold=None, policy_path=None, git={}, version=None
+    )
+    assert "projects/proj-exp/traces?trace=t-i1-C-0" in md
+    assert "proj-base" not in md
+
+
+def test_build_digest_without_any_project_id_has_no_trace_links(monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [row("i1", "s1", {"B": [_ok()], "C": [_bad("a")]})]
+    monkeypatch.setattr(run_eval.opik_access, "fetch_compare_rows", lambda c, d, ids: rows)
+    monkeypatch.setattr(run_eval.opik_access, "ui_base_and_workspace", lambda c: ("https://h/", "ws"))
+    md, _ = run_eval._build_digest(
+        None, "ds", "B", "base", "C", "cand", pass_threshold=None, policy_path=None, git={}, version=None
+    )
+    assert "- s1: a" in md
+    assert "[trace]" not in md
+
+
 def test_run_requires_metric() -> None:
     with pytest.raises(SystemExit) as e:
         run_eval.build_parser().parse_args(["run", "--dataset", "d", "--task", "m:t"])

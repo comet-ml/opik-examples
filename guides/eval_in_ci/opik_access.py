@@ -183,6 +183,14 @@ def fetch_compare_rows(
     return rows
 
 
+def experiment_project_id(client: Any, experiment_id: str) -> str | None:
+    """The experiment's project id, or None when it cannot be read."""
+    try:
+        return client.rest_client.experiments.get_experiment_by_id(experiment_id).project_id or None
+    except Exception:
+        return None
+
+
 def trace_url_builder(ui_base: str, workspace: str, project_id: str | None) -> Callable[[str], str | None]:
     """Return trace_id -> UI URL, or None when the project id is unknown."""
 

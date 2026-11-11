@@ -164,6 +164,9 @@ def _compare(
         ),
         None,
     )
+    if project_id is None:
+        # WHY: some servers (2.2.143) return compare rows without a project id; the experiment has it.
+        project_id = opik_access.experiment_project_id(client, candidate_id)
     meta = eval_compare.DigestMeta(
         baseline_name=baseline_name,
         candidate_name=candidate_name,
