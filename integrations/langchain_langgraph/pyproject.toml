@@ -1,0 +1,35 @@
+[project]
+name = "langchain-langgraph"
+version = "0.1.0"
+description = "Trace LangChain runnables and LangGraph workflows to Opik."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "langchain-core",
+    "langgraph",
+    "opik>=2.0",
+]
+
+[project.scripts]
+langchain-langgraph-opik = "langchain_langgraph:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# WHY: single top-level module (not a src/ package) - point hatchling at the one file.
+[tool.hatch.build.targets.wheel]
+include = ["langchain_langgraph.py"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
