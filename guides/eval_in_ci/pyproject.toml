@@ -1,0 +1,27 @@
+[project]
+name = "eval-in-ci"
+version = "0.1.0"
+description = "Run Opik evaluations in CI with a PR gate, promote the prompt on merge, and let the optimizer and a coding agent propose changes."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = ["opik==2.2.143", "litellm>=1.70"]
+
+[project.optional-dependencies]
+optimizer = ["opik-optimizer>=3.2"]
+
+[dependency-groups]
+dev = ["pytest", "ruff", "pyyaml>=6"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

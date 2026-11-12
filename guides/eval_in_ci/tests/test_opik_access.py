@@ -1,0 +1,241 @@
+"""Tests for the Opik access layer, using stub clients (no network)."""
+
+import json
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+
+import opik_access
+from opik_access import ConfigError, GitContext
+
+
+def test_git_context_prefers_head_ref_and_parses_pr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # WHY: CI jobs export OPIK_EVAL_GIT_SHA, which git_context prefers over GITHUB_SHA.
+    monkeypatch.delenv("OPIK_EVAL_GIT_SHA", raising=False)
+    monkeypatch.setenv("GITHUB_HEAD_REF", "feat/x")
+    monkeypatch.setenv("GITHUB_REF_NAME", "42/merge")
+    monkeypatch.setenv("GITHUB_SHA", "abcdef1234")
+    monkeypatch.setenv("GITHUB_ACTOR", "octocat")
+    ctx = opik_access.git_context()
+    assert ctx.branch == "feat/x"
+    assert ctx.pr_number == "42"
+    assert ctx.sha7 == "abcdef1"
+    assert ctx.actor == "octocat"
+    assert opik_access.git_context(pr_override="7").pr_number == "7"
+
+
+def test_experiment_name_replaces_slash() -> None:
+    ctx = GitContext(branch="feat/x", sha7="abcdef1", pr_number=None, actor=None)
+    assert opik_access.experiment_name(ctx) == "feat-x-abcdef1"
+
+
+def _experiments_client(find_experiments: Any) -> SimpleNamespace:
+    return SimpleNamespace(
+        rest_client=SimpleNamespace(experiments=SimpleNamespace(find_experiments=find_experiments))
+    )
+
+
+def test_find_baseline_skips_excluded_id() -> None:
+    calls: list[dict[str, Any]] = []
+
+    def find_experiments(**kwargs: Any) -> SimpleNamespace:
+        calls.append(kwargs)
+        return SimpleNamespace(
+            content=[
+                SimpleNamespace(id="cand", tags=["ci", "baseline"]),
+                SimpleNamespace(id="base", tags=["ci", "baseline"]),
+            ]
+        )
+
+    client = _experiments_client(find_experiments)
+    found = opik_access.find_baseline(client, "ds1", exclude_id="cand")
+    assert found is not None and found.id == "base"
+    assert calls[0]["dataset_id"] == "ds1"
+    # WHY: "=" is exact list membership on the server; "contains" would match branch tags too.
+    assert json.loads(calls[0]["filters"])[0] == {"field": "tags", "operator": "=", "value": "baseline"}
+    assert opik_access.find_baseline(client, "ds1", exclude_id=None).id == "cand"  # type: ignore[union-attr]
+
+
+def test_ui_base_and_workspace_resolves_default() -> None:
+    client = SimpleNamespace(
+        config=SimpleNamespace(url_override="https://host.example.com/opik/api", workspace="default"),
+        rest_client=SimpleNamespace(
+            check=SimpleNamespace(get_workspace_name=lambda: SimpleNamespace(workspace_name="acme"))
+        ),
+    )
+    base, ws = opik_access.ui_base_and_workspace(client)
+    assert base == "https://host.example.com/"
+    assert ws == "acme"
+    client.config.workspace = "team"
+    assert opik_access.ui_base_and_workspace(client)[1] == "team"
+
+
+def test_fetch_compare_rows_pages_until_total() -> None:
+    calls: list[int] = []
+
+    def find(**kwargs: Any) -> SimpleNamespace:
+        page = kwargs["page"]
+        calls.append(page)
+        n = 100 if page < 3 else 50
+        return SimpleNamespace(content=[object()] * n, page=page, size=kwargs["size"], total=250)
+
+    client = SimpleNamespace(
+        rest_client=SimpleNamespace(datasets=SimpleNamespace(find_dataset_items_with_experiment_items=find))
+    )
+    rows = opik_access.fetch_compare_rows(client, "ds1", ["e1", "e2"])
+    assert len(rows) == 250
+    assert calls == [1, 2, 3]
+
+
+def test_load_callable_bad_ref_raises_config_error() -> None:
+    for ref in ("nocolon", "no_such_module_xyz:fn", "json:no_such_attr"):
+        with pytest.raises(ConfigError) as exc:
+            opik_access.load_callable(ref)
+        assert ref in str(exc.value)
+    assert opik_access.load_callable("json:dumps") is json.dumps
+
+
+def test_resolve_experiment_falls_back_without_project() -> None:
+    import opik.exceptions
+
+    match = SimpleNamespace(name="exp", created_at=1)
+    match.get_experiment_data = lambda: match  # type: ignore[attr-defined]
+    seen: list[Any] = []
+
+    def get_by_name(name: str, project_name: str | None = None) -> list[Any]:
+        seen.append(project_name)
+        if project_name is not None:
+            raise opik.exceptions.ExperimentNotFound(name)
+        return [match]
+
+    def by_id(_: str) -> Any:
+        raise RuntimeError("not an id")
+
+    client = SimpleNamespace(
+        get_experiments_by_name=get_by_name,
+        rest_client=SimpleNamespace(experiments=SimpleNamespace(get_experiment_by_id=by_id)),
+    )
+    assert opik_access.resolve_experiment(client, "exp", "proj") is match
+    assert seen == ["proj", None]
+
+
+def test_find_baseline_requires_exact_tag_not_substring() -> None:
+    newer = SimpleNamespace(id="new", tags=["ci", "fix-baseline-loader", "candidate"])
+    older = SimpleNamespace(id="old", tags=["ci", "main", "baseline"])
+    client = _experiments_client(lambda **_k: SimpleNamespace(content=[newer, older]))
+    found = opik_access.find_baseline(client, "ds1")
+    assert found is not None and found.id == "old"
+
+
+def test_mark_baseline_adds_tag_by_id() -> None:
+    calls: list[dict[str, Any]] = []
+    client = SimpleNamespace(
+        rest_client=SimpleNamespace(
+            experiments=SimpleNamespace(update_experiment=lambda **kw: calls.append(kw))
+        )
+    )
+    opik_access.mark_baseline(client, "exp1")
+    assert calls == [{"id": "exp1", "tags_to_add": ["baseline"]}]
+
+
+def test_git_context_prefers_eval_git_sha(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPIK_EVAL_GIT_SHA", "abcdef1234")
+    monkeypatch.setenv("GITHUB_SHA", "zzzzzzz999")
+    assert opik_access.git_context().sha7 == "abcdef1"
+    monkeypatch.delenv("OPIK_EVAL_GIT_SHA")
+    assert opik_access.git_context().sha7 == "zzzzzzz"
+
+
+def test_server_version_unwraps_version_key() -> None:
+    def make(value: Any) -> SimpleNamespace:
+        return SimpleNamespace(rest_client=SimpleNamespace(version=lambda: value))
+
+    assert opik_access.server_version(make({"version": "2.2.113"})) == "2.2.113"
+    assert opik_access.server_version(make("2.2.9")) == "2.2.9"
+
+
+def _prompt(version: str, text: str) -> SimpleNamespace:
+    return SimpleNamespace(name="p", version=version, prompt=text, environments=[])
+
+
+def _prompt_client(production: Any, history: list[Any]) -> tuple[SimpleNamespace, list[dict[str, Any]]]:
+    calls: list[dict[str, Any]] = []
+    client = SimpleNamespace(
+        get_prompt=lambda name, **kw: production,
+        get_prompt_history=lambda name: history,
+        create_prompt=lambda **kw: calls.append(kw) or _prompt("v9", kw["prompt"]),
+    )
+    return client, calls
+
+
+def test_log_prompt_reuses_production_when_latest_differs() -> None:
+    production = _prompt("v2", "text")
+    client, calls = _prompt_client(production, [_prompt("v3", "other"), production])
+    assert opik_access.log_prompt(client, "p", "text", change_description="ci") is production
+    assert calls == []
+
+
+def test_log_prompt_reuses_newest_matching_history_version() -> None:
+    history = [_prompt("v2", "text"), _prompt("v10", "text"), _prompt("v11", "other")]
+    client, calls = _prompt_client(_prompt("v1", "old"), history)
+    assert opik_access.log_prompt(client, "p", "text", change_description="ci").version == "v10"
+    assert calls == []
+
+
+def test_log_prompt_creates_new_version_for_new_text() -> None:
+    client, calls = _prompt_client(None, [_prompt("v1", "old")])
+    assert opik_access.log_prompt(client, "p", "text", change_description="ci abc1234 main").version == "v9"
+    assert calls[0]["metadata"] == {"source": "eval-in-ci"}
+    assert calls[0]["change_description"] == "ci abc1234 main"
+    assert calls[0]["prompt"] == "text"
+
+
+def test_get_test_suite_wraps_errors() -> None:
+    suite = object()
+    assert opik_access.get_test_suite(SimpleNamespace(get_test_suite=lambda name: suite), "s") is suite
+
+    def missing(name: str) -> Any:
+        raise RuntimeError("404")
+
+    for client in (SimpleNamespace(get_test_suite=missing), SimpleNamespace(get_test_suite=lambda n: None)):
+        with pytest.raises(ConfigError, match="Test suite 's'"):
+            opik_access.get_test_suite(client, "s")
+
+
+def test_ensure_environments_creates_only_missing() -> None:
+    created: list[str] = []
+    client = SimpleNamespace(
+        get_environments=lambda: [SimpleNamespace(name="dev")],
+        create_environment=lambda name, **_k: created.append(name),
+    )
+    assert opik_access.ensure_environments(client, ["dev", "production"]) == ["production"]
+    assert created == ["production"]
+
+
+def test_assign_environment_merges_existing() -> None:
+    seen: list[tuple[Any, ...]] = []
+    client = SimpleNamespace(
+        set_prompt_environments=lambda name, envs, version: seen.append((name, envs, version))
+    )
+    prompt = SimpleNamespace(name="p", version="v2", environments=["dev"])
+    opik_access.assign_environment(client, prompt, "production")
+    assert seen == [("p", ["dev", "production"], "v2")]
+
+
+def test_get_production_prompt_none_when_missing() -> None:
+    client = SimpleNamespace(get_prompt=lambda name, **kw: None)
+    assert opik_access.get_production_prompt(client, "p") is None
+
+
+def test_get_production_prompt_reads_production_uncached() -> None:
+    calls: list[tuple[Any, ...]] = []
+    client = SimpleNamespace(get_prompt=lambda name, **kw: calls.append((name, kw)) or "found")
+    assert opik_access.get_production_prompt(client, "p") == "found"
+    assert calls == [("p", {"environment": "production", "no_cache": True})]
+
+
+def test_logs_url() -> None:
+    assert opik_access.logs_url("http://h/", "ws", "pid") == "http://h/opik/ws/projects/pid/logs"

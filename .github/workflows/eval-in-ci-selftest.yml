@@ -1,0 +1,121 @@
+name: eval-in-ci selftest
+
+# Exercises guides/eval_in_ci's own gate (github/opik-eval.yml) inside this repo, which pr-test.yml
+# does not: it runs the unit tests, then run.sh, uploads the digest and posts the sticky PR comment.
+# Paths differ from the template because the guide lives under guides/ here.
+# A unit test keeps the comment script identical to the template's.
+#
+# Pull requests (and manual dispatches) are a smoke run in the eval-in-ci-smoke project with no gate
+# flag, so a hold is reported but does not fail the job. A push to main runs the showcase: it tags the
+# baseline in eval-in-ci-example, promotes the prompt and sends traffic (--mark-baseline).
+
+on:
+  pull_request:
+    paths:
+      - "guides/eval_in_ci/**"
+      - ".github/workflows/eval-in-ci-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "guides/eval_in_ci/**"
+      - ".github/workflows/eval-in-ci-selftest.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: eval-in-ci-selftest-${{ github.event.pull_request.number || github.ref }}
+  # Only PR runs cancel each other; a main run (baseline, promotion, traffic) always finishes.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+    working-directory: guides/eval_in_ci
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+      OPIK_WORKSPACE: ${{ vars.OPIK_WORKSPACE }}
+      # An unset variable expands to "", which the SDK takes literally; default to Opik Cloud.
+      OPIK_URL_OVERRIDE: ${{ vars.OPIK_URL_OVERRIDE || 'https://www.comet.com/opik/api' }}
+      OPIK_EXAMPLES_MODEL: ${{ vars.OPIK_EXAMPLES_MODEL }}
+      OPIK_ONLINE_JUDGE_MODEL: ${{ vars.OPIK_ONLINE_JUDGE_MODEL }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPIK_PROJECT_NAME: ${{ github.event_name == 'push' && 'eval-in-ci-example' || 'eval-in-ci-smoke' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: |
+          uv sync --group dev
+          uv run pytest -q
+
+      - name: Run evaluation
+        id: eval
+        continue-on-error: true
+        env:
+          # On pull_request github.sha is the merge commit; name runs by the PR head.
+          OPIK_EVAL_GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Empty on pull requests: no gate flag, so the smoke run reports a hold without failing.
+          MODE_FLAG: ${{ github.event_name == 'push' && '--mark-baseline' || '' }}
+        # run.sh drops empty args and forwards the rest to run_eval.py run.
+        # Exit codes: 0 ok or baseline created, 1 policy failed, 2 config or connection error.
+        run: |
+          set +e
+          bash run.sh "$MODE_FLAG" --out digest.md --json digest.json --summary "$GITHUB_STEP_SUMMARY"
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload digest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: opik-eval-digest
+          path: |
+            guides/eval_in_ci/digest.md
+            guides/eval_in_ci/digest.json
+          if-no-files-found: ignore
+
+      - name: Post sticky PR comment
+        # On workflow_dispatch (the optimizer's optimize/<n> branch) the comment goes to the branch's open PR.
+        if: always() && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && hashFiles('guides/eval_in_ci/digest.md') != ''
+        continue-on-error: true
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('guides/eval_in_ci/digest.md', 'utf8');
+            const marker = '<!-- opik-eval -->';
+            const { owner, repo } = context.repo;
+            let issue_number = context.issue.number;
+            if (context.eventName === 'workflow_dispatch') {
+              const { data: prs } = await github.rest.pulls.list({
+                owner, repo, state: 'open', head: `${owner}:${context.ref.replace('refs/heads/', '')}`,
+              });
+              if (prs.length === 0) return;
+              issue_number = prs[0].number;
+            }
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Fail the job if the eval failed
+        if: always()
+        env:
+          EVAL_EXIT_CODE: ${{ steps.eval.outputs.exit_code }}
+        run: exit "${EVAL_EXIT_CODE:-2}"
