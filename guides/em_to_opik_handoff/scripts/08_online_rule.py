@@ -5,7 +5,7 @@ Usage: uv run python scripts/08_online_rule.py [--delete] [--model NAME]
 Optional part of the demo. Skip it where online evaluation is not allowed; nothing else
 depends on it. The judge model runs inside Opik, so it needs a provider configured in the
 workspace (Opik UI -> Configuration -> AI Providers). Model resolution: --model, then
-ONLINE_JUDGE_MODEL, then JUDGE_MODEL. "opik-free-model" works with no provider key.
+OPIK_ONLINE_JUDGE_MODEL, then "opik-free-model", which works with no provider key.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def main() -> None:
     s = get_settings()
     client = opik.Opik()
     rules = client.rest_client.automation_rule_evaluators
-    project = client.rest_client.projects.retrieve_project(name=s.opik_project)
+    project = client.rest_client.projects.retrieve_project(name=s.project)
     existing = [
         r
         for r in (rules.find_evaluators(project_id=project.id, name=RULE_NAME, size=50).content or [])
@@ -53,7 +53,7 @@ def main() -> None:
         print(f"Deleted {len(existing)} rule(s) named '{RULE_NAME}'.")
         return
     if existing:
-        print(f"Rule '{RULE_NAME}' already exists on project '{s.opik_project}'. Nothing to do.")
+        print(f"Rule '{RULE_NAME}' already exists on project '{s.project}'. Nothing to do.")
         return
 
     judge_text = judge_prompt()
@@ -121,7 +121,7 @@ def _create(rules, project, code, s) -> None:
             "If the model or provider is not available: Opik UI -> Configuration -> AI Providers "
             "-> add an Anthropic key, then re-run (optionally with --model <name shown in the UI>)."
         ) from exc
-    print(f"Created online rule '{RULE_NAME}' on project '{s.opik_project}' (score: {SCORE_NAME}).")
+    print(f"Created online rule '{RULE_NAME}' on project '{s.project}' (score: {SCORE_NAME}).")
 
 
 if __name__ == "__main__":

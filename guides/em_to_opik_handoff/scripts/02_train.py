@@ -84,7 +84,7 @@ def main() -> None:
     args = ap.parse_args()
 
     s = get_settings()
-    os.environ["COMET_PROJECT_NAME"] = s.comet_project
+    os.environ["COMET_PROJECT_NAME"] = s.project
     os.environ["COMET_MODEL_NAME"] = s.registry_model
     os.environ.setdefault("COMET_EVAL_LOG_CONFUSION_MATRIX", "true")
     os.environ.setdefault("COMET_MAX_IMAGE_PREDICTIONS", "100")
@@ -94,7 +94,7 @@ def main() -> None:
     from ultralytics import YOLO
 
     yolo_dir = s.data_dir / "yolo"
-    experiment = comet_ml.start(workspace=s.comet_workspace or None, project_name=s.comet_project)
+    experiment = comet_ml.start(workspace=s.workspace or None, project_name=s.project)
     experiment.set_name(f"{Path(args.model).stem}-{args.name}")
     experiment.add_tags(["roadwork", Path(args.model).stem, args.name])
     experiment_key = experiment.get_key()
@@ -108,7 +108,7 @@ def main() -> None:
         imgsz=args.imgsz,
         batch=args.batch,
         device=args.device,
-        project=str(REPO_ROOT / "runs" / s.comet_project),
+        project=str(REPO_ROOT / "runs" / s.project),
         name=args.name,
         exist_ok=True,
         save_json=True,

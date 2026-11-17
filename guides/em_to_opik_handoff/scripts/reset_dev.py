@@ -35,7 +35,7 @@ def main() -> None:
     dev_tag = dev_handoff().model_tag()
 
     traces = client.search_traces(
-        project_name=s.opik_project, filter_string=f'tags contains "{dev_tag}"', max_results=10000
+        project_name=s.project, filter_string=f'tags contains "{dev_tag}"', max_results=10000
     )
     experiments = []
     version = current_handoff().model_version
@@ -52,7 +52,7 @@ def main() -> None:
     dev_dataset = s.dev_dataset
 
     print(
-        f"Project '{s.opik_project}': {len(traces)} dev traces, {len(experiments)} dev experiments, "
+        f"Project '{s.project}': {len(traces)} dev traces, {len(experiments)} dev experiments, "
         f"{len(queues)} review queue(s) selected, dataset '{dev_dataset}'."
     )
     if not args.yes and input("Delete these? [y/N] ").strip().lower() != "y":

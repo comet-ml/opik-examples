@@ -67,7 +67,7 @@ def link_back_to_em(handoff, s, dataset_name: str, results: dict) -> None:
             + "</tr>"
         )
     exp.log_other("opik_dataset", dataset_name)
-    exp.log_other("opik_project", s.opik_project)
+    exp.log_other("opik_project", s.project)
     exp.log_html(
         clear=True,
         html="<h3>Downstream evaluation in Opik</h3>"
@@ -111,7 +111,7 @@ def main() -> None:
             task=make_task(variant, image_paths),
             scoring_metrics=metrics,
             experiment_name=experiment_name(variant, handoff.model_version, full_run),
-            project_name=s.opik_project,
+            project_name=s.project,
             experiment_config=handoff.as_metadata()
             | {
                 "variant": variant,

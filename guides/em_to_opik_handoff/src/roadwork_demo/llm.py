@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from functools import lru_cache
 
 from anthropic import Anthropic
@@ -13,11 +14,13 @@ from roadwork_demo.config import get_settings
 
 @lru_cache(maxsize=1)
 def client() -> Anthropic:
-    s = get_settings()
     # WHY: base_url is always explicit; a shell ANTHROPIC_BASE_URL may point at a proxy.
     return track_anthropic(
-        Anthropic(api_key=s.anthropic_api_key, base_url=s.anthropic_api_url),
-        project_name=s.opik_project,
+        Anthropic(
+            api_key=os.environ.get("ANTHROPIC_API_KEY"),
+            base_url=os.environ.get("ANTHROPIC_API_URL") or "https://api.anthropic.com",
+        ),
+        project_name=get_settings().project,
     )
 
 

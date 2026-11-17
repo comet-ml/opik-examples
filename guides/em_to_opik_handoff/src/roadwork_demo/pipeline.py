@@ -39,8 +39,8 @@ _load_lock = threading.Lock()
 def dev_handoff() -> Handoff:
     """Placeholder identifiers for development before a model is trained and registered."""
     return Handoff(
-        comet_workspace=settings.comet_workspace,
-        comet_project=settings.comet_project,
+        comet_workspace=settings.workspace,
+        comet_project=settings.project,
         experiment_key="not-trained-yet",
         experiment_url="",
         registry_model="yolo11s-stock",
@@ -152,7 +152,7 @@ def verdict(image_b64: str, detections: list[dict] | None = None, overlay_b64: s
     return parse_verdict(parsed, raw_text=raw)
 
 
-@opik.track(name="road_obstruction_triage", project_name=settings.opik_project)
+@opik.track(name="road_obstruction_triage", project_name=settings.project)
 def run_frame(
     image_path: str, variant: Variant = "detector_vlm", extra_tags: list[str] | None = None
 ) -> dict:

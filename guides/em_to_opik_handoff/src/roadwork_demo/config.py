@@ -7,28 +7,29 @@ import os
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+STOCK_VERSION = "stock"
+DEV_VERSION = "dev-stock"
+VARIANTS = ("vlm_only", "detector_vlm")
 
 
 @dataclass(frozen=True)
 class Settings:
-    comet_workspace: str
-    comet_project: str
+    workspace: str
+    project: str
     registry_model: str
     dataset_artifact: str
-    opik_project: str
     opik_dataset: str
     prompt_name: str
     queue_name: str
     verdict_model: str
     judge_model: str
     online_judge_model: str
-    anthropic_api_key: str
-    anthropic_api_url: str
+    detector: str
     data_dir: Path
     handoff_path: Path
+    dry_run: bool
 
     @property
     def eval_manifest_path(self) -> Path:
@@ -41,30 +42,27 @@ class Settings:
 
 
 def get_settings() -> Settings:
-    load_dotenv(REPO_ROOT / ".env")
+    # WHY: every lookup falls back with `or`, not a .get default: an unset CI variable arrives as "".
     env = os.environ.get
     # WHY: Opik falls back to a default project from user config for traces created outside
-    # our @track decorators (for example by evaluate()). Pin it to this demo's project.
-    opik_project = env("OPIK_PROJECT") or "roadwork-triage"
-    os.environ["OPIK_PROJECT_NAME"] = opik_project
-    judge_model = env("JUDGE_MODEL") or "claude-sonnet-5-5"
+    # our @track decorators (for example by evaluate()). Pin it to this guide's project.
+    project = env("OPIK_PROJECT_NAME") or "roadwork-detection"
+    os.environ["OPIK_PROJECT_NAME"] = project
     return Settings(
-        comet_workspace=env("COMET_WORKSPACE_NAME") or env("COMET_WORKSPACE") or "",
-        comet_project=env("COMET_PROJECT") or "roadwork-detector",
+        workspace=env("COMET_WORKSPACE") or env("OPIK_WORKSPACE") or "",
+        project=project,
         registry_model=env("REGISTRY_MODEL") or "roadwork-yolo11s",
         dataset_artifact=env("DATASET_ARTIFACT") or "roadwork-yolo",
-        opik_project=opik_project,
-        opik_dataset=env("OPIK_DATASET") or "roadwork-verdicts-v1",
+        opik_dataset=env("OPIK_DATASET") or "roadwork-verdicts",
         prompt_name=env("PROMPT_NAME") or "roadwork-verdict",
         queue_name=env("QUEUE_NAME") or "roadwork-review",
-        verdict_model=env("VERDICT_MODEL") or "claude-haiku-5-5",
-        judge_model=judge_model,
-        online_judge_model=env("ONLINE_JUDGE_MODEL") or judge_model,
-        anthropic_api_key=env("ANTHROPIC_API_KEY") or "",
-        # WHY: never fall back to ANTHROPIC_BASE_URL; a shell may point it at a proxy.
-        anthropic_api_url=env("ANTHROPIC_API_URL") or "https://api.anthropic.com",
+        verdict_model=env("OPIK_EXAMPLES_MODEL") or "anthropic/claude-haiku-5-5",
+        judge_model=env("JUDGE_MODEL") or "anthropic/claude-sonnet-5-5",
+        online_judge_model=env("OPIK_ONLINE_JUDGE_MODEL") or "opik-free-model",
+        detector=env("DETECTOR_VERSION") or "production",
         data_dir=Path(env("DATA_DIR") or REPO_ROOT / "data"),
         handoff_path=Path(env("HANDOFF_PATH") or REPO_ROOT / "handoff.json"),
+        dry_run=not (env("OPIK_API_KEY") and env("OPIK_WORKSPACE")),
     )
 
 
@@ -117,19 +115,17 @@ def load_handoff(path: Path) -> Handoff:
     return Handoff(**{f.name: data[f.name] for f in fields(Handoff)})
 
 
-DEV_VERSION = "dev-stock"
-VARIANTS = ("vlm_only", "detector_vlm")
-
-
 def is_full_run(dataset_name: str, default_dataset: str, nb_samples: int | None) -> bool:
     """True for a run over every item of the default verdict dataset."""
     return dataset_name == default_dataset and nb_samples is None
 
 
-def experiment_name(variant: str, model_version: str, full_run: bool = True) -> str:
+def experiment_name(variant: str, model_version: str | None, full_run: bool = True) -> str:
     """Opik experiment name. Subset and dev-dataset runs get a "-dev" suffix so they never
     share a name with the full run that the gate and the Comet back-link read."""
-    return f"{variant}-{model_version}" + ("" if full_run else "-dev")
+    # WHY: vlm_only runs no detector, so one experiment serves every detector version.
+    base = variant if variant == "vlm_only" or model_version is None else f"{variant}-{model_version}"
+    return base + ("" if full_run else "-dev")
 
 
 def variant_tag(variant: str) -> str:
@@ -143,4 +139,5 @@ def should_link_back(
 
     Subset or dev-dataset runs would overwrite the headline numbers with partial ones.
     """
-    return model_version != DEV_VERSION and is_full_run(dataset_name, default_dataset, nb_samples)
+    registered = model_version not in (STOCK_VERSION, DEV_VERSION)
+    return registered and is_full_run(dataset_name, default_dataset, nb_samples)

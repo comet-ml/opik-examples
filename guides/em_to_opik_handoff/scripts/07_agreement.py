@@ -94,7 +94,7 @@ def main() -> None:
             }
             for r in rows
         ],
-        project_name=s.opik_project,
+        project_name=s.project,
     )
     client.flush()
     print("\nLogged human_says_correct onto the reviewed traces.")

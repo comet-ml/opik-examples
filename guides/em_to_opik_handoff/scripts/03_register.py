@@ -38,7 +38,7 @@ def main() -> None:
 
     api = API()
     exp = api.get_experiment_by_key(last["experiment_key"])
-    workspace = s.comet_workspace or exp.workspace
+    workspace = s.workspace or exp.workspace
 
     print(
         f"Experiment {last['experiment_key']} (run '{last.get('name')}'): "
@@ -77,7 +77,7 @@ def main() -> None:
 
     handoff = Handoff(
         comet_workspace=workspace,
-        comet_project=s.comet_project,
+        comet_project=s.project,
         experiment_key=last["experiment_key"],
         experiment_url=exp.url,
         registry_model=s.registry_model,

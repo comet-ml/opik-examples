@@ -56,7 +56,7 @@ def main() -> None:
 
     queue = find_review_queue(client, s) or client.create_traces_annotation_queue(
         name=s.queue_name,
-        project_name=s.opik_project,
+        project_name=s.project,
         description=f"10 percent human review of {handoff.model_tag()} verdicts.",
         instructions=INSTRUCTIONS,
         comments_enabled=True,
@@ -64,7 +64,7 @@ def main() -> None:
     )
 
     traces = client.search_traces(
-        project_name=s.opik_project,
+        project_name=s.project,
         filter_string=f'tags contains "{variant_tag("detector_vlm")}"',
         max_results=5000,
     )

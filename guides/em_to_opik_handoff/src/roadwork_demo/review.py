@@ -7,7 +7,7 @@ from roadwork_demo.config import Settings
 
 def find_review_queue(client, s: Settings):
     """The demo's traces annotation queue, or None if it was not created yet."""
-    queues = client.get_traces_annotation_queues(project_name=s.opik_project)
+    queues = client.get_traces_annotation_queues(project_name=s.project)
     return next((q for q in queues if q.name == s.queue_name), None)
 
 

@@ -10,7 +10,6 @@ dependencies = [
     "comet-ml>=3.58",
     "pillow",
     "anthropic>=2.9.0",
-    "python-dotenv>=1.2.4",
 ]
 
 [project.optional-dependencies]
