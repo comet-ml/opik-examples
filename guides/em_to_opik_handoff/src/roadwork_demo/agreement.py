@@ -14,7 +14,7 @@ def _check(a: list, b: list) -> None:
 
 def percent_agreement(a: list, b: list) -> float:
     _check(a, b)
-    return sum(x == y for x, y in zip(a, b)) / len(a)
+    return sum(x == y for x, y in zip(a, b, strict=True)) / len(a)
 
 
 def cohens_kappa(a: list, b: list) -> float:

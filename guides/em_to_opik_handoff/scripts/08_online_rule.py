@@ -42,15 +42,14 @@ def main() -> None:
     rules = client.rest_client.automation_rule_evaluators
     project = client.rest_client.projects.retrieve_project(name=s.opik_project)
     existing = [
-        r for r in (rules.find_evaluators(project_id=project.id, name=RULE_NAME, size=50).content or [])
+        r
+        for r in (rules.find_evaluators(project_id=project.id, name=RULE_NAME, size=50).content or [])
         if r.name == RULE_NAME
     ]
 
     if args.delete:
         if existing:
-            rules.delete_automation_rule_evaluator_batch(
-                ids=[r.id for r in existing], project_id=project.id
-            )
+            rules.delete_automation_rule_evaluator_batch(ids=[r.id for r in existing], project_id=project.id)
         print(f"Deleted {len(existing)} rule(s) named '{RULE_NAME}'.")
         return
     if existing:
@@ -79,7 +78,10 @@ def main() -> None:
             LlmAsJudgeOutputSchemaWrite(
                 name=SCORE_NAME,
                 type="BOOLEAN",
-                description="True if the system verdict is right for the image and the reason refers to visible evidence.",
+                description=(
+                    "True if the system verdict is right for the image "
+                    "and the reason refers to visible evidence."
+                ),
             )
         ],
     )
@@ -118,7 +120,7 @@ def _create(rules, project, code, s) -> None:
             f"Could not create the rule: {exc}\n"
             "If the model or provider is not available: Opik UI -> Configuration -> AI Providers "
             "-> add an Anthropic key, then re-run (optionally with --model <name shown in the UI>)."
-        )
+        ) from exc
     print(f"Created online rule '{RULE_NAME}' on project '{s.opik_project}' (score: {SCORE_NAME}).")
 
 

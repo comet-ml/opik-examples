@@ -112,8 +112,7 @@ def load_handoff(path: Path) -> Handoff:
     missing = [f.name for f in fields(Handoff) if f.name not in data]
     if missing:
         raise HandoffError(
-            f"{path} is missing field(s): {', '.join(missing)}. "
-            "Re-run scripts/03_register.py."
+            f"{path} is missing field(s): {', '.join(missing)}. Re-run scripts/03_register.py."
         )
     return Handoff(**{f.name: data[f.name] for f in fields(Handoff)})
 

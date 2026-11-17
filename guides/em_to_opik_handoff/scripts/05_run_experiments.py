@@ -75,7 +75,9 @@ def link_back_to_em(handoff, s, dataset_name: str, results: dict) -> None:
         f"Opik dataset <b>{dataset_name}</b>.</p>"
         "<table border='1' cellpadding='6'><tr><th>Opik experiment</th>"
         + "".join(f"<th>{m}</th>" for m in HEADLINE_SCORES)
-        + "</tr>" + "".join(rows) + "</table>",
+        + "</tr>"
+        + "".join(rows)
+        + "</table>",
     )
     print(f"Linked Opik results onto Comet experiment: {handoff.experiment_url}")
 
@@ -126,7 +128,7 @@ def main() -> None:
         results[variant] = (result, means, per_class)
 
     print("\n=== Results ===")
-    for variant, (result, means, per_class) in results.items():
+    for result, means, per_class in results.values():
         print(f"{result.experiment_name}: " + ", ".join(f"{k}={v:.3f}" for k, v in sorted(means.items())))
         print("   per-class accuracy: " + ", ".join(f"{k}={v:.2f}" for k, v in sorted(per_class.items())))
         print(f"   {result.experiment_url}")

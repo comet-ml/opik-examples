@@ -19,9 +19,7 @@ IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 def build_image_index(root: Path) -> dict[str, Path]:
     """Map lower-cased file name -> path. ROADWork mixes .jpg and .JPG."""
     return {
-        p.name.lower(): p
-        for p in Path(root).rglob("*")
-        if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES
+        p.name.lower(): p for p in Path(root).rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES
     }
 
 
@@ -41,9 +39,7 @@ def verdict_from_tags(tags: list[str] | None) -> str | None:
     return None
 
 
-def coco_bbox_to_yolo(
-    bbox: list[float], img_w: int, img_h: int
-) -> tuple[float, float, float, float] | None:
+def coco_bbox_to_yolo(bbox: list[float], img_w: int, img_h: int) -> tuple[float, float, float, float] | None:
     x, y, w, h = bbox
     x1, y1 = max(0.0, x), max(0.0, y)
     x2, y2 = min(float(img_w), x + w), min(float(img_h), y + h)
@@ -69,14 +65,10 @@ def convert_split(
     coco = json.loads(Path(coco_json).read_text())
     images = [im for im in coco["images"] if find_image(image_index, im["file_name"])]
     if max_images is not None and len(images) > max_images:
-        images = random.Random(seed).sample(
-            sorted(images, key=lambda im: im["file_name"]), max_images
-        )
+        images = random.Random(seed).sample(sorted(images, key=lambda im: im["file_name"]), max_images)
     # WHY: YOLO class index = position in data.yaml (categories sorted by id). COCO ids need
     # not start at 1 or be contiguous.
-    class_index = {
-        c["id"]: i for i, c in enumerate(sorted(coco["categories"], key=lambda c: c["id"]))
-    }
+    class_index = {c["id"]: i for i, c in enumerate(sorted(coco["categories"], key=lambda c: c["id"]))}
     anns = defaultdict(list)
     for a in coco["annotations"]:
         anns[a["image_id"]].append(a)
@@ -177,7 +169,5 @@ def stale_item_ids(existing: list[dict], manifest: list[dict]) -> list[str]:
     """Ids of Opik dataset items that left the manifest or whose label changed."""
     wanted = {(m["file_name"], m["verdict"]) for m in manifest}
     return [
-        item["id"]
-        for item in existing
-        if (item.get("file_name"), item.get("expected_verdict")) not in wanted
+        item["id"] for item in existing if (item.get("file_name"), item.get("expected_verdict")) not in wanted
     ]

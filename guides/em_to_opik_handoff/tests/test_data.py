@@ -36,9 +36,7 @@ def test_verdict_from_tags(tags, expected):
 
 
 def test_bbox_center_normalized():
-    assert coco_bbox_to_yolo([100, 200, 50, 100], 1000, 1000) == pytest.approx(
-        (0.125, 0.25, 0.05, 0.1)
-    )
+    assert coco_bbox_to_yolo([100, 200, 50, 100], 1000, 1000) == pytest.approx((0.125, 0.25, 0.05, 0.1))
 
 
 def test_bbox_clipped_to_image():

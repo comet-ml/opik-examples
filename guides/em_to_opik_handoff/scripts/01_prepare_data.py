@@ -12,7 +12,6 @@ import random
 import sys
 import zipfile
 from collections import Counter
-from pathlib import Path
 
 from PIL import Image, ImageDraw
 
@@ -44,8 +43,7 @@ def main() -> None:
     if not img_root.exists():
         if not zip_path.exists() or zip_path.stat().st_size < MIN_ZIP_BYTES:
             sys.exit(
-                f"{zip_path} missing or incomplete. Resume with:\n"
-                f"  curl -L -C - -o {zip_path} {IMAGES_URL}"
+                f"{zip_path} missing or incomplete. Resume with:\n  curl -L -C - -o {zip_path} {IMAGES_URL}"
             )
         print("Unzipping images (about 10 GB)...")
         with zipfile.ZipFile(zip_path) as z:
@@ -78,7 +76,9 @@ def main() -> None:
     val_images = [im for im in val_coco["images"] if find_image(image_index, im["file_name"])]
     print(
         "Val verdicts from raw tags (before the description filter on blocked):",
-        dict(Counter(verdict_from_tags(im["scene_level_tags"].get("travel_alteration")) for im in val_images)),
+        dict(
+            Counter(verdict_from_tags(im["scene_level_tags"].get("travel_alteration")) for im in val_images)
+        ),
     )
     manifest = select_eval_frames(val_images, per_class=50, seed=7)
     for item in manifest:

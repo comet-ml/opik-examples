@@ -51,8 +51,10 @@ def main() -> None:
     queues = [queue] if queue else []
     dev_dataset = s.dev_dataset
 
-    print(f"Project '{s.opik_project}': {len(traces)} dev traces, {len(experiments)} dev experiments, "
-          f"{len(queues)} review queue(s) selected, dataset '{dev_dataset}'.")
+    print(
+        f"Project '{s.opik_project}': {len(traces)} dev traces, {len(experiments)} dev experiments, "
+        f"{len(queues)} review queue(s) selected, dataset '{dev_dataset}'."
+    )
     if not args.yes and input("Delete these? [y/N] ").strip().lower() != "y":
         print("Nothing deleted.")
         return

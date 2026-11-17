@@ -27,9 +27,7 @@ def main() -> None:
 
     s = get_settings()
     eval_names = {item["file_name"] for item in load_eval_manifest(s.eval_manifest_path)}
-    pool = sorted(
-        p for p in (s.data_dir / "yolo" / "images" / "val").iterdir() if p.name not in eval_names
-    )
+    pool = sorted(p for p in (s.data_dir / "yolo" / "images" / "val").iterdir() if p.name not in eval_names)
     frames = random.Random(args.seed).sample(pool, min(args.n, len(pool)))
     failed = 0
     for i, frame in enumerate(frames, start=1):

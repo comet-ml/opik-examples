@@ -84,9 +84,7 @@ def _load_detector_cached(registry_model: str, version: str, workspace: str):
         target.mkdir(parents=True, exist_ok=True)
         # WHY: load what the registry serves, not the local runs folder, so the model under
         # evaluation is provably the registered version.
-        API().download_registry_model(
-            workspace, registry_model, version=version, output_path=str(target)
-        )
+        API().download_registry_model(workspace, registry_model, version=version, output_path=str(target))
         weights = next(target.rglob("*.pt"))
     return YOLO(str(weights))
 
@@ -122,11 +120,9 @@ def detect(image_path: str) -> list[dict]:
             "confidence": round(float(conf), 3),
             "box": [round(float(v), 1) for v in box],
         }
-        for cls, conf, box in zip(result.boxes.cls, result.boxes.conf, result.boxes.xyxy)
+        for cls, conf, box in zip(result.boxes.cls, result.boxes.conf, result.boxes.xyxy, strict=True)
     ]
-    overlay = draw_overlay(
-        Path(image_path), detections, _overlay_path(handoff, Path(image_path))
-    )
+    overlay = draw_overlay(Path(image_path), detections, _overlay_path(handoff, Path(image_path)))
     opik_context.update_current_span(
         metadata=handoff.as_metadata() | {"n_detections": len(detections), "confidence": CONFIDENCE},
         tags=[handoff.model_tag()],
@@ -136,16 +132,12 @@ def detect(image_path: str) -> list[dict]:
 
 
 @opik.track(name="verdict", ignore_arguments=["image_b64", "overlay_b64"])
-def verdict(
-    image_b64: str, detections: list[dict] | None = None, overlay_b64: str | None = None
-) -> dict:
+def verdict(image_b64: str, detections: list[dict] | None = None, overlay_b64: str | None = None) -> dict:
     """Ask the vision model for a structured verdict. `detections=None` means VLM only."""
     prompt = get_verdict_prompt()
     content = [{"type": "text", "text": "Camera frame:"}, image_block(image_b64)]
     if detections is not None:
-        content.append(
-            {"type": "text", "text": f"Detector output:\n{format_detections(detections)}"}
-        )
+        content.append({"type": "text", "text": f"Detector output:\n{format_detections(detections)}"})
         if overlay_b64:
             content += [
                 {"type": "text", "text": "Same frame with detector boxes drawn:"},

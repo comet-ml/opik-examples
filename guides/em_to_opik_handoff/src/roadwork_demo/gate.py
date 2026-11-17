@@ -28,7 +28,6 @@ def latest(experiments: list, name: str):
 
 def mean_score(experiment_name: str, score_name: str = VERDICT_ACCURACY) -> float:
     import opik
-
     from opik.exceptions import ExperimentNotFound
 
     from roadwork_demo.config import get_settings

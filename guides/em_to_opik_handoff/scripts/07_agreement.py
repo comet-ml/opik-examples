@@ -48,14 +48,15 @@ def main() -> None:
                 "id": trace.id,
                 "human": human_label(scores[HUMAN]),
                 "model": extract_verdict(trace.output),
-                "judges": {
-                    n: int(float(scores[n].value) >= 0.5) for n in JUDGE_SCORES if n in scores
-                },
+                "judges": {n: int(float(scores[n].value) >= 0.5) for n in JUDGE_SCORES if n in scores},
             }
         )
 
     if not rows:
-        print(f"No '{HUMAN}' annotations yet in queue '{s.queue_name}'. Annotate some traces in the Opik UI, then re-run.")
+        print(
+            f"No '{HUMAN}' annotations yet in queue '{s.queue_name}'. "
+            "Annotate some traces in the Opik UI, then re-run."
+        )
         return
 
     humans, models = [r["human"] for r in rows], [r["model"] for r in rows]

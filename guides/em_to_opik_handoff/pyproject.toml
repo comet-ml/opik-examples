@@ -1,28 +1,38 @@
 [project]
-name = "roadwork-demo"
+name = "em-to-opik-handoff"
 version = "0.1.0"
-description = "Fine-tuning in Comet EM handing off to evaluation in Opik, on a road-obstruction use case"
-authors = [
-    { name = "Francisco Schulz", email = "22344801+fschlz@users.noreply.github.com" }
-]
-requires-python = ">=3.12"
+description = "Fine-tune in Comet EM, evaluate in Opik: the Model Registry as the only link, with a gate that promotes or holds a training run"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
 dependencies = [
-    "anthropic>=2.9.0",
-    "comet-ml>=3.49",
     "opik>=2.2",
-    "pillow>=13.0.0",
+    "litellm>=1.70",
+    "comet-ml>=3.58",
+    "pillow",
+    "anthropic>=2.9.0",
     "python-dotenv>=1.2.4",
-    "ultralytics>=8.4.215",
 ]
 
-[build-system]
-requires = ["uv_build>=0.13.8,<0.14.0"]
-build-backend = "uv_build"
-
-[tool.uv.workspace]
-members = []
+[project.optional-dependencies]
+# WHY: torch is too heavy for the CI lint and dry-run jobs; training and detector inference need it.
+detector = ["ultralytics>=8.4"]
 
 [dependency-groups]
-dev = [
-    "pytest>=9.2.0",
-]
+dev = ["pytest", "ruff"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/roadwork_demo"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

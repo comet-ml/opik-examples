@@ -29,9 +29,7 @@ def data_uri(b64_jpeg: str) -> str:
     return f"data:image/jpeg;base64,{b64_jpeg}"
 
 
-def draw_overlay(
-    path: Path, detections: list[dict], out_path: Path, max_side: int = 1024
-) -> Path:
+def draw_overlay(path: Path, detections: list[dict], out_path: Path, max_side: int = 1024) -> Path:
     """Draw detection boxes (pixel coords of the original image) on a downsized copy."""
     img, scale = _load_resized(Path(path), max_side)
     draw = ImageDraw.Draw(img)

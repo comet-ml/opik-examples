@@ -27,9 +27,7 @@ class VerdictAccuracy(base_metric.BaseMetric):
     def __init__(self, name: str = VERDICT_ACCURACY):
         super().__init__(name=name, track=False)
 
-    def score(
-        self, verdict: str | None, expected_verdict: str, **ignored: Any
-    ) -> score_result.ScoreResult:
+    def score(self, verdict: str | None, expected_verdict: str, **ignored: Any) -> score_result.ScoreResult:
         got = verdict
         if got == "invalid" or got is None:
             return score_result.ScoreResult(self.name, 0.0, reason="invalid model output")

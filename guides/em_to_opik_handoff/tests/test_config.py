@@ -77,7 +77,10 @@ def test_link_back_only_for_full_run_on_registered_model():
     assert should_link_back(model_version="1.0.0", **full) is True
     assert should_link_back(model_version="dev-stock", **full) is False
     assert should_link_back(model_version="1.0.0", **(full | {"nb_samples": 5})) is False
-    assert should_link_back(model_version="1.0.0", **(full | {"dataset_name": "roadwork-verdicts-v1-dev"})) is False
+    assert (
+        should_link_back(model_version="1.0.0", **(full | {"dataset_name": "roadwork-verdicts-v1-dev"}))
+        is False
+    )
 
 
 def test_partial_runs_get_their_own_experiment_name():

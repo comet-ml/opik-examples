@@ -10,9 +10,8 @@ import argparse
 import random
 
 import opik
-from opik.rest_api.types import CategoricalFeedbackDetailCreate, FeedbackCreate_Categorical
-
 from opik.config import OpikConfig
+from opik.rest_api.types import CategoricalFeedbackDetailCreate, FeedbackCreate_Categorical
 
 from roadwork_demo.config import get_settings, variant_tag
 from roadwork_demo.pipeline import current_handoff
@@ -69,9 +68,7 @@ def main() -> None:
         filter_string=f'tags contains "{variant_tag("detector_vlm")}"',
         max_results=5000,
     )
-    traces = sorted(
-        (t for t in traces if handoff.model_tag() in (t.tags or [])), key=lambda t: t.id
-    )
+    traces = sorted((t for t in traces if handoff.model_tag() in (t.tags or [])), key=lambda t: t.id)
     if not traces:
         raise SystemExit(f"No detector_vlm traces tagged {handoff.model_tag()} yet.")
 
