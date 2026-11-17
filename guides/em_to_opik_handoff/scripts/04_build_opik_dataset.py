@@ -12,9 +12,10 @@ from pathlib import Path
 
 import opik
 
-from roadwork_demo.config import get_settings, load_handoff
+from roadwork_demo.config import HandoffError, get_settings
 from roadwork_demo.data import load_eval_manifest, stale_item_ids
 from roadwork_demo.images import data_uri, encode_image
+from roadwork_demo.pipeline import get_handoff
 
 ATTRIBUTION = (
     "Frames and scene labels from the CMU ROADWork dataset (ODC-By 1.0), "
@@ -42,14 +43,15 @@ def main() -> None:
         manifest = stratified(manifest, args.limit)
         name = s.dev_dataset
 
-    artifact = "unknown"
-    if s.handoff_path.exists():
-        artifact = load_handoff(s.handoff_path).dataset_artifact
+    try:
+        source = f" Source artifact: {get_handoff().dataset_artifact}."
+    except HandoffError:
+        source = ""  # nothing is in Production yet; the dataset does not depend on a model
 
     client = opik.Opik()
     dataset = client.get_or_create_dataset(
         name=name,
-        description=f"Held-out frames with human verdict labels. Source artifact: {artifact}. {ATTRIBUTION}",
+        description=f"Held-out frames with human verdict labels.{source} {ATTRIBUTION}",
     )
     # Safe to re-run: Opik de-duplicates identical items, and items that left the manifest or
     # changed label are removed so the dataset always mirrors the manifest.

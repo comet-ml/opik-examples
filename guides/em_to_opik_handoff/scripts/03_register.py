@@ -1,4 +1,4 @@
-"""Register the trained model in the Comet Model Registry and write handoff.json.
+"""Register the trained model in the Comet Model Registry.
 
 Usage: uv run python scripts/03_register.py [--name baseline]
 Reads runs/last_experiment.json written by scripts/02_train.py.
@@ -13,9 +13,9 @@ import sys
 
 from comet_ml import API
 
-from roadwork_demo.config import REPO_ROOT, Handoff, get_settings, save_handoff
+from roadwork_demo.config import REPO_ROOT, get_settings
 from roadwork_demo.data import load_eval_manifest
-from roadwork_demo.pipeline import load_detector, registry_cache_dir
+from roadwork_demo.pipeline import get_handoff, load_detector, registry_cache_dir
 from roadwork_demo.registry import next_version, registered_version
 
 
@@ -75,28 +75,14 @@ def main() -> None:
         exp.log_other("registry_model", f"{s.registry_model}:{version}")
         print(f"Registered {workspace}/{s.registry_model}:{version}")
 
-    handoff = Handoff(
-        comet_workspace=workspace,
-        comet_project=s.project,
-        experiment_key=last["experiment_key"],
-        experiment_url=exp.url,
-        registry_model=s.registry_model,
-        model_version=version,
-        dataset_artifact=last["dataset_artifact"],
-        classes=last["classes"],
-        map50=last["map50"],
-        map50_95=last["map50_95"],
-    )
-    save_handoff(handoff, s.handoff_path)
     print(f"Registry: https://www.comet.com/{workspace}/model-registry/{s.registry_model}")
-    print(f"Wrote {s.handoff_path}")
 
     # Verify: what the registry serves loads and predicts. Uses the pipeline's own loader, so
     # the download also fills the cache the Opik scripts read from. The cache is cleared first:
     # the check must exercise a real download, and a version number may have been reused.
     shutil.rmtree(registry_cache_dir(s.registry_model, version), ignore_errors=True)
     frame = load_eval_manifest(s.eval_manifest_path)[0]["path"]
-    result = load_detector(handoff).predict(frame, verbose=False)[0]
+    result = load_detector(get_handoff(version)).predict(frame, verbose=False)[0]
     labels = [result.names[int(c)] for c in result.boxes.cls]
     print(f"Verification: registry weights predicted {len(labels)} objects: {sorted(set(labels))}")
 

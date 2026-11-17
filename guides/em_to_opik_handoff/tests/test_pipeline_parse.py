@@ -52,3 +52,36 @@ def test_extract_verdict_from_trace_output(trace_output, expected):
     from roadwork_demo.verdicts import extract_verdict
 
     assert extract_verdict(trace_output) == expected
+
+
+def _handoff():
+    from roadwork_demo.config import Handoff
+
+    return Handoff(
+        "ws", "p", "abc", "https://x/abc", "roadwork-yolo11s", "1.0.0", "roadwork-yolo:1.0.0", [], 0.4, 0.2
+    )
+
+
+def test_detector_trace_carries_the_registry_identity():
+    from roadwork_demo.pipeline import trace_identity
+
+    tags, metadata = trace_identity("detector_vlm", _handoff(), ["source:x"])
+    assert tags == ["detector:roadwork-yolo11s:1.0.0", "variant:detector_vlm", "source:x"]
+    assert metadata["experiment_key"] == "abc" and metadata["variant"] == "detector_vlm"
+
+
+def test_vlm_only_trace_carries_no_detector_identity():
+    from roadwork_demo.pipeline import trace_identity
+
+    for handoff in (None, _handoff()):
+        tags, metadata = trace_identity("vlm_only", handoff, None)
+        assert tags == ["variant:vlm_only"]
+        assert "experiment_key" not in metadata and "model_version" not in metadata
+        assert metadata["variant"] == "vlm_only"
+
+
+def test_detector_variant_without_a_handoff_is_an_error():
+    from roadwork_demo.pipeline import trace_identity
+
+    with pytest.raises(ValueError, match="handoff"):
+        trace_identity("detector_vlm", None, None)

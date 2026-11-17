@@ -1,9 +1,19 @@
-"""Model Registry helpers."""
+"""Model Registry helpers: version numbers, statuses, and the registry-resolved handoff."""
 
 from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import Any
+
+from roadwork_demo.config import STOCK_VERSION, Handoff, HandoffError
+
+PRODUCTION = "production"
+STATUS_PRODUCTION = "Production"
+STATUS_STAGING = "Staging"
+STOCK_MODEL = "yolo11s"
+MAP50 = "metrics/mAP50(B)"
+MAP50_95 = "metrics/mAP50-95(B)"
 
 
 def next_version(existing: list[str]) -> str:
@@ -43,3 +53,87 @@ def fingerprint_dir(root: Path) -> str:
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()[:16]
+
+
+def pick_version(detector: str, versions: list[str], production: list[str]) -> str:
+    """Registry version for a --detector value: "production" or an explicit version."""
+    known = ", ".join(versions) or "none"
+    if detector == PRODUCTION:
+        if not production:
+            # WHY: no fallback to the newest version; that would serve a candidate the gate held.
+            raise HandoffError(
+                f"No registry version has status {STATUS_PRODUCTION} (registered versions: {known}). "
+                "Promote one with `python -m roadwork_demo.gate --candidate <version> --apply`, set the "
+                "status in the Comet Model Registry, or name a version with --detector <version> "
+                "(env DETECTOR_VERSION)."
+            )
+        return production[0]
+    if detector not in versions:
+        raise HandoffError(f"Version '{detector}' is not in the registry. Registered versions: {known}.")
+    return detector
+
+
+def initial_status(production: list[str]) -> str:
+    """The first registered model is what is deployed; every later one has to pass the gate."""
+    return STATUS_STAGING if production else STATUS_PRODUCTION
+
+
+def stock_handoff(workspace: str, project: str) -> Handoff:
+    """Identity of the COCO-pretrained baseline: no training run, no registry entry."""
+    return Handoff(
+        comet_workspace=workspace,
+        comet_project=project,
+        experiment_key="",
+        experiment_url="",
+        registry_model=STOCK_MODEL,
+        model_version=STOCK_VERSION,
+        dataset_artifact="none",
+        classes=[],
+        map50=0.0,
+        map50_95=0.0,
+    )
+
+
+def _metric(experiment: Any, name: str) -> float:
+    summary = experiment.get_metrics_summary(name)
+    return float(summary["valueCurrent"]) if summary else 0.0
+
+
+def resolve_handoff(
+    workspace: str, registry_model: str, detector: str, project: str, api: Any = None
+) -> Handoff:
+    """Everything the Opik side knows about the training side, read from `workspace/model:version`."""
+    if detector == STOCK_VERSION:
+        return stock_handoff(workspace, project)
+    try:
+        if api is None:
+            from comet_ml import API
+
+            api = API()
+        model = api.get_model(workspace, registry_model)
+    except Exception as exc:
+        raise HandoffError(
+            f"Could not read registry model '{workspace}/{registry_model}': {exc}. Train and register "
+            "one first (scripts/02_train.py, then scripts/03_register.py), or use --detector stock."
+        ) from exc
+    version = pick_version(detector, model.find_versions(), model.find_versions(status=STATUS_PRODUCTION))
+    key = model.get_details(version).get("experimentKey")
+    experiment = api.get_experiment_by_key(key) if key else None
+    if experiment is None:
+        raise HandoffError(
+            f"{registry_model}:{version} was registered from Comet experiment '{key}', which no longer "
+            "exists. Pick another version with --detector, or register the model again."
+        )
+    artifact = experiment.get_others_summary("dataset_artifact")
+    return Handoff(
+        comet_workspace=workspace,
+        comet_project=project,
+        experiment_key=key,
+        experiment_url=experiment.url,
+        registry_model=registry_model,
+        model_version=version,
+        dataset_artifact=artifact[0] if artifact else "unknown",
+        classes=[],
+        map50=_metric(experiment, MAP50),
+        map50_95=_metric(experiment, MAP50_95),
+    )

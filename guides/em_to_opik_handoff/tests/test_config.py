@@ -4,12 +4,10 @@ import pytest
 
 from roadwork_demo.config import (
     Handoff,
-    HandoffError,
     experiment_name,
     get_settings,
+    is_dev_experiment,
     is_full_run,
-    load_handoff,
-    save_handoff,
     should_link_back,
 )
 
@@ -30,26 +28,10 @@ def h():
     )
 
 
-def test_handoff_roundtrip(tmp_path, h):
-    save_handoff(h, tmp_path / "handoff.json")
-    assert load_handoff(tmp_path / "handoff.json") == h
-
-
 def test_model_tag_and_metadata(h):
     assert h.model_tag() == "detector:roadwork-yolo11s:1.0.0"
     md = h.as_metadata()
     assert md["em_url"] == h.experiment_url and "classes" not in md
-
-
-def test_missing_file_names_the_fix(tmp_path):
-    with pytest.raises(HandoffError, match="03_register"):
-        load_handoff(tmp_path / "nope.json")
-
-
-def test_missing_field_is_named(tmp_path):
-    (tmp_path / "h.json").write_text('{"comet_workspace": "ws"}')
-    with pytest.raises(HandoffError, match="experiment_key"):
-        load_handoff(tmp_path / "h.json")
 
 
 def test_defaults(monkeypatch):
@@ -113,3 +95,13 @@ def test_link_back_only_for_full_run_on_registered_model():
     assert should_link_back(model_version="1.0.0", **full) is True
     assert should_link_back(model_version="stock", **full) is False
     assert should_link_back(model_version="1.0.0", **(full | {"nb_samples": 5})) is False
+
+
+def test_dev_experiments_are_recognised_by_name_and_stock_is_not_one():
+    assert is_dev_experiment("vlm_only-dev") is True
+    assert is_dev_experiment("detector_vlm-2.0.0-dev") is True
+    assert is_dev_experiment("detector_vlm-stock-dev") is True
+    assert is_dev_experiment("detector_vlm-stock") is False
+    assert is_dev_experiment("detector_vlm-1.0.0") is False
+    assert is_dev_experiment("vlm_only") is False
+    assert is_dev_experiment("someone-elses-experiment-dev") is False

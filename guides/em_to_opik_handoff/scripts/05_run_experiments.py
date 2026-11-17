@@ -20,17 +20,17 @@ from roadwork_demo.config import (
 )
 from roadwork_demo.data import load_eval_manifest
 from roadwork_demo.metrics import JudgeVerdictCorrect, VerdictAccuracy
-from roadwork_demo.pipeline import current_handoff, get_verdict_prompt, load_detector, run_frame
+from roadwork_demo.pipeline import get_handoff, get_verdict_prompt, load_detector, run_frame
 from roadwork_demo.verdicts import JUDGE_VERDICT_CORRECT, VERDICT_ACCURACY
 
 HEADLINE_SCORES = (VERDICT_ACCURACY, JUDGE_VERDICT_CORRECT)
 
 
-def make_task(variant: str, image_paths: dict[str, str]):
+def make_task(variant: str, image_paths: dict[str, str], handoff):
     def task(item: dict) -> dict:
         # WHY: returned as is, so experiment traces have the same output shape as production
         # traces (output.verdict) and the online rule and UI columns work on both.
-        return run_frame(image_paths[item["file_name"]], variant)
+        return run_frame(image_paths[item["file_name"]], variant, handoff)
 
     return task
 
@@ -90,7 +90,7 @@ def main() -> None:
     args = ap.parse_args()
 
     s = get_settings()
-    handoff = current_handoff()
+    handoff = get_handoff()
     dataset_name = args.dataset or s.opik_dataset
     manifest = load_eval_manifest(s.eval_manifest_path)
     image_paths = {item["file_name"]: item["path"] for item in manifest}
@@ -108,7 +108,7 @@ def main() -> None:
     for variant in VARIANTS:
         result = evaluate(
             dataset=dataset,
-            task=make_task(variant, image_paths),
+            task=make_task(variant, image_paths, handoff),
             scoring_metrics=metrics,
             experiment_name=experiment_name(variant, handoff.model_version, full_run),
             project_name=s.project,

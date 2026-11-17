@@ -1,30 +1,24 @@
 """Inference pipeline: fine-tuned detector + vision-model verdict, traced in Opik.
 
-Every trace carries the identifiers of the Comet experiment and registered model version that
-produced the detector (see config.Handoff), so Opik results can be traced back to training.
+Every detector trace carries the identifiers of the Comet experiment and registered model version
+that produced the detector (see config.Handoff, resolved from the Model Registry), so Opik results
+can be traced back to training.
 """
 
 from __future__ import annotations
 
-import sys
 import threading
-from functools import lru_cache
+from functools import cache, lru_cache
 from pathlib import Path
 from typing import Literal
 
 import opik
 from opik import Attachment, opik_context
 
-from roadwork_demo.config import (
-    DEV_VERSION,
-    REPO_ROOT,
-    Handoff,
-    get_settings,
-    load_handoff,
-    variant_tag,
-)
+from roadwork_demo.config import REPO_ROOT, STOCK_VERSION, Handoff, get_settings, variant_tag
 from roadwork_demo.images import data_uri, draw_overlay, encode_image
 from roadwork_demo.llm import image_block, structured_json
+from roadwork_demo.registry import resolve_handoff
 from roadwork_demo.verdicts import VERDICT_SCHEMA, format_detections, parse_verdict
 
 Variant = Literal["vlm_only", "detector_vlm"]
@@ -36,33 +30,14 @@ _predict_lock = threading.Lock()
 _load_lock = threading.Lock()
 
 
-def dev_handoff() -> Handoff:
-    """Placeholder identifiers for development before a model is trained and registered."""
-    return Handoff(
-        comet_workspace=settings.workspace,
-        comet_project=settings.project,
-        experiment_key="not-trained-yet",
-        experiment_url="",
-        registry_model="yolo11s-stock",
-        model_version=DEV_VERSION,
-        dataset_artifact="none",
-        classes=[],
-        map50=0.0,
-        map50_95=0.0,
-    )
+@cache
+def _resolve(detector: str) -> Handoff:
+    return resolve_handoff(settings.workspace, settings.registry_model, detector, settings.project)
 
 
-@lru_cache(maxsize=1)
-def current_handoff() -> Handoff:
-    if settings.handoff_path.exists():
-        return load_handoff(settings.handoff_path)
-    print(
-        f"WARNING: {settings.handoff_path.name} not found. Using stock COCO weights (yolo11s.pt), "
-        f"not a registered model. Traces will be tagged {dev_handoff().model_tag()}. "
-        "Run scripts/02_train.py and scripts/03_register.py for the real pipeline.",
-        file=sys.stderr,
-    )
-    return dev_handoff()
+def get_handoff(detector: str | None = None) -> Handoff:
+    """Handoff for "production", a registry version or "stock". None means DETECTOR_VERSION."""
+    return _resolve(detector or settings.detector)
 
 
 def registry_cache_dir(registry_model: str, version: str) -> Path:
@@ -74,7 +49,7 @@ def registry_cache_dir(registry_model: str, version: str) -> Path:
 def _load_detector_cached(registry_model: str, version: str, workspace: str):
     from ultralytics import YOLO
 
-    if version == DEV_VERSION:
+    if version == STOCK_VERSION:
         return YOLO("yolo11s.pt")
     target = registry_cache_dir(registry_model, version)
     weights = next(target.rglob("*.pt"), None) if target.exists() else None
@@ -84,7 +59,7 @@ def _load_detector_cached(registry_model: str, version: str, workspace: str):
         target.mkdir(parents=True, exist_ok=True)
         # WHY: load what the registry serves, not the local runs folder, so the model under
         # evaluation is provably the registered version.
-        API().download_registry_model(workspace, registry_model, version=version, output_path=str(target))
+        API().get_model(workspace, registry_model).download(version, output_folder=str(target))
         weights = next(target.rglob("*.pt"))
     return YOLO(str(weights))
 
@@ -100,17 +75,16 @@ def load_detector(h: Handoff):
 def get_verdict_prompt() -> opik.Prompt:
     """Verdict prompt, versioned in the Opik Prompt Library (new version only on change)."""
     text = (REPO_ROOT / "prompts" / "verdict.txt").read_text().strip()
-    return opik.Opik().create_prompt(name=settings.prompt_name, prompt=text)
+    return opik.Opik().create_prompt(name=settings.prompt_name, prompt=text, project_name=settings.project)
 
 
 def _overlay_path(handoff: Handoff, image_path: Path) -> Path:
     return settings.data_dir / "overlays" / handoff.model_version / image_path.name
 
 
-@opik.track(type="tool", name="detector")
-def detect(image_path: str) -> list[dict]:
-    """Run the registered detector. Span carries the EM / registry identifiers."""
-    handoff = current_handoff()
+@opik.track(type="tool", name="detector", ignore_arguments=["handoff"])
+def detect(image_path: str, handoff: Handoff) -> list[dict]:
+    """Run the detector the handoff names. Span carries the EM / registry identifiers."""
     model = load_detector(handoff)
     with _predict_lock:
         result = model.predict(str(image_path), conf=CONFIDENCE, verbose=False)[0]
@@ -152,32 +126,44 @@ def verdict(image_b64: str, detections: list[dict] | None = None, overlay_b64: s
     return parse_verdict(parsed, raw_text=raw)
 
 
-@opik.track(name="road_obstruction_triage", project_name=settings.project)
+def trace_identity(
+    variant: Variant, handoff: Handoff | None, extra_tags: list[str] | None
+) -> tuple[list[str], dict]:
+    """Tags and metadata of a trace. Only a variant that ran a detector carries its identity."""
+    tags = [variant_tag(variant), *(extra_tags or [])]
+    metadata = {
+        "variant": variant,
+        "verdict_model": settings.verdict_model,
+        "prompt_name": settings.prompt_name,
+    }
+    if variant == "vlm_only":
+        return tags, metadata
+    if handoff is None:
+        raise ValueError(f"variant {variant} runs a detector and needs a handoff: pass get_handoff()")
+    return [handoff.model_tag(), *tags], handoff.as_metadata() | metadata
+
+
+@opik.track(name="road_obstruction_triage", project_name=settings.project, ignore_arguments=["handoff"])
 def run_frame(
-    image_path: str, variant: Variant = "detector_vlm", extra_tags: list[str] | None = None
+    image_path: str, variant: Variant, handoff: Handoff | None, extra_tags: list[str] | None = None
 ) -> dict:
     """One flagged frame -> verdict. Returns {verdict, reason, variant, detections}."""
-    handoff = current_handoff()
+    tags, metadata = trace_identity(variant, handoff, extra_tags)
     image_path = Path(image_path)
     image_b64 = encode_image(image_path)
 
     detections: list[dict] | None = None
     overlay_b64 = None
     if variant == "detector_vlm":
-        detections = detect(str(image_path))
+        detections = detect(str(image_path), handoff)
         overlay_b64 = encode_image(_overlay_path(handoff, image_path))
 
     result = verdict(image_b64, detections, overlay_b64)
 
     opik_context.update_current_trace(
         input={"image": data_uri(image_b64), "file_name": image_path.name},
-        tags=[handoff.model_tag(), variant_tag(variant), *(extra_tags or [])],
-        metadata=handoff.as_metadata()
-        | {
-            "variant": variant,
-            "verdict_model": settings.verdict_model,
-            "prompt_name": settings.prompt_name,
-        },
+        tags=tags,
+        metadata=metadata,
         prompts=[get_verdict_prompt()],
     )
     return {

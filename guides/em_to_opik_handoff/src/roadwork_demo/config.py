@@ -1,16 +1,14 @@
-"""Settings from the environment and the EM -> Opik handoff contract."""
+"""Settings from the environment, the EM -> Opik handoff record, and experiment naming."""
 
 from __future__ import annotations
 
-import json
 import os
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 STOCK_VERSION = "stock"
-DEV_VERSION = "dev-stock"
 VARIANTS = ("vlm_only", "detector_vlm")
 
 
@@ -28,7 +26,6 @@ class Settings:
     online_judge_model: str
     detector: str
     data_dir: Path
-    handoff_path: Path
     dry_run: bool
 
     @property
@@ -61,7 +58,6 @@ def get_settings() -> Settings:
         online_judge_model=env("OPIK_ONLINE_JUDGE_MODEL") or "opik-free-model",
         detector=env("DETECTOR_VERSION") or "production",
         data_dir=Path(env("DATA_DIR") or REPO_ROOT / "data"),
-        handoff_path=Path(env("HANDOFF_PATH") or REPO_ROOT / "handoff.json"),
         dry_run=not (env("OPIK_API_KEY") and env("OPIK_WORKSPACE")),
     )
 
@@ -95,26 +91,6 @@ class Handoff:
         return md
 
 
-def save_handoff(h: Handoff, path: Path) -> None:
-    Path(path).write_text(json.dumps(asdict(h), indent=2) + "\n")
-
-
-def load_handoff(path: Path) -> Handoff:
-    path = Path(path)
-    if not path.exists():
-        raise HandoffError(
-            f"{path} not found. Train and register a model first: "
-            "run scripts/02_train.py then scripts/03_register.py."
-        )
-    data = json.loads(path.read_text())
-    missing = [f.name for f in fields(Handoff) if f.name not in data]
-    if missing:
-        raise HandoffError(
-            f"{path} is missing field(s): {', '.join(missing)}. Re-run scripts/03_register.py."
-        )
-    return Handoff(**{f.name: data[f.name] for f in fields(Handoff)})
-
-
 def is_full_run(dataset_name: str, default_dataset: str, nb_samples: int | None) -> bool:
     """True for a run over every item of the default verdict dataset."""
     return dataset_name == default_dataset and nb_samples is None
@@ -128,6 +104,11 @@ def experiment_name(variant: str, model_version: str | None, full_run: bool = Tr
     return base + ("" if full_run else "-dev")
 
 
+def is_dev_experiment(name: str) -> bool:
+    """True for the "-dev" names experiment_name() gives subset and dev-dataset runs."""
+    return name.endswith("-dev") and (name == "vlm_only-dev" or name.startswith("detector_vlm-"))
+
+
 def variant_tag(variant: str) -> str:
     return f"variant:{variant}"
 
@@ -139,5 +120,4 @@ def should_link_back(
 
     Subset or dev-dataset runs would overwrite the headline numbers with partial ones.
     """
-    registered = model_version not in (STOCK_VERSION, DEV_VERSION)
-    return registered and is_full_run(dataset_name, default_dataset, nb_samples)
+    return model_version != STOCK_VERSION and is_full_run(dataset_name, default_dataset, nb_samples)

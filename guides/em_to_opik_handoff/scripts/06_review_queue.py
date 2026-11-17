@@ -14,7 +14,7 @@ from opik.config import OpikConfig
 from opik.rest_api.types import CategoricalFeedbackDetailCreate, FeedbackCreate_Categorical
 
 from roadwork_demo.config import get_settings, variant_tag
-from roadwork_demo.pipeline import current_handoff
+from roadwork_demo.pipeline import get_handoff
 from roadwork_demo.review import find_review_queue, top_up
 from roadwork_demo.verdicts import HUMAN_VERDICT as FEEDBACK_NAME
 from roadwork_demo.verdicts import HUMAN_VERDICT_CATEGORIES as CATEGORIES
@@ -50,7 +50,7 @@ def main() -> None:
     args = ap.parse_args()
 
     s = get_settings()
-    handoff = current_handoff()
+    handoff = get_handoff()
     client = opik.Opik()
     ensure_feedback_definition(client)
 
