@@ -1,8 +1,12 @@
+from types import SimpleNamespace
+
 import pytest
 
 from roadwork_demo.config import HandoffError
 from roadwork_demo.registry import (
     initial_status,
+    labels_fingerprint,
+    latest_artifact,
     next_version,
     pick_version,
     resolve_handoff,
@@ -165,3 +169,49 @@ def test_unreadable_registry_model_is_a_handoff_error_that_names_the_fix():
     api = FakeAPI(model_error=RuntimeError("404 model not found"))
     with pytest.raises(HandoffError, match="404 model not found.*03_register"):
         resolve_handoff("ws", "roadwork-yolo11s", "production", "p", api=api)
+
+
+class FakeArtifactAPI:
+    """Like comet_ml.API: a name that was never logged is absent from the list, and asking for it
+    anyway fails with a generic REST error (HTTP 400), not with ArtifactNotFound."""
+
+    def __init__(self, artifacts=None):
+        self.artifacts = artifacts or {}
+
+    def get_artifact_list(self, workspace, artifact_type=None):
+        return {"artifacts": [{"name": name} for name in self.artifacts]}
+
+    def get_artifact(self, workspace, artifact_name):
+        if artifact_name not in self.artifacts:
+            raise RuntimeError("400: Could not Retrieve Artifact; Invalid artifact Name")
+        return self.artifacts[artifact_name]
+
+
+def test_latest_artifact_returns_version_and_fingerprint():
+    api = FakeArtifactAPI(
+        {"roadwork-yolo": SimpleNamespace(version="2.0.0", metadata={"fingerprint": "abc"})}
+    )
+    assert latest_artifact("ws", "roadwork-yolo", api=api) == ("2.0.0", "abc")
+
+
+def test_latest_artifact_without_fingerprint_metadata():
+    api = FakeArtifactAPI({"roadwork-yolo": SimpleNamespace(version="1.0.0", metadata=None)})
+    assert latest_artifact("ws", "roadwork-yolo", api=api) == ("1.0.0", None)
+
+
+def test_latest_artifact_is_none_when_the_name_was_never_logged():
+    api = FakeArtifactAPI({"some-other-artifact": SimpleNamespace(version="1.0.0", metadata={})})
+    assert latest_artifact("ws", "roadwork-yolo", api=api) is None
+    assert latest_artifact("ws", "roadwork-yolo", api=FakeArtifactAPI()) is None
+
+
+def test_labels_fingerprint_ignores_the_trainer_cache_files(tmp_path):
+    labels = tmp_path / "labels"
+    (labels / "train").mkdir(parents=True)
+    (labels / "train" / "a.txt").write_text("0 0.5 0.5 0.1 0.1\n")
+    before = labels_fingerprint(tmp_path)
+    # WHY: Ultralytics writes labels/train.cache next to the label folders on every training run.
+    (labels / "train.cache").write_bytes(b"\x00cache")
+    assert labels_fingerprint(tmp_path) == before
+    (labels / "train" / "a.txt").write_text("1 0.5 0.5 0.1 0.1\n")
+    assert labels_fingerprint(tmp_path) != before

@@ -40,9 +40,11 @@ def get_handoff(detector: str | None = None) -> Handoff:
     return _resolve(detector or settings.detector)
 
 
-def registry_cache_dir(registry_model: str, version: str) -> Path:
+def registry_cache_dir(workspace: str, registry_model: str, version: str) -> Path:
     """Where weights downloaded from the Model Registry are kept between runs."""
-    return settings.data_dir / "registry" / registry_model / version
+    # WHY: the workspace is part of the key; the same model name and version can exist in two
+    # workspaces that share one DATA_DIR, and their weights must never be mixed up.
+    return settings.data_dir / "registry" / workspace / registry_model / version
 
 
 @lru_cache(maxsize=2)
@@ -51,7 +53,7 @@ def _load_detector_cached(registry_model: str, version: str, workspace: str):
 
     if version == STOCK_VERSION:
         return YOLO("yolo11s.pt")
-    target = registry_cache_dir(registry_model, version)
+    target = registry_cache_dir(workspace, registry_model, version)
     weights = next(target.rglob("*.pt"), None) if target.exists() else None
     if weights is None:
         from comet_ml import API
@@ -79,7 +81,15 @@ def get_verdict_prompt() -> opik.Prompt:
 
 
 def _overlay_path(handoff: Handoff, image_path: Path) -> Path:
-    return settings.data_dir / "overlays" / handoff.model_version / image_path.name
+    h = handoff
+    return (
+        settings.data_dir
+        / "overlays"
+        / h.comet_workspace
+        / h.registry_model
+        / h.model_version
+        / image_path.name
+    )
 
 
 @opik.track(type="tool", name="detector", ignore_arguments=["handoff"])

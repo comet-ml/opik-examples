@@ -1,21 +1,27 @@
-"""Convert ROADWork to YOLO format and build the verdict eval manifest.
+"""Convert ROADWork to YOLO format, build the verdict eval manifest, log the dataset Artifact.
 
-Usage: uv run python scripts/01_prepare_data.py [--max-train N]
+Usage: uv run python scripts/01_prepare_data.py [--max-train N] [--no-comet]
 Expects data/raw/roadwork/images.zip and data/raw/roadwork/annotations/ (see README).
+
+The labels and class list are logged as a Comet Artifact from a short "prepare-data" experiment,
+so the lineage shows data preparation as the producer and every training run as a consumer.
+Safe to re-run: unchanged labels reuse the existing Artifact version and start no experiment.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 import zipfile
 from collections import Counter
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from roadwork_demo.config import get_settings
+from roadwork_demo.config import Settings, get_settings
 from roadwork_demo.data import (
     build_image_index,
     convert_split,
@@ -24,14 +30,70 @@ from roadwork_demo.data import (
     verdict_from_tags,
     write_data_yaml,
 )
+from roadwork_demo.registry import labels_fingerprint, latest_artifact
 
 IMAGES_URL = "https://ndownloader.figshare.com/files/47217577"
+SOURCE_URL = "https://kilthub.cmu.edu/articles/dataset/ROADWork_Data/26093197"
 MIN_ZIP_BYTES = 10_000_000_000
+
+
+def get_or_log_dataset_artifact(s: Settings, yolo_dir: Path) -> str:
+    """Log the YOLO labels as a dataset Artifact, produced by a "prepare-data" experiment.
+
+    Returns 'name:version'. The newest version is reused when its labels are byte-identical to
+    the local ones (fingerprint in the artifact metadata); then no experiment is started.
+    """
+    import comet_ml
+
+    fingerprint = labels_fingerprint(yolo_dir)
+    latest = latest_artifact(s.workspace, s.dataset_artifact)
+    if latest is not None and latest[1] == fingerprint:
+        print(f"Using existing dataset artifact {s.dataset_artifact}:{latest[0]} (labels unchanged)")
+        return f"{s.dataset_artifact}:{latest[0]}"
+
+    n_train = len(list((yolo_dir / "images" / "train").iterdir()))
+    n_val = len(list((yolo_dir / "images" / "val").iterdir()))
+    artifact = comet_ml.Artifact(
+        name=s.dataset_artifact,
+        artifact_type="dataset",
+        # First version is 1.0.0; later versions are numbered by Comet.
+        version="1.0.0" if latest is None else None,
+        aliases=["baseline"] if latest is None else None,
+        metadata={
+            "source": "CMU ROADWork",
+            "source_url": SOURCE_URL,
+            "license": "ODC-By 1.0 (images not redistributed in this artifact)",
+            "train_images": n_train,
+            "val_images": n_val,
+            "format": "YOLO labels + data.yaml",
+            "fingerprint": fingerprint,
+        },
+    )
+    # WHY: labels and class list only. Images stay local; the artifact pins which files and
+    # labels were used for training without redistributing the dataset. The remote entry is a
+    # provenance pointer to where the images come from, not a copy.
+    labels_dir = yolo_dir / "labels"
+    labels_zip = s.data_dir / "labels.zip"
+    with zipfile.ZipFile(labels_zip, "w", zipfile.ZIP_DEFLATED) as z:
+        for path in sorted(labels_dir.rglob("*.txt")):
+            z.write(path, path.relative_to(labels_dir))
+    artifact.add(str(labels_zip), logical_path="labels.zip")
+    artifact.add(str(yolo_dir / "data.yaml"), logical_path="data.yaml")
+    artifact.add_remote(SOURCE_URL, logical_path="images")
+
+    experiment = comet_ml.start(workspace=s.workspace or None, project_name=s.project)
+    experiment.set_name("prepare-data")
+    experiment.add_tags(["roadwork", "prepare-data"])
+    logged = experiment.log_artifact(artifact)
+    experiment.end()
+    print(f"Logged dataset artifact {s.dataset_artifact}:{logged.version} from experiment prepare-data")
+    return f"{s.dataset_artifact}:{logged.version}"
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-train", type=int, default=None, help="subsample training images")
+    ap.add_argument("--no-comet", action="store_true", help="prepare the data only, log no Artifact")
     args = ap.parse_args()
 
     s = get_settings()
@@ -103,6 +165,17 @@ def main() -> None:
         img.thumbnail((1280, 1280))
         img.save(dbg / (lbl.stem + ".jpg"))
     print(f"Debug overlays -> {dbg}")
+
+    if args.no_comet:
+        print("Skipping the dataset Artifact (--no-comet).")
+    elif not (os.environ.get("COMET_API_KEY") and s.workspace):
+        print(
+            f"[DRY RUN] COMET_API_KEY or COMET_WORKSPACE not set: would log the labels as Artifact "
+            f"'{s.dataset_artifact}' (fingerprint {labels_fingerprint(out)}) "
+            "from a prepare-data experiment."
+        )
+    else:
+        get_or_log_dataset_artifact(s, out)
 
 
 if __name__ == "__main__":

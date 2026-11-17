@@ -43,16 +43,38 @@ def registered_version(registry_other: str | None, registry_model: str) -> str |
     return version if name == registry_model and version else None
 
 
-def fingerprint_dir(root: Path) -> str:
-    """Content hash of every file under `root` (relative path + bytes), order independent."""
+def fingerprint_dir(root: Path, pattern: str = "*") -> str:
+    """Content hash of the files under `root` matching `pattern` (relative path + bytes)."""
     root = Path(root)
     digest = hashlib.sha256()
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+    for path in sorted(p for p in root.rglob(pattern) if p.is_file()):
         digest.update(str(path.relative_to(root)).encode())
         digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()[:16]
+
+
+def labels_fingerprint(yolo_dir: Path) -> str:
+    """Fingerprint of the YOLO label files, the identity of a dataset Artifact version."""
+    # WHY: label .txt files only. Ultralytics writes train.cache and val.cache into the same
+    # folder on every training run; hashing them would make every run look like new data.
+    return fingerprint_dir(Path(yolo_dir) / "labels", "*.txt")
+
+
+def latest_artifact(workspace: str, name: str, api: Any = None) -> tuple[str, str | None] | None:
+    """(version, labels fingerprint) of the newest version of a dataset Artifact, None if not logged."""
+    if api is None:
+        from comet_ml import API
+
+        api = API()
+    # WHY: asking for an artifact name that was never logged fails with a generic HTTP 400, not
+    # with ArtifactNotFound, so existence is read from the workspace's artifact list instead.
+    listed = api.get_artifact_list(workspace).get("artifacts") or []
+    if name not in {a["name"] for a in listed}:
+        return None
+    artifact = api.get_artifact(workspace, name)
+    return str(artifact.version), (artifact.metadata or {}).get("fingerprint")
 
 
 def pick_version(detector: str, versions: list[str], production: list[str]) -> str:

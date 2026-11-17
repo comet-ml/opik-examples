@@ -85,3 +85,13 @@ def test_detector_variant_without_a_handoff_is_an_error():
 
     with pytest.raises(ValueError, match="handoff"):
         trace_identity("detector_vlm", None, None)
+
+
+def test_weights_and_overlays_are_cached_per_workspace():
+    from roadwork_demo.pipeline import _overlay_path, registry_cache_dir, settings
+
+    # WHY: the same model name and version can exist in two workspaces that share one DATA_DIR.
+    cache = registry_cache_dir("ws", "roadwork-yolo11s", "1.0.0")
+    assert cache == settings.data_dir / "registry" / "ws" / "roadwork-yolo11s" / "1.0.0"
+    overlay = _overlay_path(_handoff(), __import__("pathlib").Path("/frames/a.jpg"))
+    assert overlay == settings.data_dir / "overlays" / "ws" / "roadwork-yolo11s" / "1.0.0" / "a.jpg"
