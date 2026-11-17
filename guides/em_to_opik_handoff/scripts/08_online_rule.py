@@ -1,4 +1,4 @@
-"""Create an Opik online evaluation rule: a vision LLM judge scores every new trace.
+"""Create an Opik online evaluation rule: a vision LLM judge scores every new production trace.
 
 Usage: uv run python scripts/08_online_rule.py [--delete] [--model NAME]
 
@@ -112,6 +112,10 @@ def _create(rules, project, code, s) -> None:
                 project_ids=[project.id],
                 sampling_rate=1.0,
                 enabled=True,
+                # WHY: production traffic only (also the API default). Experiment traces are
+                # scored offline by evaluate() with the stronger judge; scoring them here too
+                # would put two judges' numbers on the same trace.
+                trigger_scope="production",
                 action="evaluator",
                 code=code,
             )
