@@ -9,7 +9,6 @@ dependencies = [
     "litellm>=1.70",
     "comet-ml>=3.58",
     "pillow",
-    "anthropic>=2.9.0",
 ]
 
 [project.optional-dependencies]
