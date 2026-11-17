@@ -15,7 +15,7 @@ from typing import Literal
 import opik
 from opik import Attachment, opik_context
 
-from roadwork_demo.config import REPO_ROOT, STOCK_VERSION, Handoff, get_settings, variant_tag
+from roadwork_demo.config import REPO_ROOT, STOCK_VERSION, Handoff, HandoffError, get_settings, variant_tag
 from roadwork_demo.images import data_uri, draw_overlay, encode_image
 from roadwork_demo.llm import image_block, structured_json
 from roadwork_demo.registry import resolve_handoff
@@ -38,6 +38,14 @@ def _resolve(detector: str) -> Handoff:
 def get_handoff(detector: str | None = None) -> Handoff:
     """Handoff for "production", a registry version or "stock". None means DETECTOR_VERSION."""
     return _resolve(detector or settings.detector)
+
+
+def handoff_or_exit(detector: str | None = None) -> Handoff:
+    """get_handoff for scripts: a registry problem ends the script with its message, no traceback."""
+    try:
+        return get_handoff(detector)
+    except HandoffError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def registry_cache_dir(workspace: str, registry_model: str, version: str) -> Path:

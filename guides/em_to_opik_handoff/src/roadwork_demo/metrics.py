@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -83,3 +84,22 @@ class JudgeVerdictCorrect(base_metric.BaseMetric):
             )
         value, judge_reason = judge_verdict(encode_image(Path(path)), verdict, reason)
         return score_result.ScoreResult(self.name, value, reason=judge_reason)
+
+
+def accuracy_by_class(test_results: list) -> dict[str, float]:
+    """Mean verdict accuracy per expected verdict, over the items that were scored."""
+    per_class = defaultdict(list)
+    for tr in test_results:
+        expected = tr.test_case.dataset_item_content.get("expected_verdict")
+        for sr in tr.score_results:
+            if sr.name == VERDICT_ACCURACY and not sr.scoring_failed:
+                per_class[expected].append(sr.value)
+    return {cls: sum(values) / len(values) for cls, values in per_class.items()}
+
+
+def per_class_accuracy(test_results: list) -> list[score_result.ScoreResult]:
+    """Experiment-level scores accuracy_<class>, for evaluate(experiment_scoring_functions=[...])."""
+    return [
+        score_result.ScoreResult(name=f"accuracy_{cls}", value=value)
+        for cls, value in sorted(accuracy_by_class(test_results).items())
+    ]

@@ -17,7 +17,7 @@ import argparse
 import opik
 from opik.exceptions import ExperimentNotFound
 
-from roadwork_demo.config import get_settings, is_dev_experiment
+from roadwork_demo.config import exit_if_dry_run, get_settings, is_dev_experiment
 from roadwork_demo.review import find_review_queue
 
 
@@ -28,6 +28,7 @@ def main() -> None:
     args = ap.parse_args()
 
     s = get_settings()
+    exit_if_dry_run(s, f"delete the -dev experiments and dataset in project '{s.project}'")
     client = opik.Opik()
     try:
         # WHY: the lookup matches by substring, in this project only; keep exact dev names.

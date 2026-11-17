@@ -1,19 +1,80 @@
-"""Promotion gate for the retrain loop: a candidate must beat the current model offline.
+"""Promotion gate: a candidate detector version must beat the current one on the downstream task.
 
-Usage: uv run python -m roadwork_demo.gate <candidate_experiment> <current_experiment>
-Compares mean verdict_accuracy of two Opik experiments run on the same dataset.
+Usage: python -m roadwork_demo.gate --candidate 2.0.0 [--current production] [--min-delta 0.03] [--apply]
+
+Compares the Opik experiments detector_vlm-<candidate> and detector_vlm-<current>, item by item,
+on verdict accuracy. Both must have run on the same dataset version. Without --apply it only
+prints. With --apply a promote makes the candidate Production in the Comet Model Registry and the
+previous Production version Staging, and the decision is written on both training experiments.
 """
 
 from __future__ import annotations
 
-import sys
-from typing import Literal
+import argparse
+import math
+from dataclasses import dataclass
+from typing import Any, Literal
 
+from roadwork_demo.registry import PRODUCTION, STATUS_PRODUCTION, STATUS_STAGING
 from roadwork_demo.verdicts import VERDICT_ACCURACY
 
+Decision = Literal["promote", "hold"]
+GATE_VARIANT = "detector_vlm"
 
-def decide(candidate: float, current: float, min_delta: float = 0.0) -> Literal["promote", "hold"]:
-    return "promote" if candidate > current + min_delta else "hold"
+
+class GateRefusal(ValueError):
+    """The two experiments cannot be compared fairly."""
+
+
+@dataclass
+class Paired:
+    n: int
+    dropped: int
+    mean_candidate: float
+    mean_current: float
+    delta: float
+    wins: int
+    losses: int
+    p_value: float
+
+
+def sign_test_p(wins: int, losses: int) -> float:
+    """Exact two-sided sign test: chance of a split at least this uneven if neither side is better."""
+    n = wins + losses
+    if n == 0:
+        return 1.0
+    tail = sum(math.comb(n, i) for i in range(min(wins, losses) + 1))
+    return min(1.0, 2 * tail / 2**n)
+
+
+def paired(candidate: dict[str, float], current: dict[str, float]) -> Paired:
+    """Compare two experiments on the dataset items both of them scored (keys: dataset item ids)."""
+    shared = sorted(candidate.keys() & current.keys())
+    if not shared:
+        raise ValueError("the two experiments have no dataset items in common")
+    wins = sum(candidate[i] > current[i] for i in shared)
+    losses = sum(candidate[i] < current[i] for i in shared)
+    mean_candidate = sum(candidate[i] for i in shared) / len(shared)
+    mean_current = sum(current[i] for i in shared) / len(shared)
+    return Paired(
+        n=len(shared),
+        dropped=len(candidate.keys() ^ current.keys()),
+        mean_candidate=mean_candidate,
+        mean_current=mean_current,
+        delta=mean_candidate - mean_current,
+        wins=wins,
+        losses=losses,
+        p_value=sign_test_p(wins, losses),
+    )
+
+
+def decide(delta: float, min_delta: float = 0.03) -> Decision:
+    """Promote only on a real gain of at least `min_delta`; a tie never promotes."""
+    return "promote" if delta > 0 and delta >= min_delta else "hold"
+
+
+def same_dataset_version(a: str | None, b: str | None) -> bool:
+    return a is not None and a == b
 
 
 def latest(experiments: list, name: str):
@@ -26,39 +87,143 @@ def latest(experiments: list, name: str):
     return max(exact, key=lambda e: e.id) if exact else None
 
 
-def mean_score(experiment_name: str, score_name: str = VERDICT_ACCURACY) -> float:
-    import opik
-    from opik.exceptions import ExperimentNotFound
-
-    from roadwork_demo.config import get_settings
-
-    get_settings()  # loads .env so Opik uses this demo's workspace and project
-    client = opik.Opik()
-
-    try:
-        experiment = latest(client.get_experiments_by_name(experiment_name), experiment_name)
-    except ExperimentNotFound:
-        experiment = None
-    if experiment is None:
-        raise SystemExit(f"Opik experiment not found: {experiment_name}")
-    values = []
+def item_scores(experiment: Any, score_name: str = VERDICT_ACCURACY) -> dict[str, float]:
+    """Per-item value of one feedback score, keyed by dataset item id. Unscored items are left out."""
+    scores = {}
     for item in experiment.get_items():
         for score in item.feedback_scores or []:
             if score["name"] == score_name:
-                values.append(float(score["value"]))
-    if not values:
-        raise SystemExit(f"No '{score_name}' scores on experiment {experiment_name}")
-    return sum(values) / len(values)
+                scores[item.dataset_item_id] = float(score["value"])
+    return scores
+
+
+def compare(candidate: Any, current: Any, score_name: str = VERDICT_ACCURACY) -> Paired:
+    """Paired comparison of two Opik experiments; GateRefusal if it would not be a fair one."""
+    a = candidate.get_experiment_data().dataset_version_id
+    b = current.get_experiment_data().dataset_version_id
+    if not same_dataset_version(a, b):
+        raise GateRefusal(
+            f"{candidate.name} ran on dataset version {a} and {current.name} on {b}. "
+            "Re-run both on the current dataset version before comparing them."
+        )
+    try:
+        return paired(item_scores(candidate, score_name), item_scores(current, score_name))
+    except ValueError as exc:
+        raise GateRefusal(f"{candidate.name} and {current.name}: {exc}.") from exc
+
+
+def gate_notes(decision: Decision, candidate: str, current: str, delta: float) -> tuple[str, str]:
+    """The `opik_gate` value for the candidate's and for the current version's training experiment."""
+    return (
+        f"{decision} vs {current}, delta={delta:+.3f}",
+        f"candidate {candidate}: {decision}, delta={delta:+.3f}",
+    )
+
+
+def apply_decision(model: Any, candidate: str, current: str, decision: Decision) -> list[str]:
+    """Write a promote to the registry. Returns what happened as text; never raises."""
+    if decision != "promote":
+        return []
+    lines = []
+    # WHY: candidate first. If its promotion fails or waits for approval, the current version
+    # must stay in Production, so the demotion is not attempted.
+    for version, status in ((candidate, STATUS_PRODUCTION), (current, STATUS_STAGING)):
+        try:
+            model.set_status(version, status)
+            actual = model.status(version)
+        except Exception as exc:
+            lines.append(f"{version}: could not set status {status} ({exc}); nothing else was changed")
+            break
+        if actual != status:
+            lines.append(
+                f"{version}: requested status {status}, the registry still shows {actual} "
+                "(an approval request may be pending); nothing else was changed"
+            )
+            break
+        lines.append(f"{version}: status is now {status}")
+    return lines
+
+
+def _load_experiment(client: Any, version: str) -> Any:
+    from opik.exceptions import ExperimentNotFound
+
+    from roadwork_demo.config import experiment_name
+
+    name = experiment_name(GATE_VARIANT, version)
+    try:
+        experiment = latest(client.get_experiments_by_name(name), name)
+    except ExperimentNotFound:
+        experiment = None
+    if experiment is None:
+        raise SystemExit(
+            f"Opik experiment not found: {name}. Run "
+            f"scripts/05_run_experiments.py --detector {version} --variants {GATE_VARIANT} first."
+        )
+    return experiment
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        raise SystemExit(__doc__)
-    candidate, current = (mean_score(name) for name in sys.argv[1:3])
-    decision = decide(candidate, current)
-    print(f"candidate {sys.argv[1]}: {candidate:.3f}")
-    print(f"current   {sys.argv[2]}: {current:.3f}")
+    ap = argparse.ArgumentParser(description="Promote or hold a registered detector version.")
+    ap.add_argument("--candidate", required=True, help="registry version to evaluate, e.g. 2.0.0")
+    ap.add_argument("--current", default=PRODUCTION, help="version to beat (default: the Production one)")
+    ap.add_argument("--min-delta", type=float, default=0.03, help="smallest accuracy gain that promotes")
+    ap.add_argument("--apply", action="store_true", help="write the decision to Comet")
+    args = ap.parse_args()
+
+    import opik
+
+    from roadwork_demo.config import STOCK_VERSION, exit_if_dry_run, get_settings
+    from roadwork_demo.pipeline import handoff_or_exit
+
+    s = get_settings()
+    exit_if_dry_run(s, f"compare detector_vlm-{args.candidate} with the {args.current} version")
+    if STOCK_VERSION in (args.candidate, args.current):
+        raise SystemExit("The gate compares registered versions; the stock baseline is a reference only.")
+    candidate, current = handoff_or_exit(args.candidate), handoff_or_exit(args.current)
+    if candidate.model_version == current.model_version:
+        raise SystemExit(f"{candidate.model_version} is already the current version; nothing to compare.")
+
+    client = opik.Opik()
+    try:
+        result = compare(
+            _load_experiment(client, candidate.model_version), _load_experiment(client, current.model_version)
+        )
+    except GateRefusal as exc:
+        raise SystemExit(f"Refusing to compare: {exc}") from exc
+    decision = decide(result.delta, args.min_delta)
+
+    print(f"candidate {s.registry_model}:{candidate.model_version}  accuracy {result.mean_candidate:.3f}")
+    print(f"current   {s.registry_model}:{current.model_version}  accuracy {result.mean_current:.3f}")
+    print(f"items compared: {result.n} (dropped, not scored in both: {result.dropped})")
+    print(f"delta: {result.delta:+.3f} (min delta {args.min_delta})")
+    print(
+        f"items won / lost by the candidate: {result.wins} / {result.losses}, "
+        f"two-sided sign test p = {result.p_value:.3f} (context, not a threshold)"
+    )
     print(f"decision: {decision}")
+
+    if not args.apply:
+        print("dry run: nothing written")
+        return
+
+    from comet_ml import API
+
+    api = API()
+    for line in apply_decision(
+        api.get_model(s.workspace, s.registry_model),
+        candidate.model_version,
+        current.model_version,
+        decision,
+    ):
+        print(line)
+    notes = gate_notes(decision, candidate.model_version, current.model_version, result.delta)
+    for handoff, note in zip((candidate, current), notes, strict=True):
+        experiment = api.get_experiment_by_key(handoff.experiment_key)
+        if experiment is None:
+            print(f"{handoff.model_version}: training experiment {handoff.experiment_key} not found")
+            continue
+        experiment.log_other("opik_gate", note)
+        print(f"{handoff.model_version}: opik_gate = '{note}' on {handoff.experiment_url}")
 
 
 if __name__ == "__main__":

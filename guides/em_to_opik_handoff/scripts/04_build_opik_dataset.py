@@ -12,7 +12,7 @@ from pathlib import Path
 
 import opik
 
-from roadwork_demo.config import HandoffError, get_settings
+from roadwork_demo.config import HandoffError, exit_if_dry_run, get_settings
 from roadwork_demo.data import load_eval_manifest, stale_item_ids
 from roadwork_demo.images import data_uri, encode_image
 from roadwork_demo.pipeline import get_handoff
@@ -37,6 +37,7 @@ def main() -> None:
     args = ap.parse_args()
 
     s = get_settings()
+    exit_if_dry_run(s, f"create the Opik dataset '{s.opik_dataset}' from the eval manifest")
     manifest = load_eval_manifest(s.eval_manifest_path)
     name = s.opik_dataset
     if args.limit:
@@ -52,6 +53,7 @@ def main() -> None:
     dataset = client.get_or_create_dataset(
         name=name,
         description=f"Held-out frames with human verdict labels.{source} {ATTRIBUTION}",
+        project_name=s.project,
     )
     # Safe to re-run: Opik de-duplicates identical items, and items that left the manifest or
     # changed label are removed so the dataset always mirrors the manifest.
@@ -72,7 +74,7 @@ def main() -> None:
         ]
     )
     client.flush()
-    print(f"Dataset '{name}': {len(manifest)} items")
+    print(f"Dataset '{name}': {len(manifest)} items, version {dataset.get_current_version_name()}")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,6 @@
-from roadwork_demo.metrics import VerdictAccuracy, judge_result_to_score
+from types import SimpleNamespace
+
+from roadwork_demo.metrics import VerdictAccuracy, judge_result_to_score, per_class_accuracy
 
 
 def test_accuracy_match():
@@ -32,3 +34,24 @@ def test_judge_helper_without_decision_scores_zero():
     value, reason = judge_result_to_score(None)
     assert value == 0.0 and reason
     assert judge_result_to_score({"reason": "x"})[0] == 0.0
+
+
+def _result(expected, value, name="verdict_accuracy", scoring_failed=False):
+    """Shaped like opik.evaluation.test_result.TestResult, as far as per_class_accuracy reads it."""
+    return SimpleNamespace(
+        test_case=SimpleNamespace(dataset_item_content={"expected_verdict": expected}),
+        score_results=[
+            SimpleNamespace(name=name, value=value, scoring_failed=scoring_failed),
+            SimpleNamespace(name="judge_verdict_correct", value=1.0, scoring_failed=False),
+        ],
+    )
+
+
+def test_per_class_accuracy_scores():
+    results = [_result("blocked", 1.0), _result("blocked", 0.0), _result("clear", 1.0)]
+    scores = {s.name: s.value for s in per_class_accuracy(results)}
+    assert scores == {"accuracy_blocked": 0.5, "accuracy_clear": 1.0}
+
+
+def test_per_class_accuracy_skips_failed_scores():
+    assert per_class_accuracy([_result("blocked", 0.0, scoring_failed=True)]) == []

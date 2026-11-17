@@ -12,7 +12,7 @@ from __future__ import annotations
 import opik
 
 from roadwork_demo.agreement import cohens_kappa, percent_agreement
-from roadwork_demo.config import get_settings
+from roadwork_demo.config import exit_if_dry_run, get_settings
 from roadwork_demo.review import find_review_queue
 from roadwork_demo.verdicts import HUMAN_VERDICT as HUMAN
 from roadwork_demo.verdicts import (
@@ -32,6 +32,7 @@ def human_label(score) -> str | None:
 
 def main() -> None:
     s = get_settings()
+    exit_if_dry_run(s, f"compare human, model and judge verdicts in the queue '{s.queue_name}'")
     client = opik.Opik()
     queue = find_review_queue(client, s)
     if queue is None:
@@ -93,8 +94,7 @@ def main() -> None:
                 "reason": f"human={r['human']}, model={r['model']}",
             }
             for r in rows
-        ],
-        project_name=s.project,
+        ]
     )
     client.flush()
     print("\nLogged human_says_correct onto the reviewed traces.")

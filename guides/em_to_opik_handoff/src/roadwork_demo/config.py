@@ -62,6 +62,16 @@ def get_settings() -> Settings:
     )
 
 
+def exit_if_dry_run(s: Settings, would: str) -> None:
+    """Stop a script that needs Opik when there are no credentials, saying what it would do."""
+    if s.dry_run:
+        print(
+            f"[DRY RUN] OPIK_API_KEY or OPIK_WORKSPACE not set: would {would}. "
+            "scripts/00_dry_run.py is the credentials-free check."
+        )
+        raise SystemExit(0)
+
+
 class HandoffError(RuntimeError):
     pass
 

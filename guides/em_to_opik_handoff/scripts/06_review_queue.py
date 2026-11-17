@@ -1,6 +1,6 @@
 """Send about 10 percent of detector+VLM traces to a human annotation queue.
 
-Usage: uv run python scripts/06_review_queue.py [--fraction 0.10] [--minimum 12]
+Usage: uv run python scripts/06_review_queue.py [--detector production] [--fraction 0.10] [--minimum 12]
 Safe to re-run: the feedback definition and queue are reused, traces are never added twice.
 """
 
@@ -13,8 +13,8 @@ import opik
 from opik.config import OpikConfig
 from opik.rest_api.types import CategoricalFeedbackDetailCreate, FeedbackCreate_Categorical
 
-from roadwork_demo.config import get_settings, variant_tag
-from roadwork_demo.pipeline import get_handoff
+from roadwork_demo.config import exit_if_dry_run, get_settings, variant_tag
+from roadwork_demo.pipeline import handoff_or_exit
 from roadwork_demo.review import find_review_queue, top_up
 from roadwork_demo.verdicts import HUMAN_VERDICT as FEEDBACK_NAME
 from roadwork_demo.verdicts import HUMAN_VERDICT_CATEGORIES as CATEGORIES
@@ -45,12 +45,14 @@ def ensure_feedback_definition(client: opik.Opik) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--detector", default=None, help="production, a registry version or stock")
     ap.add_argument("--fraction", type=float, default=0.10)
     ap.add_argument("--minimum", type=int, default=12)
     args = ap.parse_args()
 
     s = get_settings()
-    handoff = get_handoff()
+    exit_if_dry_run(s, f"sample detector_vlm traces into the review queue '{s.queue_name}'")
+    handoff = handoff_or_exit(args.detector)
     client = opik.Opik()
     ensure_feedback_definition(client)
 

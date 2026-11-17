@@ -4,6 +4,7 @@ import pytest
 
 from roadwork_demo.config import (
     Handoff,
+    exit_if_dry_run,
     experiment_name,
     get_settings,
     is_dev_experiment,
@@ -105,3 +106,18 @@ def test_dev_experiments_are_recognised_by_name_and_stock_is_not_one():
     assert is_dev_experiment("detector_vlm-1.0.0") is False
     assert is_dev_experiment("vlm_only") is False
     assert is_dev_experiment("someone-elses-experiment-dev") is False
+
+
+def test_scripts_stop_cleanly_without_opik_credentials(monkeypatch, capsys):
+    monkeypatch.delenv("OPIK_API_KEY", raising=False)
+    with pytest.raises(SystemExit) as stop:
+        exit_if_dry_run(get_settings(), "run the experiments")
+    assert stop.value.code == 0
+    out = capsys.readouterr().out
+    assert out.startswith("[DRY RUN]") and "run the experiments" in out and "OPIK_API_KEY" in out
+
+
+def test_scripts_continue_with_opik_credentials(monkeypatch):
+    monkeypatch.setenv("OPIK_API_KEY", "k")
+    monkeypatch.setenv("OPIK_WORKSPACE", "ws")
+    assert exit_if_dry_run(get_settings(), "run the experiments") is None

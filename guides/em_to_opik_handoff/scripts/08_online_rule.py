@@ -23,7 +23,7 @@ from opik.rest_api.types import (
     LlmAsJudgeOutputSchemaWrite,
 )
 
-from roadwork_demo.config import get_settings
+from roadwork_demo.config import exit_if_dry_run, get_settings
 from roadwork_demo.metrics import judge_prompt
 from roadwork_demo.verdicts import ONLINE_VERDICT_CORRECT as SCORE_NAME
 
@@ -38,6 +38,7 @@ def main() -> None:
     args = ap.parse_args()
 
     s = get_settings()
+    exit_if_dry_run(s, f"create the online rule '{RULE_NAME}' on project '{s.project}'")
     client = opik.Opik()
     rules = client.rest_client.automation_rule_evaluators
     project = client.rest_client.projects.retrieve_project(name=s.project)
