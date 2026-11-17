@@ -1,0 +1,28 @@
+[project]
+name = "roadwork-demo"
+version = "0.1.0"
+description = "Fine-tuning in Comet EM handing off to evaluation in Opik, on a road-obstruction use case"
+authors = [
+    { name = "Francisco Schulz", email = "22344801+fschlz@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=2.9.0",
+    "comet-ml>=3.49",
+    "opik>=2.2",
+    "pillow>=13.0.0",
+    "python-dotenv>=1.2.4",
+    "ultralytics>=8.4.215",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.workspace]
+members = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]

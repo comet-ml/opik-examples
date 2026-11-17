@@ -1,0 +1,10 @@
+data/
+runs/
+.env
+.venv/
+__pycache__/
+*.pt
+handoff.json
+.DS_Store
+.superpowers/
+.tmp/
