@@ -4,11 +4,51 @@ Fine-tune a detector in Comet Experiment Management (EM), evaluate the applicati
 Opik, and let a gate decide which training run gets promoted. The only thing the evaluation side
 needs from the training side is `workspace/model:version`.
 
+![Comet project view with the training metric next to the downstream result](images/em_project_view.png)
+
+*The Comet project view this guide builds. For every registered training run: the training
+metric (mAP50), the downstream result measured in Opik, the gate decision and a link to the Opik
+experiment.*
+
 ## What this does
 
-A team that fine-tunes models in Comet EM usually ends with a training metric (here: mAP). What
-they need to know is whether the new model is better at the downstream task, and how to promote
-it. This guide answers that with one worked example and three ideas:
+A team that fine-tunes a model ends every training run with a training metric, here mAP. The
+question they have to answer is a different one: did the application that uses the model get
+better, and should this run replace the one in production? Answered by hand, that means copying a
+weights path into an evaluation script, remembering which dataset and prompt the last evaluation
+used, pasting numbers into a sheet and telling someone to switch the model. This guide wires that
+path once, with Comet Experiment Management (EM) for the model side and Opik for the application
+side: every training run ends with its downstream result next to its mAP, and with a recorded
+promote-or-hold decision that production traffic follows.
+
+### The use case
+
+A vehicle camera flags a possible road blockage. A YOLO11 detector fine-tuned on work-zone
+objects (cones, barriers, signs) and a vision-language model decide whether the road ahead is
+`blocked`, `partial` or `clear`. Two pipeline variants are compared: `vlm_only` (the vision model
+alone) and `detector_vlm` (the vision model also gets the detector's findings and an overlay
+image). The detector is the part the team trains; the verdict is what the product ships.
+
+### Why the training metric is not enough
+
+In the run documented below, a second training run raised mAP50 from 0.414 to 0.489. Judged on
+mAP alone, both fine-tunes are improvements. Downstream, the first one made the application
+worse than using no detector at all (verdict accuracy 0.527 against 0.612), and the second one
+only won part of that back (0.589). Nobody sees this in a training dashboard unless the
+downstream result is brought there. That is what this guide does.
+
+### Who answers what
+
+| Question the team asks | Where the answer is | Put there by |
+|---|---|---|
+| Which data was this model trained on? | Comet Artifact lineage: one producer, every training run a consumer | `01_prepare_data.py`, `02_train.py` |
+| Which model is deployed right now? | Comet Model Registry status (`Production` / `Staging`) | `03_register.py`, the gate |
+| Is the application better with this model? | Opik experiments, one per model version, on one versioned dataset | `05_run_experiments.py` |
+| Can I see that where I look at my training runs? | `opik_*` metrics on the Comet experiment, and the project view with a Python and a JavaScript panel | `05_run_experiments.py`, `10_em_dashboard.py` |
+| Should it be promoted, and who decided? | Gate output, `opik_gate` on both training experiments, registry status | `python -m roadwork_demo.gate` |
+| What runs in production, and is it still good? | Opik traces tagged with the registry version, an online judge, a human review queue | `06` to `09` |
+
+### Three ideas
 
 1. **The Model Registry is the contract.** The Opik side is given a registry version (or the
    status `Production`) and resolves everything else through the Comet API: the training
@@ -18,11 +58,6 @@ it. This guide answers that with one worked example and three ideas:
    written back onto each training experiment, so Comet EM shows mAP next to downstream accuracy.
 3. **A gate promotes or holds.** It compares two Opik experiments item by item and, on a promote,
    changes the registry status. New traffic follows the status with no config edit.
-
-The example: a vehicle camera flags a possible road blockage. A YOLO11 detector fine-tuned on
-work-zone objects and a vision-language model decide whether the road ahead is `blocked`,
-`partial` or `clear`. Two pipeline variants are compared: `vlm_only` (the vision model alone) and
-`detector_vlm` (the vision model also gets the detector's findings and an overlay image).
 
 ### Two loops that meet at the gate
 
@@ -134,6 +169,7 @@ The full run, in order. Every command is `uv run --env-file .env python <script>
 | 9 | `scripts/05_run_experiments.py --detector 2.0.0 --variants detector_vlm` | The candidate's experiment, linked back onto its training experiment | 3 min |
 | 10 | `python -m roadwork_demo.gate --candidate 2.0.0`, then the same with `--apply` | Prints the comparison; `--apply` writes the decision to the registry and both training experiments | 1 min |
 | 11 | `scripts/09_simulate_traffic.py` | Traffic after the gate carries whatever is in Production | 3 min |
+| 12 | `scripts/10_em_dashboard.py` | Creates the Comet project view "Training vs downstream": a Python panel, a JavaScript panel, the mAP curve and an experiment table with the `opik_*` columns. Run it any time after step 5 | 1 min |
 
 Each training run overwrites `runs/last_experiment.json`. To register an older run, keep a copy
 and pass it: `scripts/03_register.py --name baseline --from runs/baseline.json`.
@@ -224,27 +260,60 @@ means "better on this sample". A larger eval set is the fix, not a lower thresho
 
 ### In Comet EM
 
-- Experiment table of project `roadwork-detection`: add the columns `metrics/mAP50(B)`,
-  `opik_verdict_accuracy`, `opik_accuracy_blocked` and `opik_gate` to compare training runs on
-  the training metric and the downstream metric in one row.
-- Artifact `roadwork-yolo`, lineage tab: `prepare-data` as producer, the training runs as
-  consumers.
-- Model Registry `roadwork-yolo11s`: versions with their status and source experiment.
-- A training experiment's HTML tab: the table with a link to its Opik experiment.
+The image at the top of this page is the project view `scripts/10_em_dashboard.py` creates. Top:
+the Python panel, one row per registered training run, with mAP50, the Opik verdict accuracy, the
+difference to running no detector, the gate decision and a link to the Opik experiment. Bottom
+left: mAP50 per epoch for both training runs, a built-in chart. Bottom right: the JavaScript
+panel, verdict accuracy per class for each detector version next to the no-detector reference.
+The left chart says "2.0.0 is the better detector"; the right chart says "and the application is
+still not better than with no detector".
 
-Screenshots: pending.
+![Experiment table with the training metric and the Opik columns](images/em_experiment_table.png)
+
+The same view, "Experiments" tab. The registry version, mAP50, the downstream accuracy, the gate
+note and the dataset Artifact are columns of the experiment table, so training runs can be sorted
+and filtered on the downstream result like on any training metric.
+
+![Artifact lineage: one producer, two training runs, two registry versions](images/em_artifact_lineage.png)
+
+Lineage of the dataset Artifact `roadwork-yolo:1.0.0`. The `prepare-data` experiment produced it,
+both training runs consumed it, and each run leads to its Model Registry version. "Which data was
+this model trained on" is one click from the model.
+
+![Model Registry with one Production and one Staging version](images/em_model_registry.png)
+
+The Model Registry after the gate ran with `--apply`: 2.0.0 is `Production`, 1.0.0 went back to
+`Staging`, and each version links to its source experiment. This status is what the Opik side
+reads when it is told to use `production`.
+
+![HTML tab of the candidate training run with its Opik results](images/em_html_tab.png)
+
+The HTML tab of the candidate's training experiment, written by `05_run_experiments.py`: the
+registry version, the Opik dataset version, the scores and a link to the Opik experiment.
 
 ### In Opik
 
-- Experiments: select the four experiments and compare them; they share one dataset version.
-  The experiment configuration of a `detector_vlm` experiment names the registry version, the
-  training experiment and the dataset Artifact.
-- A `detector_vlm` trace: the detector span with the overlay image and the registry identity,
-  then the verdict span with the input image, the structured verdict, tokens and cost.
-- Logs filtered by tag `source:simulated-traffic`: traces of whatever version is in Production,
-  scored by the online rule.
+![Feedback scores of the four experiments side by side](images/opik_experiment_compare.png)
 
-Screenshots: pending.
+The four experiments compared on the "Feedback scores" tab. They share one dataset version, so
+the columns are comparable: no detector, the stock detector, registry 1.0.0 and registry 2.0.0.
+The `blocked` row is where a detector costs the most (0.48 without one, 0.36 to 0.42 with one).
+The two `human_*` rows come from the review queue; only `detector_vlm-1.0.0` has reviewed traces.
+
+![Experiment configuration naming the registry version and the training run](images/opik_experiment_config.png)
+
+The "Configuration" tab of the same comparison. Every `detector_vlm` experiment names the
+registry version it ran with, the training experiment (key and URL), that run's mAP and the
+dataset Artifact. Someone looking at an Opik result can get back to the exact training run
+without asking anyone.
+
+![A production trace: detector span with the overlay image and the registry identity](images/opik_trace.png)
+
+A trace from the traffic simulated after the gate. The detector span carries the overlay image
+with the boxes the detector found, the tag `detector:roadwork-yolo11s:2.0.0` and, as metadata,
+the registry version, the training experiment and its mAP. The verdict span below it holds the
+vision model call with tokens and cost. Filter the logs by tag `source:simulated-traffic` to see
+the traffic of whatever version is in Production, scored by the online rule.
 
 ## How it works
 
@@ -282,12 +351,21 @@ Screenshots: pending.
    often each judge agrees with the humans. The online rule scores new traces inside Opik. Check
    an online judge against human labels before trusting its numbers; step 7 gives that check for
    every judge.
+8. **The project view** (`scripts/10_em_dashboard.py`, `panels/`). `comet_ml.views` builds a
+   project view in code and `API.create_view` saves it. `panels/scorecard.py` is a Python panel:
+   it runs inside Comet, reads the experiments on the page with `API().get_panel_experiments()`
+   and renders one row per registered training run.
+   `panels/per_class_accuracy.js` is a JavaScript panel (`Comet.Panel`) that draws the
+   per-class verdict accuracy of each detector version. Both only read what steps 3, 5 and 10
+   wrote onto the training experiments, so they need no access to Opik. They show no registry
+   status: the token a panel runs with is not allowed to read the Model Registry.
 
 Layout:
 
 ```
 src/roadwork_demo/   config, registry + handoff, pipeline, LLM calls, metrics, gate, data helpers
 scripts/             00 dry run, then the numbered stages in run order
+panels/              source of the Python and the JavaScript panel of the Comet project view
 prompts/             verdict and judge prompts (the verdict prompt is versioned in Opik)
 tests/               unit tests for the pure logic
 ```
@@ -323,7 +401,16 @@ tests/               unit tests for the pure logic
 
 ## Attribution
 
-Images and annotations come from the **ROADWork dataset** (Carnegie Mellon University),
-https://kilthub.cmu.edu/articles/dataset/ROADWork_Data/26093197 , released under the Open Data
-Commons Attribution License v1.0. Please cite the ROADWork paper when using it. This repository
-does not redistribute the dataset; it only contains scripts that download and convert it.
+Images and annotations come from the **ROADWork dataset** (Carnegie Mellon University):
+https://github.com/anuragxel/roadwork-dataset , data at
+https://kilthub.cmu.edu/articles/dataset/ROADWork_Data/26093197 . The dataset is released under
+the Open Data Commons Attribution License v1.0. If you use it, cite:
+
+> Ghosh, Zheng, Tamburo, Vuong, Alvarez-Padilla, Zhu, Cardei, Dunn, Mertz, Narasimhan.
+> "ROADWork: A Dataset and Benchmark for Learning to Recognize, Observe, Analyze and Drive
+> Through Work Zones." ICCV 2025.
+
+This repository does not redistribute the dataset; its scripts download and convert it. The only
+ROADWork images in the repository are the camera frames visible in the screenshots above. The
+guide uses `images.zip` and `annotations.zip` only, not `discovered_images.zip`, which holds
+third-party images under other licenses.
