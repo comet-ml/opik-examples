@@ -129,7 +129,7 @@ The full run, in order. Every command is `uv run --env-file .env python <script>
 | 5 | `scripts/05_run_experiments.py --variants vlm_only`, then `--detector stock --variants detector_vlm`, then `--detector 1.0.0 --variants detector_vlm` | Three experiments on one dataset version; the last one is linked back onto the training experiment | 2-4 min each |
 | 6 | `scripts/06_review_queue.py`, annotate in the Opik UI, `scripts/07_agreement.py` | 10 percent of the traces go to a human review queue; agreement between humans, the pipeline and the judges | 1 min + annotation |
 | 7 | `scripts/08_online_rule.py`, `scripts/09_simulate_traffic.py` | Optional: an online LLM judge rule, and fresh traffic for it to score | 3 min |
-| 8 | `scripts/02_train.py --name candidate --epochs 30 --imgsz 960`, `scripts/03_register.py --name candidate` | The second training run becomes 2.0.0 with status `Staging` | about 4 h on an M4 Max (8.5 min per epoch) |
+| 8 | `scripts/02_train.py --name candidate --epochs 30 --imgsz 960`, `scripts/03_register.py --name candidate` | The second training run becomes 2.0.0 with status `Staging` | about 3 h 40 min on an M4 Max (7.3 min per epoch) |
 | 9 | `scripts/05_run_experiments.py --detector 2.0.0 --variants detector_vlm` | The candidate's experiment, linked back onto its training experiment | 3 min |
 | 10 | `python -m roadwork_demo.gate --candidate 2.0.0`, then the same with `--apply` | Prints the comparison; `--apply` writes the decision to the registry and both training experiments | 1 min |
 | 11 | `scripts/09_simulate_traffic.py` | Traffic after the gate carries whatever is in Production | 3 min |
@@ -154,15 +154,12 @@ full creates a second one with the same name; the gate and the back-link read th
 Numbers below are from one run, in workspace `opik-examples`, project `roadwork-detection`
 (2026-11-17). They are shown as measured; nothing was tuned to make a variant win.
 
-> Draft: the second training run (2.0.0) is still training. Rows and sections marked "pending"
-> are filled in when it has been registered, evaluated and gated.
-
 **Training runs (Comet EM)**
 
 | Registry version | Training run | Config | mAP50 | mAP50-95 |
 |---|---|---|---|---|
 | 1.0.0 | `yolo11s-baseline` | 15 epochs, 640 px | 0.414 | 0.258 |
-| 2.0.0 | `yolo11s-candidate` | 30 epochs, 960 px | pending | pending |
+| 2.0.0 | `yolo11s-candidate` | 30 epochs, 960 px | 0.489 | 0.315 |
 
 **Experiments (Opik, dataset `roadwork-verdicts` version v1, 129 items)**
 
@@ -171,14 +168,16 @@ Numbers below are from one run, in workspace `opik-examples`, project `roadwork-
 | `vlm_only` | none | 0.612 | 0.636 | 0.48 | 0.68 | 0.72 |
 | `detector_vlm-stock` | COCO `yolo11s.pt`, not fine-tuned | 0.597 | 0.628 | 0.42 | 0.72 | 0.69 |
 | `detector_vlm-1.0.0` | registry 1.0.0 | 0.527 | 0.597 | 0.36 | 0.60 | 0.69 |
-| `detector_vlm-2.0.0` | registry 2.0.0 | pending | pending | pending | pending | pending |
+| `detector_vlm-2.0.0` | registry 2.0.0 | 0.589 | 0.589 | 0.38 | 0.72 | 0.72 |
 
-How to read it: mAP says the fine-tune worked. Downstream, giving the vision model the output of
-detector 1.0.0 lowered verdict accuracy by 8.5 points against the vision model alone, most of it
-on the `blocked` class (0.36 against 0.48). With 129 items that is at the edge of noise (see
-Known limits), so it is a reason to look closer, not a verdict on the detector. The point of the
-guide is that the question can be asked at all: the training run and its downstream result sit
-next to each other in both products.
+How to read it: mAP says both fine-tunes worked, the second more than the first (0.489 against
+0.414). Downstream the picture is different. Giving the vision model the output of detector 1.0.0
+lowered verdict accuracy by 8.5 points against the vision model alone, most of it on the
+`blocked` class (0.36 against 0.48). Detector 2.0.0 wins back 6.2 of those points, and is still
+no better than the stock detector or no detector at all. With 129 items every one of these
+differences is at the edge of noise (see Known limits), so they are a reason to look closer, not
+a verdict on the detector. The point of the guide is that the question can be asked at all: the
+training run and its downstream result sit next to each other in both products.
 
 **Human review (16 traces from the queue, one reviewer)**
 
@@ -193,8 +192,34 @@ its score. Three traces prove nothing either way; review more traffic before rea
 
 ### The gate
 
-Pending: `python -m roadwork_demo.gate --candidate 2.0.0` runs once 2.0.0 is registered and
-evaluated. Its output goes here as printed.
+`python -m roadwork_demo.gate --candidate 2.0.0`, as printed:
+
+```text
+candidate roadwork-yolo11s:2.0.0  accuracy 0.589
+current   roadwork-yolo11s:1.0.0  accuracy 0.527
+items compared: 129 (dropped, not scored in both: 0)
+delta: +0.062 (min delta 0.03)
+items won / lost by the candidate: 18 / 10, two-sided sign test p = 0.185 (context, not a threshold)
+decision: promote
+dry run: nothing written
+```
+
+The same command with `--apply` prints the same comparison and then what it wrote:
+
+```text
+2.0.0: status is now Production
+1.0.0: status is now Staging
+2.0.0: opik_gate = 'promote vs 1.0.0, delta=+0.062' on https://www.comet.com/opik-examples/roadwork-detection/8e32872f48004014b8eb5978b32dee5e
+1.0.0: opik_gate = 'candidate 2.0.0: promote, delta=+0.062' on https://www.comet.com/opik-examples/roadwork-detection/573bfc3a63c146738ac491d455753a36
+```
+
+The candidate cleared the 3 point minimum, so it was promoted. The 30 traffic frames simulated
+before the gate are tagged `detector:roadwork-yolo11s:1.0.0`; the 30 simulated after it are
+tagged `detector:roadwork-yolo11s:2.0.0`, with no config change in between.
+
+Read the sign test line before you trust the decision: 18 items won against 10 lost, p = 0.185.
+The gate promotes on the delta, not on significance, so on an eval set this small a promote
+means "better on this sample". A larger eval set is the fix, not a lower threshold.
 
 ### In Comet EM
 
