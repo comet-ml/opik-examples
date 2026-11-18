@@ -1,3 +1,4 @@
+import ast
 import runpy
 import sys
 from types import ModuleType, SimpleNamespace
@@ -51,37 +52,23 @@ NOT_EVALUATED = fake_experiment(
 )
 
 
-class FakeModel:
-    def find_versions(self):
-        return ["2.0.0", "1.0.0"]
-
-    def status(self, version):
-        return {"2.0.0": "Production", "1.0.0": "Staging"}[version]
-
-
-def run_panel(monkeypatch, experiments, registry_fails=False):
+def run_panel(monkeypatch, experiments):
     """Execute the panel source the way Comet does, with the Comet and Streamlit modules faked."""
-    shown = []
+    shown, page_config = [], {}
 
     class FakeAPI:
         def get_panel_experiments(self):
             return experiments
 
-        def get_panel_workspace(self):
-            return "ws"
-
-        def get_model(self, workspace, name):
-            if registry_fails:
-                raise RuntimeError("registry not reachable")
-            return FakeModel()
-
     comet = ModuleType("comet_ml")
     comet.API = FakeAPI
     streamlit = ModuleType("streamlit")
     streamlit.markdown = shown.append
+    streamlit.set_page_config = page_config.update
     monkeypatch.setitem(sys.modules, "comet_ml", comet)
     monkeypatch.setitem(sys.modules, "streamlit", streamlit)
     namespace = runpy.run_path(str(PANEL))
+    namespace["page_config"] = page_config
     return namespace, "\n".join(shown)
 
 
@@ -99,12 +86,12 @@ def test_one_row_per_registered_run_in_version_order(monkeypatch):
 def test_panel_shows_training_and_downstream_numbers_side_by_side(monkeypatch):
     _, text = run_panel(monkeypatch, [BASELINE, CANDIDATE])
     baseline_row = next(line for line in text.splitlines() if line.startswith("| 1.0.0"))
-    for cell in ("Staging", "yolo11s-baseline", "0.414", "0.527", "-0.085", "0.36", "0.60", "0.69"):
+    for cell in ("yolo11s-baseline", "0.414", "0.527", "-0.085", "0.36", "0.60", "0.69"):
         assert cell in baseline_row
     assert "[detector_vlm-1.0.0](https://opik.example/exp1)" in baseline_row
     assert "candidate 2.0.0: promote, delta=+0.062" in baseline_row
     candidate_row = next(line for line in text.splitlines() if line.startswith("| 2.0.0"))
-    assert "Production" in candidate_row and "-0.023" in candidate_row
+    assert "-0.023" in candidate_row
     assert "0.612" in text  # the no-detector reference
 
 
@@ -114,9 +101,24 @@ def test_a_registered_run_without_opik_results_says_so_instead_of_showing_zeros(
     assert "0.510" in row and "not evaluated in Opik yet" in row and "0.000" not in row
 
 
-def test_panel_still_renders_when_the_registry_cannot_be_read(monkeypatch):
-    _, text = run_panel(monkeypatch, [BASELINE], registry_fails=True)
-    assert "| 1.0.0 | unknown |" in text
+def test_panel_reads_only_the_experiments_on_the_page(monkeypatch):
+    # The token a panel runs with is refused by the Model Registry endpoints (seen live: Unauthorized),
+    # so FakeAPI offers nothing but the page's experiments and the panel must not show a status.
+    _, text = run_panel(monkeypatch, [BASELINE, CANDIDATE])
+    assert "| 1.0.0 | yolo11s-baseline |" in text
+    assert "Status" not in text and "unknown" not in text
+
+
+def test_panel_source_has_no_bare_string_statements():
+    # Streamlit prints every bare expression, a module docstring included, into the panel.
+    tree = ast.parse(PANEL.read_text())
+    bare = [n for n in tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)]
+    assert bare == []
+
+
+def test_panel_uses_the_full_panel_width(monkeypatch):
+    namespace, _ = run_panel(monkeypatch, [BASELINE])
+    assert namespace["page_config"] == {"layout": "wide"}
 
 
 def test_panel_explains_an_empty_page(monkeypatch):

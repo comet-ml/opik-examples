@@ -5,6 +5,14 @@ class MyPanel extends Comet.Panel {
     const classes = ["blocked", "partial", "clear"];
     const byName = (list) =>
       Object.fromEntries((Array.isArray(list) ? list : []).map((entry) => [entry.name, entry.valueCurrent]));
+    const bar = (name, x, y) => ({
+      type: "bar",
+      name: name,
+      x: x,
+      y: y,
+      text: y.map((value) => value.toFixed(2)),
+      textposition: "outside",
+    });
     const runs = [];
     let reference = null;
     for (const key of experimentKeys) {
@@ -25,21 +33,20 @@ class MyPanel extends Comet.Panel {
     }
     runs.sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }));
     const labels = ["all classes", ...classes];
-    const data = runs.map((run) => ({
-      type: "bar",
-      name: "detector " + run.version + " (mAP50 " + run.map50.toFixed(3) + ")",
-      x: labels,
-      y: run.values,
-    }));
+    const data = runs.map((run) =>
+      bar("detector " + run.version + " (mAP50 " + run.map50.toFixed(3) + ")", labels, run.values)
+    );
     if (reference !== null) {
-      data.unshift({ type: "bar", name: "no detector (vlm_only)", x: ["all classes"], y: [reference] });
+      data.unshift(bar("no detector (vlm_only)", ["all classes"], [reference]));
     }
     this.plot({
       data: data,
       layout: {
         barmode: "group",
-        yaxis: { title: "verdict accuracy (Opik)", range: [0, 1] },
-        legend: { orientation: "h" },
+        showlegend: true,
+        legend: { orientation: "h", x: 0, y: 1.15 },
+        margin: { l: 50, r: 20, t: 40, b: 40 },
+        yaxis: { range: [0, 1], automargin: true },
       },
     });
   }

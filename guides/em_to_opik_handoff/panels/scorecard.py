@@ -1,7 +1,6 @@
-"""Comet Python panel: the training metric of every registered run next to its downstream result.
-
-Runs inside Comet, not locally. scripts/10_em_dashboard.py stores this file in the project view.
-"""
+# Comet Python panel: the training metric of every registered run next to its downstream result.
+# Runs inside Comet, not locally. scripts/10_em_dashboard.py stores this file in the project view.
+# WHY comments and no docstring: Streamlit prints every bare string, a module docstring included.
 
 import streamlit as st
 from comet_ml import API
@@ -36,14 +35,12 @@ def scorecard_rows(experiments):
         if not registered:
             continue
         metrics = {m["name"]: m.get("valueCurrent") for m in experiment.get_metrics_summary()}
-        model, _, version = registered.rpartition(":")
         accuracy = number(metrics.get("opik_verdict_accuracy"))
         reference = number(others.get("opik_vlm_only_accuracy"))
         both = accuracy is not None and reference is not None
         rows.append(
             {
-                "model": model,
-                "version": version,
+                "version": registered.rpartition(":")[2],
                 "run": experiment.name,
                 "map50": number(metrics.get("metrics/mAP50(B)")),
                 "accuracy": accuracy,
@@ -58,21 +55,7 @@ def scorecard_rows(experiments):
     return sorted(rows, key=version_key)
 
 
-def registry_statuses(api, workspace, rows):
-    statuses = {}
-    for name in {row["model"] for row in rows}:
-        # WHY: the status is a nice-to-have here; a registry that cannot be read must not blank
-        # the whole panel.
-        try:
-            model = api.get_model(workspace, name)
-            for version in model.find_versions():
-                statuses[(name, version)] = model.status(version)
-        except Exception:
-            continue
-    return statuses
-
-
-def render(rows, statuses):
+def render(rows):
     if not rows:
         return (
             "No registered training run among the experiments on this page. "
@@ -80,14 +63,12 @@ def render(rows, statuses):
             "`scripts/05_run_experiments.py`."
         )
     lines = [
-        "#### Does a better detector make a better application?",
-        "",
         "Training metric from Comet EM (mAP50) next to the downstream metric from Opik (verdict "
         "accuracy on the same held-out frames), for every training run in the Model Registry.",
         "",
-        "| Registry version | Status | Training run | mAP50 | Verdict accuracy | vs no detector "
+        "| Registry version | Training run | mAP50 | Verdict accuracy | vs no detector "
         "| blocked | partial | clear | Gate | Opik experiment |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         if row["accuracy"] is None:
@@ -103,7 +84,6 @@ def render(rows, statuses):
             ]
         cells = [
             row["version"],
-            statuses.get((row["model"], row["version"]), "unknown"),
             row["run"],
             cell(row["map50"]),
             *downstream,
@@ -119,6 +99,7 @@ def render(rows, statuses):
     return "\n".join(lines)
 
 
-api = API()
-rows = scorecard_rows(api.get_panel_experiments())
-st.markdown(render(rows, registry_statuses(api, api.get_panel_workspace(), rows)))
+st.set_page_config(layout="wide")
+# WHY no registry status column: the token a panel runs with is refused by the Model Registry
+# endpoints, so the panel shows only what is logged on the experiments of this page.
+st.markdown(render(scorecard_rows(API().get_panel_experiments())))
