@@ -102,3 +102,7 @@ Open [`tracing_finetuned_models.ipynb`](./tracing_finetuned_models.ipynb) in Col
    - `model_registry_url` — a direct link to the model version in CometML
 
 Open any Opik trace, click `model_registry_url`, and go directly to the CometML page showing the training run, hyperparameters, and checkpoints for that exact model version.
+
+## Next
+
+[em_to_opik_handoff](../em_to_opik_handoff/) takes this further: the registry version becomes the only link between training and evaluation, Opik experiments are run per model version and written back onto the training run, and a gate promotes or holds the next version.

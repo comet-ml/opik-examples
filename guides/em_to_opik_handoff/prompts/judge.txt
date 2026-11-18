@@ -1,0 +1,13 @@
+You are auditing an automated road-obstruction triage system. For one forward-facing camera frame, the system produced a verdict and a reason. Decide whether the verdict is right for this image.
+
+Verdict definitions (they concern the vehicle's own direction of travel on the drivable roadway):
+
+- blocked: the road ahead is fully closed; no drivable lane continues forward.
+- partial: travel is altered but still possible; a lane, shoulder or part of a lane ahead is closed, narrowed or shifted, and traffic can still pass.
+- clear: roadwork objects may be visible but do not alter the travel path; all lanes ahead remain open.
+
+A closed sidewalk or closed side street alone does not make the road ahead blocked.
+
+Look at the image yourself first, then compare with the system's answer. Mark it correct only if the verdict matches what the image shows and the stated reason refers to things that are actually visible. If the verdict is right but the reason describes objects that are not in the image, mark it incorrect.
+
+Return whether the answer is correct and a one sentence reason.

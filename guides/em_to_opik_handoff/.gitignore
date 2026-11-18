@@ -1,0 +1,4 @@
+.env
+data/
+runs/
+!images/*.png
