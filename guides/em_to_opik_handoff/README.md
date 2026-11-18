@@ -79,7 +79,7 @@ uv sync --extra detector
 ```
 
 `uv sync` alone installs everything except Ultralytics and torch; that is enough for the tests
-and the dry run. Without `uv`: `pip install opik litellm comet-ml pillow ultralytics`.
+and the dry run. Without `uv`: `pip install -e ".[detector]"` from this folder.
 
 You also need a Comet account (EM and Opik in one workspace), an API key for the verdict and
 judge models, and about 25 GB of free disk. Training runs on an Apple Silicon GPU by default
@@ -87,10 +87,10 @@ judge models, and about 25 GB of free disk. Training runs on an Apple Silicon GP
 
 | Environment variable | Required | Description |
 |---|---|---|
-| `COMET_API_KEY` | for steps 1-3, 5 and the gate | Comet EM, Artifacts and Model Registry |
-| `OPIK_API_KEY` | for steps 4-9 and the gate | Opik. Unset -> those scripts print a `[DRY RUN]` line and stop |
+| `COMET_API_KEY` | for every step except 4 | Comet EM, Artifacts and Model Registry. The Opik-side scripts need it too: they resolve the detector through the registry. Unset -> steps 1-3 print a `[DRY RUN]` line and stop |
+| `OPIK_API_KEY` | for steps 4-7 and 9-11 | Opik. Unset -> those scripts print a `[DRY RUN]` line and stop |
 | `COMET_WORKSPACE`, `OPIK_WORKSPACE` | yes | The same workspace for both products |
-| `ANTHROPIC_API_KEY` (or the key for your model provider) | for steps 5, 6, 9 | Verdict and judge models, called through litellm |
+| `ANTHROPIC_API_KEY` (or the key for your model provider) | for steps 5, 6, 9, 11 | Verdict and judge models, called through litellm |
 | `OPIK_PROJECT_NAME` | No | One name for the Comet EM project and the Opik project (default `roadwork-detection`) |
 | `OPIK_EXAMPLES_MODEL` | No | Verdict model, litellm form (default `anthropic/claude-haiku-5-5`) |
 | `JUDGE_MODEL` | No | Offline judge model (default `anthropic/claude-sonnet-5-5`) |
@@ -101,12 +101,13 @@ judge models, and about 25 GB of free disk. Training runs on an Apple Silicon GP
 | `OPIK_URL_OVERRIDE` | No | Base URL for self-hosted Opik (default: Opik Cloud) |
 
 Credentials are read from the environment only. Copy `.env.example` to `.env`, fill it in, and
-pass it with `uv run --env-file .env ...`.
+pass it with `uv run --env-file .env ...`. The step numbers are those of the table under
+"Running it".
 
 The dataset is CMU ROADWork (see Attribution). Two files are needed, about 10 GB:
 
 ```bash
-mkdir -p data/raw/roadwork && cd data/raw/roadwork && curl -L -C - -o images.zip https://ndownloader.figshare.com/files/47217577 && curl -L -o annotations.zip https://ndownloader.figshare.com/files/47217703 && unzip -q annotations.zip
+mkdir -p data/raw/roadwork && (cd data/raw/roadwork && curl -L -C - -o images.zip https://ndownloader.figshare.com/files/47217577 && curl -L -o annotations.zip https://ndownloader.figshare.com/files/47217703 && unzip -q annotations.zip)
 ```
 
 ## Running it
@@ -127,8 +128,8 @@ The full run, in order. Every command is `uv run --env-file .env python <script>
 | 3 | `scripts/03_register.py --name baseline` | Registers 1.0.0. The first version gets status `Production` | 1 min |
 | 4 | `scripts/04_build_opik_dataset.py` | Creates the Opik dataset with images and human labels | 2 min |
 | 5 | `scripts/05_run_experiments.py --variants vlm_only`, then `--detector stock --variants detector_vlm`, then `--detector 1.0.0 --variants detector_vlm` | Three experiments on one dataset version; the last one is linked back onto the training experiment | 2-4 min each |
-| 6 | `scripts/06_review_queue.py`, annotate in the Opik UI, `scripts/07_agreement.py` | 10 percent of the traces go to a human review queue; agreement between humans, the pipeline and the judges | 1 min + annotation |
-| 7 | `scripts/08_online_rule.py`, `scripts/09_simulate_traffic.py` | Optional: an online LLM judge rule, and fresh traffic for it to score | 3 min |
+| 6 | `scripts/08_online_rule.py`, `scripts/09_simulate_traffic.py` | An online LLM judge rule, and fresh traffic for it to score. The rule scores production traffic only, not experiment traces | 3 min |
+| 7 | `scripts/06_review_queue.py`, annotate in the Opik UI, `scripts/07_agreement.py` | 10 percent of the traces go to a human review queue; agreement between humans, the pipeline and the judges. Run it after step 6, or no reviewed trace has an online score | 1 min + annotation |
 | 8 | `scripts/02_train.py --name candidate --epochs 30 --imgsz 960`, `scripts/03_register.py --name candidate` | The second training run becomes 2.0.0 with status `Staging` | about 3 h 40 min on an M4 Max (7.3 min per epoch) |
 | 9 | `scripts/05_run_experiments.py --detector 2.0.0 --variants detector_vlm` | The candidate's experiment, linked back onto its training experiment | 3 min |
 | 10 | `python -m roadwork_demo.gate --candidate 2.0.0`, then the same with `--apply` | Prints the comparison; `--apply` writes the decision to the registry and both training experiments | 1 min |
@@ -268,15 +269,18 @@ Screenshots: pending.
    not the label. Per-class accuracy is logged as experiment-level scores. The dataset version is
    recorded in the experiment configuration and on the training experiment.
 6. **The gate** (`src/roadwork_demo/gate.py`). It refuses to compare experiments from different
-   dataset versions, pairs the two experiments on the items both scored, and reports the mean
-   difference, the items won and lost, and a two-sided sign test. It promotes when the gain is
-   positive and at least `--min-delta` (default 0.03); the p-value is context, not a threshold.
-   On a promote with `--apply` the candidate is set to `Production` first, then the previous
-   version to `Staging`; if the first change fails or waits for approval, nothing else changes.
+   dataset versions, or run with a different verdict model or prompt, pairs the two experiments
+   on the items both scored, and reports the mean difference, the items won and lost, and a
+   two-sided sign test. It promotes when the gain is positive and at least `--min-delta`
+   (default 0.03); the p-value is context, not a threshold. On a promote with `--apply` the
+   candidate is set to `Production` first, then the previous version to `Staging`; if the first
+   change fails or waits for approval, nothing else changes. `--apply` refuses a promote when
+   `--current` is not the one Production version, so the registry never ends up with a deployed
+   version the candidate was not compared with.
 7. **Humans and online scoring** (`scripts/06` to `09`). A sample of traces goes to an annotation
    queue; `07_agreement.py` reports human vs pipeline (percent agreement, Cohen's kappa) and how
    often each judge agrees with the humans. The online rule scores new traces inside Opik. Check
-   an online judge against human labels before trusting its numbers; step 6 gives that check for
+   an online judge against human labels before trusting its numbers; step 7 gives that check for
    every judge.
 
 Layout:
@@ -305,7 +309,7 @@ tests/               unit tests for the pure logic
 - The eval frames come from the detector's validation split: never trained on, but they were
   used for model selection during training.
 - The "clear" class is small (29 held-out frames), so its per-class accuracy moves in large steps.
-- The online judge is only as good as its agreement with humans. Measure it (step 6) before you
+- The online judge is only as good as its agreement with humans. Measure it (step 7) before you
   read its scores; a free default model can be far off.
 - Links stored in Opik trace metadata (`em_url`) may show as plain text; use the clickable links
   on the Comet side (HTML tab) or copy the experiment key.

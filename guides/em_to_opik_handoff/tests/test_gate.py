@@ -11,6 +11,7 @@ from roadwork_demo.gate import (
     item_scores,
     latest,
     paired,
+    require_current_in_production,
     same_dataset_version,
     sign_test_p,
 )
@@ -36,8 +37,14 @@ class FakeModel:
     def status(self, version):
         return self.statuses[version]
 
+    def find_versions(self, status=None):
+        return sorted((v for v, s in self.statuses.items() if status in (None, s)), reverse=True)
 
-def fake_experiment(name, version_id, scores):
+
+CONFIG = {"verdict_model": "provider/model-a", "prompts": {"roadwork-verdict": "prompt text"}}
+
+
+def fake_experiment(name, version_id, scores, metadata=CONFIG):
     """Experiment with one item per (dataset_item_id, verdict_accuracy value); None = not scored."""
     items = [
         SimpleNamespace(
@@ -50,7 +57,7 @@ def fake_experiment(name, version_id, scores):
     return SimpleNamespace(
         name=name,
         get_items=lambda: items,
-        get_experiment_data=lambda: SimpleNamespace(dataset_version_id=version_id),
+        get_experiment_data=lambda: SimpleNamespace(dataset_version_id=version_id, metadata=metadata),
     )
 
 
@@ -119,6 +126,25 @@ def test_apply_reports_a_deferred_status_change_and_keeps_the_current_version():
     assert len(lines) == 1 and "Staging" in lines[0] and "2.0.0" in lines[0]
 
 
+def test_apply_is_allowed_over_the_one_production_version():
+    assert require_current_in_production(FakeModel(), "1.0.0") is None
+
+
+def test_apply_is_refused_when_the_version_to_beat_is_not_in_production():
+    model = FakeModel()
+    model.statuses = {"1.0.0": "Production", "2.0.0": "Staging", "3.0.0": "Staging"}
+    # WHY: promoting 3.0.0 over 2.0.0 would leave 1.0.0 in Production, never compared with 3.0.0.
+    with pytest.raises(GateRefusal, match=r"2\.0\.0 is not the Production version.*1\.0\.0"):
+        require_current_in_production(model, "2.0.0")
+
+
+def test_apply_is_refused_when_several_versions_are_in_production():
+    model = FakeModel()
+    model.statuses = {"1.0.0": "Production", "2.0.0": "Production", "3.0.0": "Staging"}
+    with pytest.raises(GateRefusal, match="2.0.0, 1.0.0"):
+        require_current_in_production(model, "2.0.0")
+
+
 def test_dataset_versions_must_match_and_be_known():
     assert same_dataset_version("v1", "v1") is True
     assert same_dataset_version("v1", "v2") is False
@@ -143,6 +169,31 @@ def test_compare_refuses_experiments_on_different_dataset_versions():
     current = fake_experiment("detector_vlm-1.0.0", "v1", {"a": 0.0})
     with pytest.raises(GateRefusal, match="dataset version"):
         compare(candidate, current)
+
+
+def test_compare_refuses_experiments_run_with_different_verdict_models():
+    candidate = fake_experiment(
+        "detector_vlm-2.0.0", "v1", {"a": 1.0}, CONFIG | {"verdict_model": "provider/model-b"}
+    )
+    current = fake_experiment("detector_vlm-1.0.0", "v1", {"a": 0.0})
+    # WHY: otherwise a promote could reflect the model change, not the detector.
+    with pytest.raises(GateRefusal, match="verdict_model.*model-b.*model-a"):
+        compare(candidate, current)
+
+
+def test_compare_refuses_experiments_run_with_different_prompts():
+    candidate = fake_experiment(
+        "detector_vlm-2.0.0", "v1", {"a": 1.0}, CONFIG | {"prompts": {"roadwork-verdict": "new"}}
+    )
+    current = fake_experiment("detector_vlm-1.0.0", "v1", {"a": 0.0})
+    with pytest.raises(GateRefusal, match="prompts"):
+        compare(candidate, current)
+
+
+def test_compare_accepts_experiments_without_a_recorded_configuration():
+    candidate = fake_experiment("detector_vlm-2.0.0", "v1", {"a": 1.0}, None)
+    current = fake_experiment("detector_vlm-1.0.0", "v1", {"a": 0.0}, None)
+    assert compare(candidate, current).delta == 1.0
 
 
 def test_compare_refuses_experiments_that_share_no_items():

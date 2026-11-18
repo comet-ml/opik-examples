@@ -24,7 +24,7 @@ import os
 import sys
 from pathlib import Path
 
-from roadwork_demo.config import REPO_ROOT, Settings, get_settings
+from roadwork_demo.config import REPO_ROOT, Settings, exit_if_no_comet, get_settings
 from roadwork_demo.registry import labels_fingerprint, latest_artifact
 
 
@@ -53,6 +53,12 @@ def main() -> None:
     args = ap.parse_args()
 
     s = get_settings()
+    exit_if_no_comet(
+        s,
+        f"fine-tune {args.model} for {args.epochs} epochs at {args.imgsz} px on Artifact "
+        f"'{s.dataset_artifact}', tracked as '{Path(args.model).stem}-{args.name}' in Comet "
+        f"project '{s.project}'",
+    )
     os.environ["COMET_PROJECT_NAME"] = s.project
     os.environ["COMET_MODEL_NAME"] = s.registry_model
     os.environ.setdefault("COMET_MAX_IMAGE_PREDICTIONS", "100")

@@ -18,7 +18,7 @@ from pathlib import Path
 
 from comet_ml import API
 
-from roadwork_demo.config import REPO_ROOT, get_settings
+from roadwork_demo.config import REPO_ROOT, exit_if_no_comet, get_settings
 from roadwork_demo.data import load_eval_manifest
 from roadwork_demo.pipeline import get_handoff, load_detector, registry_cache_dir
 from roadwork_demo.registry import STATUS_PRODUCTION, initial_status, next_version, registered_version
@@ -38,6 +38,11 @@ def main() -> None:
     args = ap.parse_args()
 
     s = get_settings()
+    exit_if_no_comet(
+        s,
+        f"register the training run '{args.name}' as the next version of '{s.registry_model}' "
+        "in the Comet Model Registry",
+    )
     last_path = args.summary
     if not last_path.exists():
         sys.exit(f"{last_path} not found. Run scripts/02_train.py first.")

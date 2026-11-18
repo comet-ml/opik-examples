@@ -101,6 +101,12 @@ def write_data_yaml(out_dir: Path, classes: list[str]) -> Path:
     return path
 
 
+def portable_data_yaml(text: str) -> str:
+    """data.yaml for sharing: the dataset root becomes '.', so no local absolute path is published."""
+    lines = text.splitlines(keepends=True)
+    return "".join("path: .\n" if line.startswith("path:") else line for line in lines)
+
+
 _CLOSED = re.compile(r"fully block|road closed|road is closed")
 _NOT_OWN_ROAD = re.compile(
     r"intersecting|sidewalk|side road|side street|crosswalk|bike lane|\blanes?\b|parking|"

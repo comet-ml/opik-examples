@@ -6,6 +6,7 @@ Compares the Opik experiments detector_vlm-<candidate> and detector_vlm-<current
 on verdict accuracy. Both must have run on the same dataset version. Without --apply it only
 prints. With --apply a promote makes the candidate Production in the Comet Model Registry and the
 previous Production version Staging, and the decision is written on both training experiments.
+A promote is only applied over the one Production version: --apply refuses any other --current.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from roadwork_demo.verdicts import VERDICT_ACCURACY
 
 Decision = Literal["promote", "hold"]
 GATE_VARIANT = "detector_vlm"
+# WHY: with a different verdict model or prompt, a difference in accuracy is not the detector's.
+SAME_IN_BOTH = ("verdict_model", "prompts")
 
 
 class GateRefusal(ValueError):
@@ -99,13 +102,23 @@ def item_scores(experiment: Any, score_name: str = VERDICT_ACCURACY) -> dict[str
 
 def compare(candidate: Any, current: Any, score_name: str = VERDICT_ACCURACY) -> Paired:
     """Paired comparison of two Opik experiments; GateRefusal if it would not be a fair one."""
-    a = candidate.get_experiment_data().dataset_version_id
-    b = current.get_experiment_data().dataset_version_id
+    data_a, data_b = candidate.get_experiment_data(), current.get_experiment_data()
+    a, b = data_a.dataset_version_id, data_b.dataset_version_id
     if not same_dataset_version(a, b):
         raise GateRefusal(
             f"{candidate.name} ran on dataset version {a} and {current.name} on {b}. "
             "Re-run both on the current dataset version before comparing them."
         )
+    config_a, config_b = data_a.metadata or {}, data_b.metadata or {}
+    for key in SAME_IN_BOTH:
+        value_a, value_b = config_a.get(key), config_b.get(key)
+        if value_a != value_b:
+            both_short = isinstance(value_a, str) and isinstance(value_b, str)
+            detail = f" ({value_a} against {value_b})" if both_short else ""
+            raise GateRefusal(
+                f"{candidate.name} and {current.name} were run with a different {key}{detail}. "
+                "Re-run both with the same verdict model and prompt before comparing them."
+            )
     try:
         return paired(item_scores(candidate, score_name), item_scores(current, score_name))
     except ValueError as exc:
@@ -118,6 +131,22 @@ def gate_notes(decision: Decision, candidate: str, current: str, delta: float) -
         f"{decision} vs {current}, delta={delta:+.3f}",
         f"candidate {candidate}: {decision}, delta={delta:+.3f}",
     )
+
+
+def require_current_in_production(model: Any, current: str) -> None:
+    """GateRefusal unless `current` is the one Production version; a promote demotes only that one."""
+    production = model.find_versions(status=STATUS_PRODUCTION)
+    if len(production) > 1:
+        raise GateRefusal(
+            f"several versions are in Production ({', '.join(production)}). "
+            "Leave one of them in Production in the Model Registry first."
+        )
+    if production != [current]:
+        raise GateRefusal(
+            f"{current} is not the Production version (in Production: {', '.join(production) or 'none'}). "
+            "A promote would leave a version in Production that the candidate was never compared "
+            "with. Compare against the deployed one: --current production."
+        )
 
 
 def apply_decision(model: Any, candidate: str, current: str, decision: Decision) -> list[str]:
@@ -209,12 +238,13 @@ def main() -> None:
     from comet_ml import API
 
     api = API()
-    for line in apply_decision(
-        api.get_model(s.workspace, s.registry_model),
-        candidate.model_version,
-        current.model_version,
-        decision,
-    ):
+    model = api.get_model(s.workspace, s.registry_model)
+    if decision == "promote":
+        try:
+            require_current_in_production(model, current.model_version)
+        except GateRefusal as exc:
+            raise SystemExit(f"Refusing to apply: {exc} Nothing was written.") from exc
+    for line in apply_decision(model, candidate.model_version, current.model_version, decision):
         print(line)
     notes = gate_notes(decision, candidate.model_version, current.model_version, result.delta)
     for handoff, note in zip((candidate, current), notes, strict=True):

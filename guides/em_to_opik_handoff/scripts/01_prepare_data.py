@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import sys
 import zipfile
@@ -21,11 +20,12 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from roadwork_demo.config import Settings, get_settings
+from roadwork_demo.config import Settings, comet_ready, get_settings
 from roadwork_demo.data import (
     build_image_index,
     convert_split,
     find_image,
+    portable_data_yaml,
     select_eval_frames,
     verdict_from_tags,
     write_data_yaml,
@@ -78,7 +78,10 @@ def get_or_log_dataset_artifact(s: Settings, yolo_dir: Path) -> str:
         for path in sorted(labels_dir.rglob("*.txt")):
             z.write(path, path.relative_to(labels_dir))
     artifact.add(str(labels_zip), logical_path="labels.zip")
-    artifact.add(str(yolo_dir / "data.yaml"), logical_path="data.yaml")
+    # WHY: the local data.yaml starts with this machine's absolute dataset path.
+    shared_yaml = s.data_dir / "data.portable.yaml"
+    shared_yaml.write_text(portable_data_yaml((yolo_dir / "data.yaml").read_text()))
+    artifact.add(str(shared_yaml), logical_path="data.yaml")
     artifact.add_remote(SOURCE_URL, logical_path="images")
 
     experiment = comet_ml.start(workspace=s.workspace or None, project_name=s.project)
@@ -168,7 +171,7 @@ def main() -> None:
 
     if args.no_comet:
         print("Skipping the dataset Artifact (--no-comet).")
-    elif not (os.environ.get("COMET_API_KEY") and s.workspace):
+    elif not comet_ready(s):
         print(
             f"[DRY RUN] COMET_API_KEY or COMET_WORKSPACE not set: would log the labels as Artifact "
             f"'{s.dataset_artifact}' (fingerprint {labels_fingerprint(out)}) "

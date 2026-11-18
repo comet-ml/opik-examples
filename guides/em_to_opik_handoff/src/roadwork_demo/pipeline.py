@@ -100,7 +100,8 @@ def _overlay_path(handoff: Handoff, image_path: Path) -> Path:
     )
 
 
-@opik.track(type="tool", name="detector", ignore_arguments=["handoff"])
+# WHY: image_path is a local absolute path; traces carry the file name instead.
+@opik.track(type="tool", name="detector", ignore_arguments=["handoff", "image_path"])
 def detect(image_path: str, handoff: Handoff) -> list[dict]:
     """Run the detector the handoff names. Span carries the EM / registry identifiers."""
     model = load_detector(handoff)
@@ -116,6 +117,7 @@ def detect(image_path: str, handoff: Handoff) -> list[dict]:
     ]
     overlay = draw_overlay(Path(image_path), detections, _overlay_path(handoff, Path(image_path)))
     opik_context.update_current_span(
+        input={"file_name": Path(image_path).name},
         metadata=handoff.as_metadata() | {"n_detections": len(detections), "confidence": CONFIDENCE},
         tags=[handoff.model_tag()],
         attachments=[Attachment(data=str(overlay), content_type="image/jpeg")],
@@ -161,7 +163,11 @@ def trace_identity(
     return [handoff.model_tag(), *tags], handoff.as_metadata() | metadata
 
 
-@opik.track(name="road_obstruction_triage", project_name=settings.project, ignore_arguments=["handoff"])
+@opik.track(
+    name="road_obstruction_triage",
+    project_name=settings.project,
+    ignore_arguments=["handoff", "image_path"],
+)
 def run_frame(
     image_path: str, variant: Variant, handoff: Handoff | None, extra_tags: list[str] | None = None
 ) -> dict:

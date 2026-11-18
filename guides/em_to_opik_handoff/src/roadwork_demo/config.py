@@ -72,6 +72,20 @@ def exit_if_dry_run(s: Settings, would: str) -> None:
         raise SystemExit(0)
 
 
+def comet_ready(s: Settings) -> bool:
+    return bool(os.environ.get("COMET_API_KEY") and s.workspace)
+
+
+def exit_if_no_comet(s: Settings, would: str) -> None:
+    """Stop a script that needs Comet EM when there are no credentials, saying what it would do."""
+    if not comet_ready(s):
+        print(
+            f"[DRY RUN] COMET_API_KEY or COMET_WORKSPACE not set: would {would}. "
+            "scripts/00_dry_run.py is the credentials-free check."
+        )
+        raise SystemExit(0)
+
+
 class HandoffError(RuntimeError):
     pass
 

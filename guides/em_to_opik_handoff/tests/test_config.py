@@ -5,6 +5,7 @@ import pytest
 from roadwork_demo.config import (
     Handoff,
     exit_if_dry_run,
+    exit_if_no_comet,
     experiment_name,
     get_settings,
     is_dev_experiment,
@@ -121,3 +122,28 @@ def test_scripts_continue_with_opik_credentials(monkeypatch):
     monkeypatch.setenv("OPIK_API_KEY", "k")
     monkeypatch.setenv("OPIK_WORKSPACE", "ws")
     assert exit_if_dry_run(get_settings(), "run the experiments") is None
+
+
+def test_comet_scripts_stop_cleanly_without_comet_credentials(monkeypatch, capsys):
+    monkeypatch.delenv("COMET_API_KEY", raising=False)
+    monkeypatch.setenv("COMET_WORKSPACE", "ws")
+    with pytest.raises(SystemExit) as stop:
+        exit_if_no_comet(get_settings(), "train the detector")
+    assert stop.value.code == 0
+    out = capsys.readouterr().out
+    assert out.startswith("[DRY RUN]") and "train the detector" in out and "COMET_API_KEY" in out
+
+
+def test_comet_scripts_stop_cleanly_without_a_workspace(monkeypatch):
+    monkeypatch.setenv("COMET_API_KEY", "k")
+    monkeypatch.delenv("COMET_WORKSPACE", raising=False)
+    monkeypatch.delenv("OPIK_WORKSPACE", raising=False)
+    with pytest.raises(SystemExit) as stop:
+        exit_if_no_comet(get_settings(), "train the detector")
+    assert stop.value.code == 0
+
+
+def test_comet_scripts_continue_with_comet_credentials(monkeypatch):
+    monkeypatch.setenv("COMET_API_KEY", "k")
+    monkeypatch.setenv("COMET_WORKSPACE", "ws")
+    assert exit_if_no_comet(get_settings(), "train the detector") is None

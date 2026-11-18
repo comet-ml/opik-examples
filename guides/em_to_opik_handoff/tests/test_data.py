@@ -207,3 +207,14 @@ def test_stale_item_ids_finds_removed_and_relabelled_items():
         {"id": "3", "file_name": "gone.jpg", "expected_verdict": "clear"},  # left the manifest
     ]
     assert stale_item_ids(existing, manifest) == ["2", "3"]
+
+
+def test_data_yaml_for_the_artifact_carries_no_local_path(tmp_path):
+    from roadwork_demo.data import portable_data_yaml, write_data_yaml
+
+    local = write_data_yaml(tmp_path, ["Cone", "Drum"]).read_text()
+    assert str(tmp_path.resolve()) in local
+    portable = portable_data_yaml(local)
+    assert str(tmp_path.resolve()) not in portable
+    assert portable.splitlines()[0] == "path: ."
+    assert portable.splitlines()[1:] == local.splitlines()[1:]
