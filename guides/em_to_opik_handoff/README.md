@@ -203,6 +203,7 @@ You also need the following:
 | `OPIK_ONLINE_JUDGE_MODEL` | No | The judge model that scores production traces. It runs inside Opik. The default is `opik-free-model`, which needs no provider key. |
 | `DETECTOR_VERSION` | No | The detector that the Opik side uses: `production` (the default), a registry version such as `1.0.0`, or `stock`. |
 | `REGISTRY_MODEL`, `DATASET_ARTIFACT`, `OPIK_DATASET` | No | The names of the registry model, the dataset Artifact and the Opik dataset. The defaults are `roadwork-yolo11s`, `roadwork-yolo` and `roadwork-verdicts`. |
+| `PROMPT_NAME`, `QUEUE_NAME` | No | The names of the verdict prompt in the Opik Prompt Library and of the review queue. The defaults are `roadwork-verdict` and `roadwork-review`. |
 | `DATA_DIR` | No | The folder that holds the dataset. The default is `./data`. |
 | `OPIK_URL_OVERRIDE` | No | The base URL of a self-hosted Opik installation. The default is Opik Cloud. |
 
@@ -260,8 +261,11 @@ to rehearse without touching your real assets, set `OPIK_PROJECT_NAME`, `REGISTR
 **Running a step again.** Every step is safe to repeat. Registration is skipped when the
 training run is already registered. The dataset Artifact is reused when the labels have not
 changed. The Opik dataset is brought in line with the list of evaluation photos. The review queue
-is only filled up to its target size. If you run a full Opik experiment a second time, Opik
-keeps both, and the gate and the results written onto the training run use the newer one.
+is only filled up to its target size for the detector version you run it for, so the traces of
+a newly promoted version get a sample of their own. If you run a full Opik experiment a second
+time, Opik keeps both, and the gate and the results written onto the training run use the newer
+one. If that newer run stopped early, the gate refuses to use it (see
+[How it works](#how-it-works)).
 
 ## What you will see
 
@@ -437,7 +441,8 @@ rule.
 2. **Registration with a status** (`scripts/03_register.py`). The first version of a model is
    registered with the status `Production`, because it is by definition what is deployed today.
    Every later version is registered with the status `Staging`, and it has to earn `Production`
-   through the gate.
+   through the gate. If the script cannot read the registry, it stops with the error. It never
+   treats a failed lookup as "this is the first version".
 3. **The handoff through the registry** (`src/roadwork_demo/registry.py`, function
    `resolve_handoff`). This function is given `production`, a version number or `stock`. It asks
    the Model Registry for that version, reads from the version which training run produced it,
@@ -456,18 +461,24 @@ rule.
    judge model that sees the photo and the answer, and does not see the human label. The script
    also logs the accuracy for each of the three verdicts as a score of the whole experiment. It
    records the version of the Opik dataset in the experiment configuration and on the training
-   run.
+   run. The accuracy without a detector is written onto the training run only when the
+   `vlm_only` experiment used the same dataset version, the same vision-language model and the
+   same prompt. Otherwise the field says `not comparable`.
 6. **The gate** (`src/roadwork_demo/gate.py`). The gate refuses to compare two experiments that
    used different versions of the dataset, a different vision-language model or a different
    prompt, because the comparison would not be fair. It pairs the two experiments on the photos
-   that both of them scored. It reports the difference in accuracy, the number of photos the
-   candidate won and lost, and a sign test. It promotes the candidate when the gain is at least
-   the value of `--min-delta`, which is 0.03 by default. With `--apply`, it first sets the
-   candidate to `Production` and then sets the previous version to `Staging`. If the first
-   change fails or is waiting for approval, nothing else is changed. With `--apply`, the gate
+   that both of them scored, and it refuses to decide when fewer than 9 in 10 photos were scored
+   by both, which is what an experiment that stopped early looks like. It reports the difference
+   in accuracy, the number of photos the candidate won and lost, and a sign test. It promotes
+   the candidate when the gain is at least the value of `--min-delta`, which is 0.03 by default.
+   With `--apply`, it first sets the candidate to `Production` and then sets the previous
+   version to `Staging`. If the first change fails or is waiting for approval, nothing else is
+   changed. With `--apply`, the gate
    also refuses to promote when the version it compared against is not the one that is in
    `Production`. This way the registry never ends up with a deployed version that the candidate
-   was not compared with.
+   was not compared with. If the registry does not take a status change, the note on the
+   training runs says `promote (not applied)` and the command ends with an error, so a decision
+   that did not reach the registry cannot be mistaken for one that did.
 7. **Human review and automatic scoring** (scripts `06` to `09`). A sample of traces goes to an
    annotation queue, which is a list in the Opik user interface where a person reviews traces
    one by one. `07_agreement.py` reports how often the human and the application agree, and how
@@ -518,6 +529,11 @@ tests/               unit tests for the logic that needs no network
 - **The `clear` class is small.** It has 29 photos, so its accuracy moves in large steps.
 - **An automatic judge is only as good as its agreement with humans.** Measure that agreement
   in step 7 before you read the judge's scores. A free default model can be far off.
+- **The gate note on a training run is the latest one only.** Every run of the gate with
+  `--apply` overwrites the field `opik_gate` on both training runs it compared. When a third
+  version is later compared with version 2.0.0, the note that says why 2.0.0 was promoted is
+  replaced by the note about the new candidate. The status history in the Model Registry keeps
+  the full record.
 - **Links to Comet in Opik trace metadata may not be clickable.** The field `em_url` can show as
   plain text. Use the links on the Comet side, in the HTML tab, or copy the key of the training
   run.

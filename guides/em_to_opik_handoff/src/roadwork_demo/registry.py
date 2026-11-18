@@ -17,10 +17,8 @@ MAP50_95 = "metrics/mAP50-95(B)"
 
 
 def next_version(existing: list[str]) -> str:
-    """1.0.0 for a new model, else bump the major of the highest version.
-
-    Versions are compared as integer tuples so "10.0.0" sorts after "9.0.0".
-    """
+    """1.0.0 for a new model, else bump the major of the highest version."""
+    # WHY: compared as integer tuples so "10.0.0" sorts after "9.0.0".
     parsed = []
     for v in existing:
         try:
@@ -33,10 +31,7 @@ def next_version(existing: list[str]) -> str:
 
 
 def registered_version(registry_other: str | None, registry_model: str) -> str | None:
-    """Version already registered from an experiment, read from its 'registry_model' field.
-
-    The field is written as "<model>:<version>" by scripts/03_register.py.
-    """
+    """Version registered from an experiment, read from its "<model>:<version>" 'registry_model' field."""
     if not registry_other or ":" not in registry_other:
         return None
     name, version = registry_other.rsplit(":", 1)
@@ -95,9 +90,18 @@ def pick_version(detector: str, versions: list[str], production: list[str]) -> s
     return detector
 
 
-def initial_status(production: list[str]) -> str:
-    """The first registered model is what is deployed; every later one has to pass the gate."""
-    return STATUS_STAGING if production else STATUS_PRODUCTION
+def existing_versions(api: Any, workspace: str, registry_model: str) -> list[str]:
+    """Versions of a registry model; empty only when the model was never registered."""
+    # WHY: asked from the list of model names, not from a failed lookup. A timeout or a refused
+    # key must end the script, not make the next version look like the first one.
+    if registry_model not in api.get_registry_model_names(workspace):
+        return []
+    return api.get_model(workspace, registry_model).find_versions()
+
+
+def initial_status(existing: list[str]) -> str:
+    """The first registered version is what is deployed; every later one has to pass the gate."""
+    return STATUS_STAGING if existing else STATUS_PRODUCTION
 
 
 def stock_handoff(workspace: str, project: str) -> Handoff:
@@ -110,7 +114,6 @@ def stock_handoff(workspace: str, project: str) -> Handoff:
         registry_model=STOCK_MODEL,
         model_version=STOCK_VERSION,
         dataset_artifact="none",
-        classes=[],
         map50=0.0,
         map50_95=0.0,
     )
@@ -155,7 +158,6 @@ def resolve_handoff(
         registry_model=registry_model,
         model_version=version,
         dataset_artifact=artifact[0] if artifact else "unknown",
-        classes=[],
         map50=_metric(experiment, MAP50),
         map50_95=_metric(experiment, MAP50_95),
     )

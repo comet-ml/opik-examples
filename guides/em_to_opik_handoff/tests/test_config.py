@@ -24,7 +24,6 @@ def h():
         "roadwork-yolo11s",
         "1.0.0",
         "roadwork-yolo:1.0.0",
-        ["Cone"],
         0.5,
         0.3,
     )
@@ -33,7 +32,8 @@ def h():
 def test_model_tag_and_metadata(h):
     assert h.model_tag() == "detector:roadwork-yolo11s:1.0.0"
     md = h.as_metadata()
-    assert md["em_url"] == h.experiment_url and "classes" not in md
+    assert md["em_url"] == h.experiment_url and md["model_version"] == "1.0.0"
+    assert not hasattr(h, "classes")
 
 
 def test_defaults(monkeypatch):
@@ -93,10 +93,9 @@ def test_full_run_means_every_item_of_the_default_dataset():
 
 
 def test_link_back_only_for_full_run_on_registered_model():
-    full = dict(dataset_name="roadwork-verdicts", default_dataset="roadwork-verdicts", nb_samples=None)
-    assert should_link_back(model_version="1.0.0", **full) is True
-    assert should_link_back(model_version="stock", **full) is False
-    assert should_link_back(model_version="1.0.0", **(full | {"nb_samples": 5})) is False
+    assert should_link_back("1.0.0", full_run=True) is True
+    assert should_link_back("stock", full_run=True) is False
+    assert should_link_back("1.0.0", full_run=False) is False
 
 
 def test_dev_experiments_are_recognised_by_name_and_stock_is_not_one():

@@ -27,10 +27,7 @@ def image_block(b64_jpeg: str) -> dict:
 def structured_json(
     model: str, system: str, content: list[dict], schema: dict, max_tokens: int
 ) -> tuple[dict | None, str]:
-    """One user turn answered as JSON matching `schema`.
-
-    Returns (parsed, raw_text). parsed is None when the model refused or the text is not a JSON object.
-    """
+    """One user turn answered as (parsed JSON matching `schema`, raw text); parsed is None on a refusal."""
     response = completion()(
         model=model,
         max_tokens=max_tokens,

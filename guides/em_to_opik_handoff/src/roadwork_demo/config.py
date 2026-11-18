@@ -101,7 +101,6 @@ class Handoff:
     registry_model: str
     model_version: str
     dataset_artifact: str
-    classes: list[str]
     map50: float
     map50_95: float
 
@@ -109,10 +108,7 @@ class Handoff:
         return f"detector:{self.registry_model}:{self.model_version}"
 
     def as_metadata(self) -> dict:
-        md = asdict(self)
-        md.pop("classes")
-        md["em_url"] = self.experiment_url
-        return md
+        return asdict(self) | {"em_url": self.experiment_url}
 
 
 def is_full_run(dataset_name: str, default_dataset: str, nb_samples: int | None) -> bool:
@@ -121,8 +117,8 @@ def is_full_run(dataset_name: str, default_dataset: str, nb_samples: int | None)
 
 
 def experiment_name(variant: str, model_version: str | None, full_run: bool = True) -> str:
-    """Opik experiment name. Subset and dev-dataset runs get a "-dev" suffix so they never
-    share a name with the full run that the gate and the Comet back-link read."""
+    """Opik experiment name; a run that is not a full run gets the suffix "-dev"."""
+    # WHY the suffix: the gate and the Comet back-link read the full run by name.
     # WHY: vlm_only runs no detector, so one experiment serves every detector version.
     base = variant if variant == "vlm_only" or model_version is None else f"{variant}-{model_version}"
     return base + ("" if full_run else "-dev")
@@ -137,11 +133,7 @@ def variant_tag(variant: str) -> str:
     return f"variant:{variant}"
 
 
-def should_link_back(
-    model_version: str, dataset_name: str, default_dataset: str, nb_samples: int | None
-) -> bool:
-    """Write Opik results onto the Comet experiment only for a full run on a registered model.
-
-    Subset or dev-dataset runs would overwrite the headline numbers with partial ones.
-    """
-    return model_version != STOCK_VERSION and is_full_run(dataset_name, default_dataset, nb_samples)
+def should_link_back(model_version: str, full_run: bool) -> bool:
+    """Write Opik results onto the Comet experiment only for a full run on a registered model."""
+    # WHY: a subset or dev-dataset run would overwrite the headline numbers with partial ones.
+    return full_run and model_version != STOCK_VERSION

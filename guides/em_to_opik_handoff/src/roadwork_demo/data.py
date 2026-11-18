@@ -27,18 +27,6 @@ def find_image(image_index: dict[str, Path], file_name: str) -> Path | None:
     return image_index.get(file_name.lower())
 
 
-def verdict_from_tags(tags: list[str] | None) -> str | None:
-    """Map ROADWork `travel_alteration` tags to a verdict; None means "exclude"."""
-    tags = list(tags or [])
-    if "Fully Blocked" in tags:
-        return "blocked"
-    if "Partially Blocked" in tags or "Lane Shift" in tags:
-        return "partial"
-    if tags == ["None"]:
-        return "clear"
-    return None
-
-
 def coco_bbox_to_yolo(bbox: list[float], img_w: int, img_h: int) -> tuple[float, float, float, float] | None:
     x, y, w, h = bbox
     x1, y1 = max(0.0, x), max(0.0, y)
@@ -115,11 +103,9 @@ _NOT_OWN_ROAD = re.compile(
 
 
 def describes_own_road_closed(description: str) -> bool:
-    """True if a sentence of the human scene description says the road itself is closed.
-
-    ROADWork's "Fully Blocked" tag also covers closed sidewalks and side streets; the
-    free-text description tells them apart.
-    """
+    """True if a sentence of the human scene description says the road itself is closed."""
+    # WHY: ROADWork's "Fully Blocked" tag also covers closed sidewalks and side streets; the
+    # free-text description tells them apart.
     for sentence in re.split(r"[.;]\s*", (description or "").lower()):
         if _CLOSED.search(sentence) and not _NOT_OWN_ROAD.search(sentence):
             return True

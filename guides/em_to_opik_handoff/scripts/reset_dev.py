@@ -16,6 +16,7 @@ import argparse
 
 import opik
 from opik.exceptions import ExperimentNotFound
+from opik.rest_api.core.api_error import ApiError
 
 from roadwork_demo.config import exit_if_dry_run, get_settings, is_dev_experiment
 from roadwork_demo.review import find_review_queue
@@ -58,8 +59,10 @@ def main() -> None:
         client.rest_client.traces.delete_traces(ids=ids[i : i + 500])
     try:
         client.delete_dataset(dev_dataset)
-    except Exception:
-        pass  # already gone
+    except ApiError as exc:
+        # WHY: only "not found" means there was nothing to delete; any other failure must be seen.
+        if exc.status_code != 404:
+            raise
     print("Dev leftovers deleted.")
 
 

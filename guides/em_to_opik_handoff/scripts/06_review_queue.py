@@ -12,6 +12,7 @@ import random
 import opik
 from opik.config import OpikConfig
 from opik.rest_api.types import CategoricalFeedbackDetailCreate, FeedbackCreate_Categorical
+from opik.url_helpers import get_ui_url
 
 from roadwork_demo.config import exit_if_dry_run, get_settings, variant_tag
 from roadwork_demo.pipeline import handoff_or_exit
@@ -76,18 +77,19 @@ def main() -> None:
 
     k = min(len(traces), max(args.minimum, round(len(traces) * args.fraction)))
     chosen = random.Random(7).sample(traces, k)
-    already = {item.id for item in queue.get_items()}
+    queued = {item.id for item in queue.get_items()}
+    eligible = {t.id for t in traces}
     # WHY: only top up to the target. A fresh sample after new traces arrived would otherwise
     # add up to k more traces on every run.
-    add_ids = set(top_up([t.id for t in chosen], already, target=k))
+    add_ids = set(top_up([t.id for t in chosen], queued, eligible, target=k))
     new = [t for t in chosen if t.id in add_ids]
     if new:
         queue.add_traces(new)
     print(
-        f"Queue '{queue.name}': {len(traces)} eligible traces, sample of {k}, "
-        f"{len(new)} added, {len(already)} already queued."
+        f"Queue '{queue.name}': {len(traces)} eligible traces of {handoff.model_tag()}, sample of {k}, "
+        f"{len(new)} added, {len(queued & eligible)} of them already queued."
     )
-    print(f"Annotate at: https://www.comet.com/opik/{OpikConfig().workspace}/annotation-queues/{queue.id}")
+    print(f"Annotate at: {get_ui_url()}{OpikConfig().workspace}/annotation-queues/{queue.id}")
 
 
 if __name__ == "__main__":

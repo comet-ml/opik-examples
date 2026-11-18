@@ -58,7 +58,7 @@ def _handoff():
     from roadwork_demo.config import Handoff
 
     return Handoff(
-        "ws", "p", "abc", "https://x/abc", "roadwork-yolo11s", "1.0.0", "roadwork-yolo:1.0.0", [], 0.4, 0.2
+        "ws", "p", "abc", "https://x/abc", "roadwork-yolo11s", "1.0.0", "roadwork-yolo:1.0.0", 0.4, 0.2
     )
 
 

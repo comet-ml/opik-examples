@@ -23,10 +23,20 @@ Decision = Literal["promote", "hold"]
 GATE_VARIANT = "detector_vlm"
 # WHY: with a different verdict model or prompt, a difference in accuracy is not the detector's.
 SAME_IN_BOTH = ("verdict_model", "prompts")
+# WHY: floats. 0.59 - 0.56 is 0.02999..., and a gain of exactly min_delta has to promote.
+EPSILON = 1e-9
+# Smallest share of the dataset items that both experiments must have scored: 9 in 10.
+MIN_COVERAGE = (9, 10)
 
 
 class GateRefusal(ValueError):
     """The two experiments cannot be compared fairly."""
+
+
+@dataclass
+class Applied:
+    done: bool
+    lines: list[str]
 
 
 @dataclass
@@ -73,7 +83,7 @@ def paired(candidate: dict[str, float], current: dict[str, float]) -> Paired:
 
 def decide(delta: float, min_delta: float = 0.03) -> Decision:
     """Promote only on a real gain of at least `min_delta`; a tie never promotes."""
-    return "promote" if delta > 0 and delta >= min_delta else "hold"
+    return "promote" if delta > 0 and delta >= min_delta - EPSILON else "hold"
 
 
 def same_dataset_version(a: str | None, b: str | None) -> bool:
@@ -81,27 +91,36 @@ def same_dataset_version(a: str | None, b: str | None) -> bool:
 
 
 def latest(experiments: list, name: str):
-    """Most recent experiment named exactly `name`, or None.
-
-    Opik's lookup by name also returns experiments that merely contain the name, and a re-run
-    creates a second experiment with the same name. Ids are time-ordered (UUID v7).
-    """
+    """Most recent experiment named exactly `name`, or None."""
+    # WHY: Opik's lookup by name also returns experiments that merely contain the name, and a
+    # re-run creates a second experiment with the same name. Ids are time-ordered (UUID v7).
     exact = [e for e in experiments if e.name == name]
     return max(exact, key=lambda e: e.id) if exact else None
+
+
+def find_experiment(client: Any, name: str):
+    """Most recent Opik experiment named exactly `name`, or None."""
+    from opik.exceptions import ExperimentNotFound
+
+    try:
+        return latest(client.get_experiments_by_name(name), name)
+    except ExperimentNotFound:
+        return None
 
 
 def item_scores(experiment: Any, score_name: str = VERDICT_ACCURACY) -> dict[str, float]:
     """Per-item value of one feedback score, keyed by dataset item id. Unscored items are left out."""
     scores = {}
-    for item in experiment.get_items():
+    # WHY truncate: only the scores are read; untruncated items carry the images.
+    for item in experiment.get_items(truncate=True):
         for score in item.feedback_scores or []:
             if score["name"] == score_name:
                 scores[item.dataset_item_id] = float(score["value"])
     return scores
 
 
-def compare(candidate: Any, current: Any, score_name: str = VERDICT_ACCURACY) -> Paired:
-    """Paired comparison of two Opik experiments; GateRefusal if it would not be a fair one."""
+def require_comparable(candidate: Any, current: Any) -> None:
+    """GateRefusal unless both experiments ran on one dataset version with one model and prompt."""
     data_a, data_b = candidate.get_experiment_data(), current.get_experiment_data()
     a, b = data_a.dataset_version_id, data_b.dataset_version_id
     if not same_dataset_version(a, b):
@@ -119,17 +138,34 @@ def compare(candidate: Any, current: Any, score_name: str = VERDICT_ACCURACY) ->
                 f"{candidate.name} and {current.name} were run with a different {key}{detail}. "
                 "Re-run both with the same verdict model and prompt before comparing them."
             )
+
+
+def compare(candidate: Any, current: Any, score_name: str = VERDICT_ACCURACY) -> Paired:
+    """Paired comparison of two Opik experiments; GateRefusal if it would not be a fair one."""
+    require_comparable(candidate, current)
     try:
-        return paired(item_scores(candidate, score_name), item_scores(current, score_name))
+        result = paired(item_scores(candidate, score_name), item_scores(current, score_name))
     except ValueError as exc:
         raise GateRefusal(f"{candidate.name} and {current.name}: {exc}.") from exc
+    total = result.n + result.dropped
+    # WHY: an aborted run that is the newest of its name would otherwise decide on a few items.
+    if result.n * MIN_COVERAGE[1] < total * MIN_COVERAGE[0]:
+        raise GateRefusal(
+            f"{candidate.name} and {current.name} were both scored on only {result.n} of {total} "
+            "dataset items. Re-run the incomplete experiment before comparing them."
+        )
+    return result
 
 
-def gate_notes(decision: Decision, candidate: str, current: str, delta: float) -> tuple[str, str]:
+def gate_notes(
+    decision: Decision, candidate: str, current: str, delta: float, applied: bool = True
+) -> tuple[str, str]:
     """The `opik_gate` value for the candidate's and for the current version's training experiment."""
+    # WHY: the note must not say "promote" when the registry did not take the status change.
+    outcome = decision if applied else f"{decision} (not applied)"
     return (
-        f"{decision} vs {current}, delta={delta:+.3f}",
-        f"candidate {candidate}: {decision}, delta={delta:+.3f}",
+        f"{outcome} vs {current}, delta={delta:+.3f}",
+        f"candidate {candidate}: {outcome}, delta={delta:+.3f}",
     )
 
 
@@ -149,10 +185,10 @@ def require_current_in_production(model: Any, current: str) -> None:
         )
 
 
-def apply_decision(model: Any, candidate: str, current: str, decision: Decision) -> list[str]:
-    """Write a promote to the registry. Returns what happened as text; never raises."""
+def apply_decision(model: Any, candidate: str, current: str, decision: Decision) -> Applied:
+    """Write a promote to the registry. Reports what happened and whether it is complete; never raises."""
     if decision != "promote":
-        return []
+        return Applied(done=True, lines=[])
     lines = []
     # WHY: candidate first. If its promotion fails or waits for approval, the current version
     # must stay in Production, so the demotion is not attempted.
@@ -162,27 +198,22 @@ def apply_decision(model: Any, candidate: str, current: str, decision: Decision)
             actual = model.status(version)
         except Exception as exc:
             lines.append(f"{version}: could not set status {status} ({exc}); nothing else was changed")
-            break
+            return Applied(done=False, lines=lines)
         if actual != status:
             lines.append(
                 f"{version}: requested status {status}, the registry still shows {actual} "
                 "(an approval request may be pending); nothing else was changed"
             )
-            break
+            return Applied(done=False, lines=lines)
         lines.append(f"{version}: status is now {status}")
-    return lines
+    return Applied(done=True, lines=lines)
 
 
 def _load_experiment(client: Any, version: str) -> Any:
-    from opik.exceptions import ExperimentNotFound
-
     from roadwork_demo.config import experiment_name
 
     name = experiment_name(GATE_VARIANT, version)
-    try:
-        experiment = latest(client.get_experiments_by_name(name), name)
-    except ExperimentNotFound:
-        experiment = None
+    experiment = find_experiment(client, name)
     if experiment is None:
         raise SystemExit(
             f"Opik experiment not found: {name}. Run "
@@ -244,9 +275,12 @@ def main() -> None:
             require_current_in_production(model, current.model_version)
         except GateRefusal as exc:
             raise SystemExit(f"Refusing to apply: {exc} Nothing was written.") from exc
-    for line in apply_decision(model, candidate.model_version, current.model_version, decision):
+    applied = apply_decision(model, candidate.model_version, current.model_version, decision)
+    for line in applied.lines:
         print(line)
-    notes = gate_notes(decision, candidate.model_version, current.model_version, result.delta)
+    notes = gate_notes(
+        decision, candidate.model_version, current.model_version, result.delta, applied=applied.done
+    )
     for handoff, note in zip((candidate, current), notes, strict=True):
         experiment = api.get_experiment_by_key(handoff.experiment_key)
         if experiment is None:
@@ -254,6 +288,8 @@ def main() -> None:
             continue
         experiment.log_other("opik_gate", note)
         print(f"{handoff.model_version}: opik_gate = '{note}' on {handoff.experiment_url}")
+    if not applied.done:
+        raise SystemExit("The promote did not reach the Model Registry in full; check the statuses there.")
 
 
 if __name__ == "__main__":

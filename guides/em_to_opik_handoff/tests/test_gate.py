@@ -7,6 +7,7 @@ from roadwork_demo.gate import (
     apply_decision,
     compare,
     decide,
+    find_experiment,
     gate_notes,
     item_scores,
     latest,
@@ -56,7 +57,7 @@ def fake_experiment(name, version_id, scores, metadata=CONFIG):
     ]
     return SimpleNamespace(
         name=name,
-        get_items=lambda: items,
+        get_items=lambda truncate=False: items if truncate else pytest.fail("items fetched untruncated"),
         get_experiment_data=lambda: SimpleNamespace(dataset_version_id=version_id, metadata=metadata),
     )
 
@@ -99,31 +100,42 @@ def test_decide():
     assert decide(-0.05) == "hold"
 
 
+def test_decide_promotes_at_the_threshold_despite_float_rounding():
+    # WHY: 59 against 56 correct of 100 is a gain of 3 points, but 0.59 - 0.56 < 0.03 in floats.
+    assert 59 / 100 - 56 / 100 < 0.03
+    assert decide(59 / 100 - 56 / 100) == "promote"
+    assert decide(56 / 100 - 53 / 100) == "promote"
+    assert decide(0.029) == "hold"
+
+
 def test_apply_promote_swaps_statuses_candidate_first():
     model = FakeModel()
-    lines = apply_decision(model, "2.0.0", "1.0.0", "promote")
-    assert model.calls == [("2.0.0", "Production"), ("1.0.0", "Staging")] and len(lines) == 2
+    applied = apply_decision(model, "2.0.0", "1.0.0", "promote")
+    assert model.calls == [("2.0.0", "Production"), ("1.0.0", "Staging")]
+    assert applied.done is True and len(applied.lines) == 2
     assert model.statuses == {"1.0.0": "Staging", "2.0.0": "Production"}
 
 
 def test_apply_hold_changes_nothing():
     model = FakeModel()
-    assert apply_decision(model, "2.0.0", "1.0.0", "hold") == [] and model.calls == []
+    applied = apply_decision(model, "2.0.0", "1.0.0", "hold")
+    assert applied.done is True and applied.lines == [] and model.calls == []
 
 
 def test_apply_reports_a_refused_status_change_instead_of_raising():
     model = FakeModel(raises=RuntimeError("approval required"))
-    lines = apply_decision(model, "2.0.0", "1.0.0", "promote")
-    assert any("approval required" in line for line in lines)
+    applied = apply_decision(model, "2.0.0", "1.0.0", "promote")
+    assert applied.done is False and any("approval required" in line for line in applied.lines)
     # WHY: demoting the current version after the promote failed would leave nothing in Production.
     assert model.calls == [("2.0.0", "Production")]
 
 
 def test_apply_reports_a_deferred_status_change_and_keeps_the_current_version():
     model = FakeModel(deferred=True)
-    lines = apply_decision(model, "2.0.0", "1.0.0", "promote")
+    applied = apply_decision(model, "2.0.0", "1.0.0", "promote")
     assert model.calls == [("2.0.0", "Production")]
-    assert len(lines) == 1 and "Staging" in lines[0] and "2.0.0" in lines[0]
+    assert applied.done is False
+    assert len(applied.lines) == 1 and "Staging" in applied.lines[0] and "2.0.0" in applied.lines[0]
 
 
 def test_apply_is_allowed_over_the_one_production_version():
@@ -203,11 +215,20 @@ def test_compare_refuses_experiments_that_share_no_items():
         compare(candidate, current)
 
 
-def test_compare_with_a_partial_candidate_uses_shared_items_and_counts_the_dropped():
+def test_compare_refuses_an_experiment_that_scored_only_part_of_the_items():
+    # WHY: an aborted run that is the newest of its name must not promote on a handful of items.
     candidate = fake_experiment("detector_vlm-2.0.0", "v1", {"a": 1.0})
     current = fake_experiment("detector_vlm-1.0.0", "v1", {"a": 0.0, "b": 1.0, "c": 1.0})
+    with pytest.raises(GateRefusal, match="only 1 of 3 dataset items"):
+        compare(candidate, current)
+
+
+def test_compare_tolerates_a_few_items_that_one_side_could_not_score():
+    ids = [f"item-{i}" for i in range(20)]
+    candidate = fake_experiment("detector_vlm-2.0.0", "v1", dict.fromkeys(ids, 1.0))
+    current = fake_experiment("detector_vlm-1.0.0", "v1", dict.fromkeys(ids[:18], 0.0))
     p = compare(candidate, current)
-    assert (p.n, p.dropped, p.mean_current) == (1, 2, 0.0)
+    assert (p.n, p.dropped) == (18, 2)
 
 
 def test_gate_notes_read_correctly_on_each_training_experiment():
@@ -215,6 +236,26 @@ def test_gate_notes_read_correctly_on_each_training_experiment():
     assert on_candidate == "promote vs 1.0.0, delta=+0.047"
     assert on_current == "candidate 2.0.0: promote, delta=+0.047"
     assert gate_notes("hold", "2.0.0", "1.0.0", -0.01)[0] == "hold vs 1.0.0, delta=-0.010"
+
+
+def test_gate_notes_say_when_a_promote_did_not_reach_the_registry():
+    on_candidate, on_current = gate_notes("promote", "2.0.0", "1.0.0", 0.047, applied=False)
+    assert on_candidate == "promote (not applied) vs 1.0.0, delta=+0.047"
+    assert on_current == "candidate 2.0.0: promote (not applied), delta=+0.047"
+
+
+def test_find_experiment_returns_the_newest_exact_match_or_none():
+    from opik.exceptions import ExperimentNotFound
+
+    old = SimpleNamespace(id="01a1-0001", name="vlm_only")
+    new = SimpleNamespace(id="01a1-0002", name="vlm_only")
+    found = SimpleNamespace(get_experiments_by_name=lambda name: [old, new])
+    assert find_experiment(found, "vlm_only") is new
+
+    def not_found(name):
+        raise ExperimentNotFound(name)
+
+    assert find_experiment(SimpleNamespace(get_experiments_by_name=not_found), "vlm_only") is None
 
 
 def test_latest_picks_the_newest_of_same_named_experiments():

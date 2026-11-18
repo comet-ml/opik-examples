@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import argparse
 import random
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import opik
 
 from roadwork_demo.config import exit_if_dry_run, get_settings
 from roadwork_demo.data import load_eval_manifest
-from roadwork_demo.pipeline import handoff_or_exit, run_frame
+from roadwork_demo.pipeline import handoff_or_exit, load_detector, run_frame
 
 SOURCE_TAG = "source:simulated-traffic"
 
@@ -35,15 +37,21 @@ def main() -> None:
     frames = random.Random(args.seed).sample(pool, min(args.n, len(pool)))
     handoff = handoff_or_exit(args.detector)
     print(f"Detector: {handoff.model_tag()}")
-    failed = 0
-    for i, frame in enumerate(frames, start=1):
+    load_detector(handoff)  # download registry weights once, before worker threads start
+
+    def send(frame: Path) -> str | Exception:
         try:
-            result = run_frame(str(frame), "detector_vlm", handoff, extra_tags=[SOURCE_TAG])
+            return run_frame(str(frame), "detector_vlm", handoff, extra_tags=[SOURCE_TAG])["verdict"]
         except Exception as exc:  # one bad frame must not stop the traffic
-            failed += 1
-            print(f"[{i}/{len(frames)}] {frame.name}: FAILED ({type(exc).__name__}: {exc})")
-            continue
-        print(f"[{i}/{len(frames)}] {frame.name}: {result['verdict']}")
+            return exc
+
+    failed = 0
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for i, (frame, outcome) in enumerate(zip(frames, pool.map(send, frames), strict=True), start=1):
+            if isinstance(outcome, Exception):
+                failed += 1
+                outcome = f"FAILED ({type(outcome).__name__}: {outcome})"
+            print(f"[{i}/{len(frames)}] {frame.name}: {outcome}")
     opik.flush_tracker()
     if failed:
         raise SystemExit(f"{failed} of {len(frames)} frames failed.")

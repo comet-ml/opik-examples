@@ -21,7 +21,7 @@ from comet_ml import API
 from roadwork_demo.config import REPO_ROOT, exit_if_no_comet, get_settings
 from roadwork_demo.data import load_eval_manifest
 from roadwork_demo.pipeline import get_handoff, load_detector, registry_cache_dir
-from roadwork_demo.registry import STATUS_PRODUCTION, initial_status, next_version, registered_version
+from roadwork_demo.registry import existing_versions, initial_status, next_version, registered_version
 
 
 def main() -> None:
@@ -61,7 +61,7 @@ def main() -> None:
             f"Comet experiment '{last['experiment_key']}' from {last_path.name} no longer exists. "
             "Re-run scripts/02_train.py."
         )
-    workspace = s.workspace or exp.workspace
+    workspace = s.workspace
 
     print(
         f"Experiment {last['experiment_key']} (run '{last.get('name')}'): "
@@ -80,12 +80,8 @@ def main() -> None:
                 f"(found: {exp.get_model_names()}). REGISTRY_MODEL must be the same for "
                 "scripts/02_train.py and scripts/03_register.py; re-run training or fix .env."
             )
-        try:
-            model = api.get_model(workspace, s.registry_model)
-            existing = model.find_versions()
-            status = initial_status(model.find_versions(status=STATUS_PRODUCTION))
-        except Exception:
-            existing, status = [], STATUS_PRODUCTION  # model not in the registry yet
+        existing = existing_versions(api, workspace, s.registry_model)
+        status = initial_status(existing)
         version = next_version(existing)
         exp.register_model(
             model_name=s.registry_model,

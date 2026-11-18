@@ -4,6 +4,7 @@ import pytest
 
 from roadwork_demo.config import HandoffError
 from roadwork_demo.registry import (
+    existing_versions,
     initial_status,
     labels_fingerprint,
     latest_artifact,
@@ -137,6 +138,31 @@ def test_no_production_version_is_an_error_that_names_the_fix():
 def test_first_registered_version_is_production_later_ones_staging():
     assert initial_status([]) == "Production"
     assert initial_status(["1.0.0"]) == "Staging"
+
+
+class NamesAPI:
+    def __init__(self, names, versions=(), error=None):
+        self.names, self.versions, self.error = names, list(versions), error
+
+    def get_registry_model_names(self, workspace):
+        if self.error:
+            raise self.error
+        return self.names
+
+    def get_model(self, workspace, model_name):
+        return SimpleNamespace(find_versions=lambda: self.versions)
+
+
+def test_existing_versions_is_empty_only_for_a_model_that_was_never_registered():
+    assert existing_versions(NamesAPI(["other-model"]), "ws", "roadwork-yolo11s") == []
+    api = NamesAPI(["roadwork-yolo11s"], versions=["2.0.0", "1.0.0"])
+    assert existing_versions(api, "ws", "roadwork-yolo11s") == ["2.0.0", "1.0.0"]
+
+
+def test_existing_versions_does_not_read_a_registry_error_as_a_new_model():
+    # WHY: a timeout or a refused key would otherwise register the next version as Production.
+    with pytest.raises(TimeoutError):
+        existing_versions(NamesAPI([], error=TimeoutError("registry timed out")), "ws", "roadwork-yolo11s")
 
 
 def test_stock_handoff_identity():

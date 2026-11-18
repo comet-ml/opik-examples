@@ -20,7 +20,9 @@ class MyPanel extends Comet.Panel {
       if (!others.registry_model) continue;
       const metrics = byName(await this.api.experimentMetricsSummary(key));
       if (metrics.opik_verdict_accuracy === undefined) continue;
-      if (others.opik_vlm_only_accuracy !== undefined) reference = Number(others.opik_vlm_only_accuracy);
+      // WHY isFinite: the field holds a text when no comparable vlm_only experiment exists.
+      const noDetector = Number(others.opik_vlm_only_accuracy);
+      if (Number.isFinite(noDetector)) reference = noDetector;
       runs.push({
         version: others.registry_model.split(":").pop(),
         map50: Number(metrics["metrics/mAP50(B)"]),

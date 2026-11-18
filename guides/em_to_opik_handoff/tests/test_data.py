@@ -9,30 +9,11 @@ from roadwork_demo.data import (
     coco_bbox_to_yolo,
     convert_split,
     select_eval_frames,
-    verdict_from_tags,
 )
 
 
 def test_verdict_labels():
     assert VERDICTS == ("blocked", "partial", "clear")
-
-
-@pytest.mark.parametrize(
-    "tags,expected",
-    [
-        (["Fully Blocked"], "blocked"),
-        (["Partially Blocked", "Fully Blocked"], "blocked"),
-        (["Partially Blocked"], "partial"),
-        (["Lane Shift"], "partial"),
-        (["None"], "clear"),
-        (["Other"], None),
-        ([], None),
-        (None, None),
-        (["None", "Other"], None),
-    ],
-)
-def test_verdict_from_tags(tags, expected):
-    assert verdict_from_tags(tags) == expected
 
 
 def test_bbox_center_normalized():

@@ -10,11 +10,9 @@ vlm_only runs no detector, so it exists once and carries no detector identity.
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
 
 import opik
 from opik.evaluation import evaluate
-from opik.exceptions import ExperimentNotFound
 
 from roadwork_demo.config import (
     VARIANTS,
@@ -27,13 +25,22 @@ from roadwork_demo.config import (
     should_link_back,
 )
 from roadwork_demo.data import VERDICTS, load_eval_manifest
-from roadwork_demo.gate import item_scores, latest
+from roadwork_demo.gate import GateRefusal, find_experiment, item_scores, require_comparable
 from roadwork_demo.metrics import JudgeVerdictCorrect, VerdictAccuracy, accuracy_by_class, per_class_accuracy
-from roadwork_demo.pipeline import get_verdict_prompt, handoff_or_exit, load_detector, run_frame
+from roadwork_demo.pipeline import (
+    get_verdict_prompt,
+    handoff_or_exit,
+    load_detector,
+    run_frame,
+    trace_identity,
+)
 from roadwork_demo.verdicts import JUDGE_VERDICT_CORRECT, VERDICT_ACCURACY
 
 HEADLINE_SCORES = (VERDICT_ACCURACY, JUDGE_VERDICT_CORRECT)
 REFERENCE_VARIANT = "vlm_only"
+# WHY a text and not a missing field: a field on a Comet experiment cannot be removed, and a
+# number from an earlier run would stay next to the new results.
+NO_REFERENCE = "not comparable"
 
 
 def make_task(variant: str, image_paths: dict[str, str], handoff: Handoff | None):
@@ -47,22 +54,24 @@ def make_task(variant: str, image_paths: dict[str, str], handoff: Handoff | None
 
 def summarize(result) -> dict[str, float]:
     """Mean of each score over the items that were scored."""
-    totals = defaultdict(list)
-    for tr in result.test_results:
-        for sr in tr.score_results:
-            if not sr.scoring_failed:
-                totals[sr.name].append(sr.value)
-    return {name: sum(values) / len(values) for name, values in totals.items()}
+    return {
+        name: stats.mean for name, stats in result.aggregate_evaluation_scores().aggregated_scores.items()
+    }
 
 
-def reference_accuracy(client: opik.Opik) -> float | None:
-    """Verdict accuracy of the latest full vlm_only experiment, if there is one."""
-    name = experiment_name(REFERENCE_VARIANT, None)
+def reference_accuracy(client: opik.Opik, experiment_id: str) -> float | None:
+    """Verdict accuracy of the latest full vlm_only experiment that is comparable with this one."""
+    reference = find_experiment(client, experiment_name(REFERENCE_VARIANT, None))
+    if reference is None:
+        return None
     try:
-        experiment = latest(client.get_experiments_by_name(name), name)
-    except ExperimentNotFound:
-        experiment = None
-    scores = item_scores(experiment) if experiment else {}
+        # WHY: same dataset version, verdict model and prompt, or the difference to the
+        # reference is not the detector's.
+        require_comparable(client.get_experiment_by_id(experiment_id), reference)
+    except GateRefusal as exc:
+        print(f"\nNo {REFERENCE_VARIANT} reference written: {exc}")
+        return None
+    scores = item_scores(reference)
     return sum(scores.values()) / len(scores) if scores else None
 
 
@@ -76,11 +85,9 @@ def link_back_to_em(
     per_class: dict[str, float],
     vlm_only_accuracy: float | None,
 ) -> None:
-    """Write the Opik experiment link and scores onto the Comet experiment that trained the detector.
-
-    Metric names carry no version or variant, so the EM experiment table and panels compare
-    training runs directly: mAP next to downstream verdict accuracy.
-    """
+    """Write the Opik experiment link and scores onto the Comet experiment that trained the detector."""
+    # WHY: metric names carry no version or variant, so the EM experiment table and panels
+    # compare training runs directly: mAP next to downstream verdict accuracy.
     from comet_ml import API
 
     exp = API().get_experiment_by_key(handoff.experiment_key)
@@ -96,8 +103,9 @@ def link_back_to_em(
     exp.log_other("opik_dataset", dataset_name)
     exp.log_other("opik_dataset_version", dataset_version)
     exp.log_other("opik_project", s.project)
-    if vlm_only_accuracy is not None:
-        exp.log_other("opik_vlm_only_accuracy", round(vlm_only_accuracy, 4))
+    exp.log_other(
+        "opik_vlm_only_accuracy", NO_REFERENCE if vlm_only_accuracy is None else round(vlm_only_accuracy, 4)
+    )
     exp.add_tags(["opik-evaluated"])
 
     columns = [*HEADLINE_SCORES, *(f"accuracy_{v}" for v in VERDICTS)]
@@ -156,12 +164,8 @@ def main() -> None:
         # WHY: only the variant that runs the detector carries its identity; vlm_only is one
         # experiment for every detector version.
         h = handoff if variant == "detector_vlm" else None
-        config = {
-            "variant": variant,
-            "verdict_model": s.verdict_model,
-            "prompt_name": s.prompt_name,
-            "dataset_version": dataset_version,
-        }
+        # WHY: the same identity a production trace carries; the gate reads verdict_model from it.
+        config = trace_identity(variant, h, None)[1] | {"dataset_version": dataset_version}
         if not args.no_judge:
             config["judge_model"] = s.judge_model
         result = evaluate(
@@ -169,7 +173,7 @@ def main() -> None:
             task=make_task(variant, image_paths, h),
             scoring_metrics=metrics,
             experiment_name=experiment_name(variant, h.model_version if h else None, full_run),
-            experiment_config=(h.as_metadata() | config) if h else config,
+            experiment_config=config,
             prompts=[get_verdict_prompt()],
             experiment_tags=[h.model_tag(), variant] if h else [variant],
             experiment_scoring_functions=[per_class_accuracy],
@@ -184,11 +188,10 @@ def main() -> None:
         print("   per-class accuracy: " + ", ".join(f"{k}={v:.2f}" for k, v in sorted(per_class.items())))
         print(f"   {result.experiment_url}")
 
-    if handoff and should_link_back(handoff.model_version, dataset_name, s.opik_dataset, args.nb_samples):
+    if handoff and should_link_back(handoff.model_version, full_run):
         result, means, per_class = results["detector_vlm"]
-        link_back_to_em(
-            handoff, s, dataset_name, dataset_version, result, means, per_class, reference_accuracy(client)
-        )
+        reference = reference_accuracy(client, result.experiment_id)
+        link_back_to_em(handoff, s, dataset_name, dataset_version, result, means, per_class, reference)
     else:
         print(
             "\nNot linking back to Comet EM: only a full detector_vlm run on the default dataset "

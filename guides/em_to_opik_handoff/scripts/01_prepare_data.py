@@ -27,7 +27,6 @@ from roadwork_demo.data import (
     find_image,
     portable_data_yaml,
     select_eval_frames,
-    verdict_from_tags,
     write_data_yaml,
 )
 from roadwork_demo.registry import labels_fingerprint, latest_artifact
@@ -38,11 +37,9 @@ MIN_ZIP_BYTES = 10_000_000_000
 
 
 def get_or_log_dataset_artifact(s: Settings, yolo_dir: Path) -> str:
-    """Log the YOLO labels as a dataset Artifact, produced by a "prepare-data" experiment.
-
-    Returns 'name:version'. The newest version is reused when its labels are byte-identical to
-    the local ones (fingerprint in the artifact metadata); then no experiment is started.
-    """
+    """Log the YOLO labels as a dataset Artifact and return its 'name:version'."""
+    # WHY: the newest version is reused when its labels are byte-identical to the local ones
+    # (fingerprint in the artifact metadata); then no "prepare-data" experiment is started.
     import comet_ml
 
     fingerprint = labels_fingerprint(yolo_dir)
@@ -135,16 +132,10 @@ def main() -> None:
 
     hist = Counter(a["category_id"] for a in train_coco["annotations"])
     print("Train class histogram:")
-    for i, name in enumerate(classes, start=1):
-        print(f"  {name:45s} {hist.get(i, 0)}")
+    for category in sorted(train_coco["categories"], key=lambda c: c["id"]):
+        print(f"  {category['name']:45s} {hist.get(category['id'], 0)}")
 
     val_images = [im for im in val_coco["images"] if find_image(image_index, im["file_name"])]
-    print(
-        "Val verdicts from raw tags (before the description filter on blocked):",
-        dict(
-            Counter(verdict_from_tags(im["scene_level_tags"].get("travel_alteration")) for im in val_images)
-        ),
-    )
     manifest = select_eval_frames(val_images, per_class=50, seed=7)
     for item in manifest:
         item["path"] = str(find_image(image_index, item["file_name"]))
