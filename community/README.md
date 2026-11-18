@@ -14,3 +14,4 @@ To add yours, see [CONTRIBUTING.md](CONTRIBUTING.md) — it's one small block in
 |---|---|---|
 | [Building a Coding Agent from Scratch (course)](https://github.com/decodingai-magazine/building-a-coding-agent-from-scratch-course) | An open-source course that builds a terminal coding agent from scratch, using Opik for tracing and evals. | [@decodingai-magazine](https://github.com/decodingai-magazine) |
 | [Observable Job Agent](https://github.com/jamwithai/observable-job-agent) | An observability-first CV-to-job-matching agent, instrumented with Opik from run one. | [@jamwithai](https://github.com/jamwithai) |
+| [Train a decision model](https://github.com/anmorgan24/decision-model) | Trains a decision model on a Qwen3 backbone with LoRA, tracks runs in Comet, and evaluates calibration plus property tests (option order, question isolation) as Opik experiments. | [@anmorgan24](https://github.com/anmorgan24) |
