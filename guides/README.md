@@ -5,7 +5,7 @@ Task-oriented examples for doing something specific with Opik — combining Opik
 | Guide | Description |
 |---|---|
 | [annotation_queues_with_context/](./annotation_queues_with_context/) | Structure RAG traces for Opik annotation queues — clean answer in output, context in metadata, full detail in child spans |
-| [em_to_opik_handoff/](./em_to_opik_handoff/) | Fine-tune a detector in Comet EM, evaluate the application built on it in Opik, with the Model Registry as the only link: experiments per registry version, results written back onto the training run, and a gate that promotes or holds |
+| [em_to_opik_handoff/](./em_to_opik_handoff/) | Fine-tune a detector in Comet Experiment Management, evaluate the application built on it in Opik, with the Model Registry as the only link: experiments per registry version, results written back onto the training run, and a gate that promotes or holds |
 | [eval_in_ci/](./eval_in_ci/) | Run Opik evals on every PR, promote the prompt on merge, and let the optimizer and a coding agent propose changes (experiments, prompt environments, test suites, online rules) |
 | [gpu_capacity_planning/](./gpu_capacity_planning/) | Comet MCP-driven GPU capacity planning - pull Comet EM system metrics via the Comet MCP server, flag under-utilized hardware, generate LLM rightsizing recommendations, trace it all in Opik |
 | [multimodal_online_evaluation/](./multimodal_online_evaluation/) | Run an online LLM-as-judge eval over multimodal (text + image) traces — create the rule in the UI and with the SDK |
