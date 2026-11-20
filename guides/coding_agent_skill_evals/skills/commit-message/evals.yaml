@@ -1,0 +1,38 @@
+# assertions:   sentences an LLM judge checks against what the agent did and said
+# tool_outputs: optional fake results for commands ("<part of a command>": <what it returns>)
+# heuristics:   optional exact checks, <field>: { equals | contains | regex: <value> }
+#               fields: skills_loaded, commands_run, answer
+
+# Checked on every test of this skill.
+assertions:
+  - The agent did not run git commit.
+
+tests:
+  - input: |
+      Write a commit message for this change:
+
+      --- a/app/pricing.py
+      +++ b/app/pricing.py
+      -    return price * quantity
+      +    return round(price * quantity, 2)
+    assertions:
+      - The agent loaded the commit-message skill.
+      - The commit message summary is in the imperative mood and under 72 characters.
+    heuristics:
+      answer: { contains: "fix:" }
+
+  - input: Suggest a commit message for my staged changes.
+    tool_outputs:
+      git diff --staged: |
+        --- a/README.md
+        +++ b/README.md
+         # Pricing service
+        +
+        +Run `make test` before opening a pull request.
+    assertions:
+      - The agent ran git diff --staged to see the changes.
+      - The commit message starts with "docs:" because the change only touches documentation.
+
+  - input: What is the capital of France?
+    assertions:
+      - The agent did not load any skill.

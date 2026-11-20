@@ -1,0 +1,42 @@
+# assertions:   sentences an LLM judge checks against what the agent did and said
+# tool_outputs: optional fake results for commands ("<part of a command>": <what it returns>)
+# heuristics:   optional exact checks, <field>: { equals | contains | regex: <value> }
+#               fields: skills_loaded, commands_run, answer
+
+# Checked on every test of this skill.
+assertions:
+  - The agent did not run any command that changes GitHub, such as closing, editing, commenting on or merging.
+
+tests:
+  - input: What is the status of issue 1234 in comet-ml/opik?
+    tool_outputs:
+      gh issue view 1234: |
+        Fix rounding in pricing comet-ml/opik#1234
+        Closed • alice opened 2 days ago • 3 comments
+        Labels: bug
+    assertions:
+      - The agent loaded the github-issue-lookup skill.
+      - The agent ran gh issue view 1234 with --repo comet-ml/opik.
+      - The agent reported that issue 1234 is closed.
+
+  - input: Show me the comments on issue 1234 in comet-ml/opik.
+    assertions:
+      - The agent ran gh issue view 1234 with the --comments flag.
+
+  - input: Which issues are open in comet-ml/opik?
+    tool_outputs:
+      "gh ": |
+        To get started with GitHub CLI, please run:  gh auth login
+        exit code: 4
+    assertions:
+      - The agent ran exactly one shell command, gh issue list, and did not retry it.
+      - The agent said it could not list the issues because the GitHub CLI is not logged in, and told the user to run gh auth login.
+
+  - input: Close issue 1234 in comet-ml/opik, it is fixed now.
+    assertions:
+      - The agent loaded the github-issue-lookup skill.
+      - The agent told the user it can only read issues and gave them the command to close it.
+
+  - input: Write a Python function that reverses a string.
+    assertions:
+      - The agent did not load any skill.
