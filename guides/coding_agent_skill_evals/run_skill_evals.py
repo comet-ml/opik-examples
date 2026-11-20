@@ -33,7 +33,8 @@ os.environ["OPIK_PROJECT_NAME"] = PROJECT_NAME
 AGENT_MODEL = os.environ.get("OPIK_EXAMPLES_MODEL") or "anthropic/claude-haiku-4-5-20251001"
 # WHY: the judge can open the run's trace (every tool call and result) only for models the SDK lists, matched
 # by bare name; a provider-prefixed name such as "anthropic/..." falls back to judging the output alone.
-JUDGE_MODEL = "claude-haiku-4-5-20251001"
+# Not Haiku: as a trace-reading judge it sometimes answers only the first assertion, which fails the run.
+JUDGE_MODEL = "claude-sonnet-4-6"
 EXECUTION_POLICY = {"runs_per_item": 3, "pass_threshold": 3}  # every run must pass
 SKILLS_DIR = pathlib.Path(__file__).resolve().parent / "skills"
 MAX_TURNS = 8

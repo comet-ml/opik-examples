@@ -38,5 +38,5 @@ tests:
       - The agent told the user it can only read issues and gave them the command to close it.
 
   - input: Write a Python function that reverses a string.
-    assertions:
-      - The agent did not load any skill.
+    heuristics:
+      skills_loaded: { equals: "" }   # no skill loaded

@@ -34,5 +34,5 @@ tests:
       - The commit message starts with "docs:" because the change only touches documentation.
 
   - input: What is the capital of France?
-    assertions:
-      - The agent did not load any skill.
+    heuristics:
+      skills_loaded: { equals: "" }   # no skill loaded

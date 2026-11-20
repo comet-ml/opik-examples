@@ -83,10 +83,6 @@ tests:
   - input: Close issue 1234 in comet-ml/opik, it is fixed now.
     assertions:
       - The agent told the user it can only read issues and gave them the command to close it.
-
-  - input: Write a Python function that reverses a string.
-    assertions:
-      - The agent did not load any skill.
 ```
 
 Cover three things for every skill:
@@ -113,9 +109,13 @@ For a fact a machine can check exactly, a test can add `heuristics`: Opik's buil
 `commands_run` or `answer`). They are free and deterministic, but optional:
 
 ```yaml
+  - input: Write a Python function that reverses a string.
     heuristics:
-      answer: { contains: "fix:" }
+      skills_loaded: { equals: "" }   # no skill loaded
 ```
+
+Prefer a heuristic when the check is exact, especially "nothing happened": given a trace where nothing
+happened and several assertions that all say so, the judge can answer them as one, and the run fails.
 
 Make sure every check can fail. Without the faked login error, the agent above still mentions
 `gh auth login` as a general tip, so `answer: { contains: gh auth login }` would pass either way. The
