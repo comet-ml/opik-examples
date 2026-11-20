@@ -39,6 +39,7 @@ Task-oriented examples for specific Opik workflows and patterns.
 | [guides/gpu_capacity_planning](guides/gpu_capacity_planning/) | Comet MCP-driven GPU capacity planning - pull Comet EM system metrics via the Comet MCP server, generate LLM rightsizing recommendations, trace it all in Opik |
 | [guides/multimodal_online_evaluation](guides/multimodal_online_evaluation/) | Online LLM-as-judge evaluation over multimodal (text + image) traces, created both in the UI and via the SDK |
 | [guides/tracing_finetuned_models](guides/tracing_finetuned_models/) | Fine-tune a model, register it to the CometML Model Registry, then fetch and trace inference in Opik |
+| [guides/tracing_three_ways](guides/tracing_three_ways/) | Log the same agent flow three ways (Python SDK, LLM integration, OpenTelemetry) and compare the traces in Opik: a first look at how data gets in |
 
 ## Use Cases
 
