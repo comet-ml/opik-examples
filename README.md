@@ -34,6 +34,7 @@ Task-oriented examples for specific Opik workflows and patterns.
 | | Description |
 |---|---|
 | [guides/annotation_queues_with_context](guides/annotation_queues_with_context/) | Structure RAG traces for Opik annotation queues — clean answer in output, context in metadata, full detail in child spans |
+| [guides/coding_agent_skill_evals](guides/coding_agent_skill_evals/) | Test coding-agent skills (`SKILL.md`) with Opik test suites — one `evals.yaml` of plain-sentence assertions per skill, a pass/fail exit code to gate pull requests |
 | [guides/eval_in_ci](guides/eval_in_ci/) | Run Opik evals on every PR, promote the prompt on merge, and let the optimizer and a coding agent propose changes (experiments, prompt environments, test suites, online rules) |
 | [guides/gpu_capacity_planning](guides/gpu_capacity_planning/) | Comet MCP-driven GPU capacity planning - pull Comet EM system metrics via the Comet MCP server, generate LLM rightsizing recommendations, trace it all in Opik |
 | [guides/multimodal_online_evaluation](guides/multimodal_online_evaluation/) | Online LLM-as-judge evaluation over multimodal (text + image) traces, created both in the UI and via the SDK |
