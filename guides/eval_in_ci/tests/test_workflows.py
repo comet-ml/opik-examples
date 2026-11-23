@@ -84,7 +84,11 @@ def test_template_uses_uv_and_current_actions() -> None:
 
 @needs_selftest
 def test_selftest_uses_the_template_action_majors() -> None:
-    assert {s["uses"] for s in _steps(SELFTEST) if "uses" in s} == GATE_ACTIONS - {"dorny/paths-filter@v4"}
+    # WHY: the selftest pins commit SHAs with the version as a comment; the template stays on majors.
+    text = SELFTEST.read_text(encoding="utf-8")
+    pinned = re.findall(r"uses: ([\w./-]+)@[0-9a-f]{40} # (v\d+)", text)
+    assert len(pinned) == len([s for s in _steps(SELFTEST) if "uses" in s])
+    assert {f"{action}@{major}" for action, major in pinned} == GATE_ACTIONS - {"dorny/paths-filter@v4"}
 
 
 def test_optimize_uses_current_action_majors() -> None:
