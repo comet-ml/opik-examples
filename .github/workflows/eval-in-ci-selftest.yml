@@ -50,9 +50,9 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPIK_PROJECT_NAME: ${{ github.event_name == 'push' && 'eval-in-ci-example' || 'eval-in-ci-smoke' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
           python-version: "3.12"
@@ -79,7 +79,7 @@ jobs:
 
       - name: Upload digest
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: opik-eval-digest
           path: |
@@ -91,7 +91,7 @@ jobs:
         # On workflow_dispatch (the optimizer's optimize/<n> branch) the comment goes to the branch's open PR.
         if: always() && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && hashFiles('guides/eval_in_ci/digest.md') != ''
         continue-on-error: true
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const fs = require('fs');
