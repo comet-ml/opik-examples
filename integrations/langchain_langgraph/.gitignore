@@ -1,0 +1,8 @@
+.env
+.venv
+__pycache__/
+*.pyc
+.tmp/
+*.log
+.ruff_cache/
+uv.lock
